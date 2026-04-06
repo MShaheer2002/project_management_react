@@ -1,12 +1,10 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { ViewType, User, Organization, ModalType, Toast } from './types';
-import { MOCK_USERS } from './constants';
+import { User, Organization, ModalType, Toast } from './types';
+import { MOCK_USERS, MOCK_ORGANIZATIONS } from './constants';
 
 interface AppContextType {
   theme: 'light' | 'dark' | 'system';
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
-  currentView: ViewType;
-  setView: (view: ViewType) => void;
   currentUser: User | null;
   setCurrentUser: (user: User | null) => void;
   organization: Organization | null;
@@ -30,9 +28,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const saved = localStorage.getItem('app-theme');
     return (saved === 'light' || saved === 'dark' || saved === 'system') ? saved : 'system';
   });
-  const [currentView, setView] = useState<ViewType>('marketing');
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [organization, setOrganization] = useState<Organization | null>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(MOCK_USERS[0]);
+  const [organization, setOrganization] = useState<Organization | null>(MOCK_ORGANIZATIONS[0]);
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
   const [isCommandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [isSidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -99,7 +96,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   return (
     <AppContext.Provider value={{
       theme, setTheme,
-      currentView, setView,
       currentUser, setCurrentUser,
       organization, setOrganization,
       selectedIssueId, setSelectedIssueId,

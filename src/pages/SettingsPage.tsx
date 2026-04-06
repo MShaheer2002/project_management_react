@@ -1,6 +1,6 @@
 import React from 'react';
-import { Settings as SettingsIcon, User, Bell, CreditCard, Shield, Globe, Key, Trash2, Save } from 'lucide-react';
-
+import { Save, Sun, Moon, Globe } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useApp } from '../AppContext';
 import { MOCK_USERS } from '../constants';
 
@@ -29,7 +29,8 @@ const SettingsItem: React.FC<{
 );
 
 export const SettingsPage: React.FC = () => {
-  const { setView, currentUser, setCurrentUser } = useApp();
+  const { currentUser, setCurrentUser, theme, setTheme } = useApp();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = React.useState('General');
 
   const tabs = [
@@ -55,7 +56,7 @@ export const SettingsPage: React.FC = () => {
               key={tab.name} 
               onClick={() => {
                 setActiveTab(tab.name);
-                if (tab.view !== 'settings') setView(tab.view as any);
+                if (tab.view !== 'settings') navigate('/' + tab.view);
               }}
               className={`pb-4 text-sm font-medium transition-colors relative ${activeTab === tab.name ? 'text-primary' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200'}`}
             >
@@ -64,6 +65,37 @@ export const SettingsPage: React.FC = () => {
             </button>
           ))}
         </div>
+
+        <SettingsSection title="Appearance">
+          <SettingsItem 
+            label="Interface Theme" 
+            description="Select how Linearis looks to you. Choose a light or dark theme, or mirror your system preferences."
+          >
+            <div className="flex bg-gray-100 dark:bg-white/5 p-1 rounded-xl w-72">
+              <button 
+                onClick={() => setTheme('light')}
+                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all ${theme === 'light' ? 'bg-white dark:bg-gray-800 text-primary shadow-sm' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200'}`}
+              >
+                <Sun size={14} />
+                Light
+              </button>
+              <button 
+                onClick={() => setTheme('dark')}
+                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all ${theme === 'dark' ? 'bg-white dark:bg-gray-800 text-primary shadow-sm' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200'}`}
+              >
+                <Moon size={14} />
+                Dark
+              </button>
+              <button 
+                onClick={() => setTheme('system')}
+                className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all ${theme === 'system' ? 'bg-white dark:bg-gray-800 text-primary shadow-sm' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200'}`}
+              >
+                <Globe size={14} />
+                System
+              </button>
+            </div>
+          </SettingsItem>
+        </SettingsSection>
 
         <SettingsSection title="Workspace Profile">
           <SettingsItem 

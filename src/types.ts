@@ -1,7 +1,6 @@
-
 export type Priority = 'low' | 'medium' | 'high' | 'urgent';
 export type Status = 'backlog' | 'todo' | 'in-progress' | 'review' | 'done';
-export type UserRole = 'admin' | 'co-admin' | 'team-lead' | 'employee';
+export type UserRole = 'owner' | 'admin' | 'member' | 'guest';
 
 export interface User {
   id: string;
@@ -10,6 +9,7 @@ export interface User {
   avatar?: string;
   role: UserRole;
   teamId?: string;
+  departmentId?: string;
   lastActive?: string;
 }
 
@@ -35,11 +35,25 @@ export interface Issue {
   updatedAt: string;
 }
 
+export interface TaskSubtask {
+  id: string;
+  title: string;
+  completed: boolean;
+}
+
+export interface CreatedTask extends Issue {
+  subtasks: TaskSubtask[];
+  estimate?: number;
+  departmentId?: string;
+  dueTime?: string;
+}
+
 export interface Project {
   id: string;
   name: string;
   description: string;
   teamId: string;
+  departmentId?: string;
   status: 'active' | 'archived' | 'completed';
   progress: number;
   issueCount: number;
@@ -50,8 +64,24 @@ export interface Team {
   id: string;
   name: string;
   leadId: string;
+  departmentId?: string;
   memberIds: string[];
   projectIds: string[];
+}
+
+export interface Department {
+  id: string;
+  name: string;
+  description?: string;
+  headId?: string;
+  color?: string;
+  icon?: string;
+  memberIds: string[];
+  teamIds: string[];
+  projectIds: string[];
+  visibility: 'public' | 'private';
+  isDefault: boolean;
+  createdAt: string;
 }
 
 export interface Organization {
@@ -108,39 +138,12 @@ export interface ApiKey {
   lastUsedAt?: string;
 }
 
-export type ViewType = 
-  | 'marketing'
-  | 'dashboard' 
-  | 'inbox' 
-  | 'my-tasks' 
-  | 'issues'
-  | 'create-issue'
-  | 'templates'
-  | 'projects' 
-  | 'project-details'
-  | 'teams' 
-  | 'team-details'
-  | 'members'
-  | 'roadmap' 
-  | 'cycles' 
-  | 'analytics' 
-  | 'activity' 
-  | 'integrations'
-  | 'api-keys'
-  | 'billing'
-  | 'settings'
-  | 'login'
-  | 'signup'
-  | 'forgot-password'
-  | 'reset-password'
-  | 'email-verification'
-  | 'org-creation';
-
 export type ModalType = 
   | 'create-task'
   | 'create-project'
   | 'create-cycle'
   | 'create-team'
+  | 'create-department'
   | 'invite-member'
   | 'generate-api-key'
   | null;

@@ -1,22 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search, Plus, LayoutDashboard, Inbox, UserCircle, Layers, Users, Map, Settings } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useApp } from '../AppContext';
-import { ViewType } from '../types';
 
 export const CommandPalette: React.FC = () => {
-  const { isCommandPaletteOpen, setCommandPaletteOpen, setView } = useApp();
+  const { isCommandPaletteOpen, setCommandPaletteOpen } = useApp();
+  const navigate = useNavigate();
   const [search, setSearch] = useState('');
 
   const actions: { id: string; label: string; icon: React.ReactNode; category: string; action: () => void }[] = [
-    { id: 'create-issue', label: 'Create new issue', icon: <Plus size={16} />, category: 'Quick Actions', action: () => console.log('Create issue') },
-    { id: 'go-dashboard', label: 'Go to Dashboard', icon: <LayoutDashboard size={16} />, category: 'Navigation', action: () => setView('dashboard') },
-    { id: 'go-inbox', label: 'Go to Inbox', icon: <Inbox size={16} />, category: 'Navigation', action: () => setView('inbox') },
-    { id: 'go-my-issues', label: 'Go to My Issues', icon: <UserCircle size={16} />, category: 'Navigation', action: () => setView('my-issues') },
-    { id: 'go-projects', label: 'Go to Projects', icon: <Layers size={16} />, category: 'Navigation', action: () => setView('projects') },
-    { id: 'go-teams', label: 'Go to Teams', icon: <Users size={16} />, category: 'Navigation', action: () => setView('teams') },
-    { id: 'go-roadmap', label: 'Go to Roadmap', icon: <Map size={16} />, category: 'Navigation', action: () => setView('roadmap') },
-    { id: 'go-settings', label: 'Go to Settings', icon: <Settings size={16} />, category: 'Navigation', action: () => setView('settings') },
+    { id: 'create-issue', label: 'Create new issue', icon: <Plus size={16} />, category: 'Quick Actions', action: () => navigate('/issues/create') },
+    { id: 'go-dashboard', label: 'Go to Dashboard', icon: <LayoutDashboard size={16} />, category: 'Navigation', action: () => navigate('/') },
+    { id: 'go-inbox', label: 'Go to Inbox', icon: <Inbox size={16} />, category: 'Navigation', action: () => navigate('/inbox') },
+    { id: 'go-my-issues', label: 'Go to My Issues', icon: <UserCircle size={16} />, category: 'Navigation', action: () => navigate('/my-tasks') },
+    { id: 'go-projects', label: 'Go to Projects', icon: <Layers size={16} />, category: 'Navigation', action: () => navigate('/projects') },
+    { id: 'go-teams', label: 'Go to Teams', icon: <Users size={16} />, category: 'Navigation', action: () => navigate('/teams') },
+    { id: 'go-roadmap', label: 'Go to Roadmap', icon: <Map size={16} />, category: 'Navigation', action: () => navigate('/roadmap') },
+    { id: 'go-settings', label: 'Go to Settings', icon: <Settings size={16} />, category: 'Navigation', action: () => navigate('/settings') },
   ];
 
   const filteredActions = actions.filter(a => 

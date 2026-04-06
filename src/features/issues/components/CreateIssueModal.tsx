@@ -1,32 +1,54 @@
-import React, { useState } from 'react';
-import { Modal } from './Modal';
-import { useApp } from '../../AppContext';
-import { MOCK_PROJECTS, MOCK_USERS } from '../../constants';
-import { Priority } from '../../types';
-import { Calendar, User, Tag, Paperclip, ChevronDown, Loader2, CheckSquare } from 'lucide-react';
+import React from 'react';
+import { z } from 'zod';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { Controller, useForm } from 'react-hook-form';
+import { Modal } from '@/src/components/modals/Modal';
+import { useApp } from '@/src/AppContext';
+import { MOCK_PROJECTS, MOCK_USERS } from '@/src/constants';
+import { Priority } from '@/src/types';
+import { Tag, Paperclip, ChevronDown, Loader2, CheckSquare } from 'lucide-react';
+import { RichTextEditor } from '@/src/components/RichTextEditor';
 
-export const CreateTaskModal: React.FC = () => {
+const taskSchema = z.object({
+  title: z.string().min(1, 'Title is required').max(100, 'Title is too long'),
+  description: z.string().optional(),
+  projectId: z.string().min(1, 'Project is required'),
+  priority: z.enum(['low', 'medium', 'high', 'urgent']),
+  assigneeId: z.string().optional(),
+  dueDate: z.string().optional(),
+});
+
+type TaskFormData = z.infer<typeof taskSchema>;
+
+export const CreateIssueModal: React.FC = () => {
   const { activeModal, setActiveModal, showToast } = useApp();
-  const [loading, setLoading] = useState(false);
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [projectId, setProjectId] = useState(MOCK_PROJECTS[0].id);
-  const [priority, setPriority] = useState<Priority>('medium');
-  const [assigneeId, setAssigneeId] = useState('');
-  const [dueDate, setDueDate] = useState('');
+  
+  const {
+    register,
+    handleSubmit,
+    control,
+    reset,
+    formState: { errors, isSubmitting, isValid },
+  } = useForm<TaskFormData>({
+    resolver: zodResolver(taskSchema),
+    defaultValues: {
+      projectId: MOCK_PROJECTS[0].id,
+      priority: 'medium',
+      assigneeId: '',
+      title: '',
+      description: '',
+      dueDate: '',
+    },
+  });
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!title.trim()) return;
+  const onSubmit = async (data: TaskFormData) => {
+    // Simulate API call
+    console.log('Submitting task:', data);
+    await new Promise(resolve => setTimeout(resolve, 1000));
     
-    setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      showToast('Task added to My Tasks');
-      setActiveModal(null);
-      setTitle('');
-      setDescription('');
-    }, 1000);
+    showToast('Task added successfully');
+    setActiveModal(null);
+    reset();
   };
 
   return (
@@ -36,26 +58,33 @@ export const CreateTaskModal: React.FC = () => {
       title="Create new task"
       maxWidth="max-w-xl"
     >
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
         <div className="space-y-4">
-          <div className="flex items-center gap-3 p-3 rounded-xl bg-primary/5 border border-primary/20">
-            <CheckSquare size={20} className="text-primary" />
+          <div className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${
+            errors.title ? 'bg-red-50 border-red-200' : 'bg-primary/5 border-primary/20'
+          }`}>
+            <CheckSquare size={20} className={errors.title ? 'text-red-500' : 'text-primary'} />
             <input
               autoFocus
               type="text"
               placeholder="What needs to be done?"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              {...register('title')}
               className="flex-1 bg-transparent border-none outline-none text-base font-semibold placeholder:text-primary/30"
-              required
             />
           </div>
+          {errors.title && <p className="text-xs text-red-500 ml-11">{errors.title.message}</p>}
           
-          <textarea
-            placeholder="Add some details..."
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            className="w-full min-h-[80px] px-4 py-2.5 bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-border-dark rounded-lg outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm resize-none"
+          <Controller
+            name="description"
+            control={control}
+            render={({ field }) => (
+              <RichTextEditor 
+                value={field.value || ''}
+                onChange={field.onChange}
+                placeholder="Add some details..."
+                minHeight="100px"
+              />
+            )}
           />
         </div>
 
@@ -64,8 +93,7 @@ export const CreateTaskModal: React.FC = () => {
             <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Project</label>
             <div className="relative">
               <select
-                value={projectId}
-                onChange={(e) => setProjectId(e.target.value)}
+                {...register('projectId')}
                 className="w-full pl-3 pr-10 py-2 bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-border-dark rounded-lg outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm appearance-none"
               >
                 {MOCK_PROJECTS.map(p => (
@@ -80,8 +108,7 @@ export const CreateTaskModal: React.FC = () => {
             <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Priority</label>
             <div className="relative">
               <select
-                value={priority}
-                onChange={(e) => setPriority(e.target.value as Priority)}
+                {...register('priority')}
                 className="w-full pl-3 pr-10 py-2 bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-border-dark rounded-lg outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm appearance-none"
               >
                 <option value="low">Low</option>
@@ -97,9 +124,9 @@ export const CreateTaskModal: React.FC = () => {
             <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Due Date</label>
             <input
               type="date"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-              className="w-full px-3 py-2 bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-border-dark rounded-lg outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm"
+              {...register('dueDate')}
+              className="w-full px-3 py-2 bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-border-dark rounded-lg outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm text-[white]"
+              style={{ colorScheme: 'dark' }}
             />
           </div>
 
@@ -107,8 +134,7 @@ export const CreateTaskModal: React.FC = () => {
             <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Assignee</label>
             <div className="relative">
               <select
-                value={assigneeId}
-                onChange={(e) => setAssigneeId(e.target.value)}
+                {...register('assigneeId')}
                 className="w-full pl-3 pr-10 py-2 bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-border-dark rounded-lg outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm appearance-none"
               >
                 <option value="">Unassigned</option>
@@ -140,10 +166,10 @@ export const CreateTaskModal: React.FC = () => {
           </button>
           <button
             type="submit"
-            disabled={loading || !title.trim()}
+            disabled={isSubmitting || !isValid}
             className="px-6 py-2 bg-primary text-white text-sm font-bold rounded-lg hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 disabled:opacity-50 disabled:shadow-none flex items-center gap-2"
           >
-            {loading && <Loader2 size={16} className="animate-spin" />}
+            {isSubmitting && <Loader2 size={16} className="animate-spin" />}
             Create Task
           </button>
         </div>

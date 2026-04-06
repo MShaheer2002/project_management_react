@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { CheckCircle2, Clock, AlertCircle, MoreHorizontal, Plus, Filter, Search as SearchIcon, ArrowUpDown, Calendar } from 'lucide-react';
-import { useApp } from '../AppContext';
-import { MOCK_ISSUES, MOCK_USERS, PRIORITY_COLORS, STATUS_LABELS } from '../constants';
-import { Priority, Status } from '../types';
+import { useNavigate } from 'react-router-dom';
+import { CheckCircle2, Clock, AlertCircle, MoreHorizontal, Plus, Filter, Search as SearchIcon, ArrowUpDown, Calendar, Building2 } from 'lucide-react';
+import { useApp } from '@/src/AppContext';
+import { MOCK_ISSUES, MOCK_USERS, MOCK_DEPARTMENTS, MOCK_PROJECTS, MOCK_TEAMS, PRIORITY_COLORS, STATUS_LABELS } from '@/src/constants';
+import { Priority, Status } from '@/src/types';
 
 const PriorityIcon: React.FC<{ priority: Priority }> = ({ priority }) => {
   switch (priority) {
@@ -24,15 +25,21 @@ const StatusIcon: React.FC<{ status: Status }> = ({ status }) => {
 };
 
 export const IssuesPage: React.FC<{ projectId?: string; initialViewMode?: 'list' | 'kanban' | 'calendar' }> = ({ projectId, initialViewMode = 'list' }) => {
-  const { setSelectedIssueId, setView } = useApp();
+  const { setSelectedIssueId } = useApp();
+  const navigate = useNavigate();
   const [viewMode, setViewMode] = useState<'list' | 'kanban' | 'calendar'>(initialViewMode);
   const [searchQuery, setSearchQuery] = useState('');
+  const [departmentFilter, setDepartmentFilter] = useState<string>('all');
 
   const filteredIssues = MOCK_ISSUES.filter(issue => {
     const matchesSearch = issue.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          issue.id.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesProject = !projectId || issue.projectId === projectId;
-    return matchesSearch && matchesProject;
+    
+    const matchesDepartment = departmentFilter === 'all' || 
+                             MOCK_TEAMS.find(t => t.id === issue.teamId)?.departmentId === departmentFilter;
+
+    return matchesSearch && matchesProject && matchesDepartment;
   });
 
   const renderListView = () => (
@@ -126,8 +133,8 @@ export const IssuesPage: React.FC<{ projectId?: string; initialViewMode?: 'list'
                   </span>
                 </div>
                 <button 
-                  onClick={() => setView('create-issue')}
-                  className="p-1 rounded hover:bg-gray-200 dark:hover:bg-white/10 text-gray-400"
+                onClick={() => navigate('/issues/create')}
+                className="p-1 rounded hover:bg-gray-200 dark:hover:bg-white/10 text-gray-400"
                 >
                   <Plus size={14} />
                 </button>
@@ -239,12 +246,25 @@ export const IssuesPage: React.FC<{ projectId?: string; initialViewMode?: 'list'
               className="pl-9 pr-4 py-1.5 bg-gray-100 dark:bg-white/5 border-none rounded-md text-sm outline-none w-64 focus:ring-2 focus:ring-primary/20 transition-all"
             />
           </div>
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-md border border-gray-200 dark:border-border-dark bg-white dark:bg-white/5">
+            <Building2 size={14} className="text-gray-400" />
+            <select 
+              value={departmentFilter}
+              onChange={(e) => setDepartmentFilter(e.target.value)}
+              className="bg-transparent border-none text-xs font-medium outline-none focus:ring-0 appearance-none pr-4 cursor-pointer"
+            >
+              <option value="all">All Departments</option>
+              {MOCK_DEPARTMENTS.map(d => (
+                <option key={d.id} value={d.id}>{d.name}</option>
+              ))}
+            </select>
+          </div>
           <button className="flex items-center gap-2 px-3 py-1.5 rounded-md border border-gray-200 dark:border-border-dark hover:bg-gray-50 dark:hover:bg-white/5 text-sm transition-colors">
             <Filter size={14} />
             <span>Filter</span>
           </button>
           <button 
-            onClick={() => setView('create-issue')}
+            onClick={() => navigate('/issues/create')}
             className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary/90 transition-colors"
           >
             <Plus size={14} />

@@ -10,6 +10,7 @@ import {
   ArrowRight,
   Plus
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useApp } from '../AppContext';
 import { MOCK_ISSUES, MOCK_PROJECTS, STATUS_LABELS, PRIORITY_COLORS } from '../constants';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
@@ -44,7 +45,8 @@ const chartData = [
 ];
 
 export const DashboardPage: React.FC = () => {
-  const { setView, setSelectedIssueId, setActiveModal } = useApp();
+  const { setSelectedIssueId, setActiveModal } = useApp();
+  const navigate = useNavigate();
 
   return (
     <div className="p-8 space-y-8 overflow-y-auto h-full scrollbar-hide">
@@ -55,11 +57,11 @@ export const DashboardPage: React.FC = () => {
         </div>
         <div className="flex gap-3">
           <button 
-            onClick={() => setActiveModal('create-issue')}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20"
+            onClick={() => navigate('/tasks/new')}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20 transition-all active:scale-95"
           >
             <Plus size={18} />
-            <span>Create Issue</span>
+            <span>New Task</span>
           </button>
         </div>
       </header>
@@ -116,7 +118,7 @@ export const DashboardPage: React.FC = () => {
           <div className="bg-white dark:bg-card-dark rounded-xl border border-gray-200 dark:border-border-dark shadow-sm overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-200 dark:border-border-dark flex items-center justify-between">
               <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400">Assigned to me</h3>
-              <button onClick={() => setView('my-tasks')} className="text-xs text-primary font-semibold flex items-center gap-1 hover:underline">
+              <button onClick={() => navigate('/my-tasks')} className="text-xs text-primary font-semibold flex items-center gap-1 hover:underline">
                 View all <ArrowRight size={12} />
               </button>
             </div>
@@ -145,7 +147,7 @@ export const DashboardPage: React.FC = () => {
           <div className="bg-white dark:bg-card-dark rounded-xl border border-gray-200 dark:border-border-dark shadow-sm overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-200 dark:border-border-dark flex items-center justify-between">
               <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400">Team Activity</h3>
-              <button onClick={() => setView('activity')} className="text-xs text-primary font-semibold flex items-center gap-1 hover:underline">
+              <button onClick={() => navigate('/activity')} className="text-xs text-primary font-semibold flex items-center gap-1 hover:underline">
                 View all <ArrowRight size={12} />
               </button>
             </div>
@@ -174,7 +176,7 @@ export const DashboardPage: React.FC = () => {
             </div>
             <div className="p-4 space-y-4">
               {MOCK_PROJECTS.map(project => (
-                <div key={project.id} className="space-y-2 cursor-pointer group" onClick={() => setView('project-detail')}>
+                <div key={project.id} className="space-y-2 cursor-pointer group" onClick={() => navigate(`/projects/${project.id}`)}>
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-semibold group-hover:text-primary transition-colors">{project.name}</span>
                     <span className="text-xs text-gray-400">{project.progress}%</span>

@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { Modal } from './Modal';
 import { useApp } from '../../AppContext';
-import { MOCK_TEAMS, MOCK_USERS } from '../../constants';
-import { ChevronDown, Loader2, Calendar, Users, Layout, RotateCcw, Map } from 'lucide-react';
+import { MOCK_TEAMS, MOCK_USERS, MOCK_DEPARTMENTS } from '../../constants';
+import { ChevronDown, Loader2, Calendar, Users, Layout, RotateCcw, Map, Building2 } from 'lucide-react';
 
 export const CreateProjectModal: React.FC = () => {
   const { activeModal, setActiveModal, showToast } = useApp();
@@ -13,6 +13,7 @@ export const CreateProjectModal: React.FC = () => {
   const [leadId, setLeadId] = useState(MOCK_USERS[0].id);
   const [startDate, setStartDate] = useState('');
   const [targetDate, setTargetDate] = useState('');
+  const [departmentId, setDepartmentId] = useState('');
   
   const [enableRoadmap, setEnableRoadmap] = useState(true);
   const [enableCycles, setEnableCycles] = useState(true);
@@ -69,13 +70,32 @@ export const CreateProjectModal: React.FC = () => {
           <div className="space-y-1.5">
             <label className="text-xs font-bold uppercase tracking-wider text-gray-400">Team</label>
             <div className="relative">
+              <Users size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <select
                 value={teamId}
                 onChange={(e) => setTeamId(e.target.value)}
-                className="w-full pl-3 pr-10 py-2.5 bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-border-dark rounded-lg outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm appearance-none"
+                className="w-full pl-10 pr-10 py-2.5 bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-border-dark rounded-lg outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm appearance-none"
               >
                 {MOCK_TEAMS.map(t => (
                   <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+              </select>
+              <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold uppercase tracking-wider text-gray-400">Department (Optional)</label>
+            <div className="relative">
+              <Building2 size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <select
+                value={departmentId}
+                onChange={(e) => setDepartmentId(e.target.value)}
+                className="w-full pl-10 pr-10 py-2.5 bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-border-dark rounded-lg outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm appearance-none"
+              >
+                <option value="">Global (No Department)</option>
+                {MOCK_DEPARTMENTS.map(d => (
+                  <option key={d.id} value={d.id}>{d.name}</option>
                 ))}
               </select>
               <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />

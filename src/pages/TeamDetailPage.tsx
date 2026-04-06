@@ -11,7 +11,7 @@ import {
   MoreHorizontal
 } from 'lucide-react';
 import { MOCK_TEAMS, MOCK_USERS, MOCK_PROJECTS, MOCK_ISSUES } from '../constants';
-import { IssuesPage } from './IssuesPage';
+import { IssuesPage } from '@/src/features/issues/components/IssuesPage';
 import { ActivityPage } from './ActivityPage';
 import { MembersPage } from './MembersPage';
 

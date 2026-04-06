@@ -1,16 +1,17 @@
 import React, { useState } from 'react';
 import { Modal } from './Modal';
 import { useApp } from '../../AppContext';
-import { MOCK_TEAMS } from '../../constants';
-import { ChevronDown, Loader2, Mail, Shield, Users } from 'lucide-react';
+import { MOCK_TEAMS, MOCK_DEPARTMENTS } from '../../constants';
+import { ChevronDown, Loader2, Mail, Shield, Users, Building2 } from 'lucide-react';
 import { UserRole } from '../../types';
 
 export const InviteMemberModal: React.FC = () => {
   const { activeModal, setActiveModal, showToast } = useApp();
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState<UserRole>('employee');
+  const [role, setRole] = useState<UserRole>('member');
   const [teamId, setTeamId] = useState(MOCK_TEAMS[0].id);
+  const [departmentId, setDepartmentId] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,12 +58,12 @@ export const InviteMemberModal: React.FC = () => {
               <select
                 value={role}
                 onChange={(e) => setRole(e.target.value as UserRole)}
-                className="w-full pl-10 pr-10 py-2.5 bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-border-dark rounded-lg outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm appearance-none"
+                className="w-full pl-10 pr-10 py-2.5 bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-border-dark rounded-lg outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm appearance-none font-medium"
               >
+                <option value="owner">Owner</option>
                 <option value="admin">Admin</option>
-                <option value="co-admin">Co-Admin</option>
-                <option value="team-lead">Team Lead</option>
-                <option value="employee">Employee</option>
+                <option value="member">Member</option>
+                <option value="guest">Guest</option>
               </select>
               <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
             </div>
@@ -79,6 +80,24 @@ export const InviteMemberModal: React.FC = () => {
               >
                 {MOCK_TEAMS.map(t => (
                   <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+              </select>
+              <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold uppercase tracking-wider text-gray-400">Department (Optional)</label>
+            <div className="relative">
+              <Building2 size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <select
+                value={departmentId}
+                onChange={(e) => setDepartmentId(e.target.value)}
+                className="w-full pl-10 pr-10 py-2.5 bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-border-dark rounded-lg outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm appearance-none"
+              >
+                <option value="">No Department</option>
+                {MOCK_DEPARTMENTS.map(d => (
+                  <option key={d.id} value={d.id}>{d.name}</option>
                 ))}
               </select>
               <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />

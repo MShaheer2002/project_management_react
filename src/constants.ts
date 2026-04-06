@@ -1,21 +1,26 @@
-import { Issue, Project, Team, User, Notification, Activity, Integration, Cycle, ApiKey } from './types';
+import { Issue, Project, Team, User, Notification, Activity, Integration, Cycle, ApiKey, Organization, Department } from './types';
 
 export const MOCK_USERS: User[] = [
-  { id: 'u1', name: 'Alex Rivera', email: 'alex@example.com', role: 'admin', avatar: 'https://picsum.photos/seed/alex/100/100', lastActive: '2 mins ago', teamId: 't1' },
-  { id: 'u2', name: 'Sarah Chen', email: 'sarah@example.com', role: 'co-admin', avatar: 'https://picsum.photos/seed/sarah/100/100', lastActive: '1 hour ago', teamId: 't1' },
-  { id: 'u3', name: 'Jordan Smith', email: 'jordan@example.com', role: 'team-lead', avatar: 'https://picsum.photos/seed/jordan/100/100', lastActive: 'Active now', teamId: 't2' },
-  { id: 'u4', name: 'Taylor Otwell', email: 'taylor@example.com', role: 'employee', avatar: 'https://picsum.photos/seed/taylor/100/100', lastActive: 'Yesterday', teamId: 't1' },
+  { id: 'u1', name: 'Alex Rivera', email: 'alex@example.com', role: 'owner', avatar: 'https://picsum.photos/seed/alex/100/100', lastActive: '2 mins ago', teamId: 't1', departmentId: 'd1' },
+  { id: 'u2', name: 'Sarah Chen', email: 'sarah@example.com', role: 'admin', avatar: 'https://picsum.photos/seed/sarah/100/100', lastActive: '1 hour ago', teamId: 't1', departmentId: 'd1' },
+  { id: 'u3', name: 'Jordan Smith', email: 'jordan@example.com', role: 'member', avatar: 'https://picsum.photos/seed/jordan/100/100', lastActive: 'Active now', teamId: 't2', departmentId: 'd2' },
+  { id: 'u4', name: 'Taylor Otwell', email: 'taylor@example.com', role: 'guest', avatar: 'https://picsum.photos/seed/taylor/100/100', lastActive: 'Yesterday', teamId: 't1', departmentId: 'd1' },
+];
+
+export const MOCK_DEPARTMENTS: Department[] = [
+  { id: 'd1', name: 'Engineering', description: 'Building the future of our product.', headId: 'u1', color: '#5f72ea', icon: 'Terminal', memberIds: ['u1', 'u2', 'u4'], teamIds: ['t1'], projectIds: ['p1', 'p2'], visibility: 'public', isDefault: true, createdAt: '2024-01-01T00:00:00Z' },
+  { id: 'd2', name: 'Design', description: 'Crafting beautiful user experiences.', headId: 'u3', color: '#ea5fba', icon: 'Palette', memberIds: ['u3'], teamIds: ['t2'], projectIds: ['p3'], visibility: 'public', isDefault: false, createdAt: '2024-01-15T00:00:00Z' },
 ];
 
 export const MOCK_TEAMS: Team[] = [
-  { id: 't1', name: 'Engineering', leadId: 'u1', memberIds: ['u1', 'u2', 'u4'], projectIds: ['p1', 'p2'] },
-  { id: 't2', name: 'Product', leadId: 'u2', memberIds: ['u2', 'u3'], projectIds: ['p3'] },
+  { id: 't1', name: 'Engineering', leadId: 'u1', memberIds: ['u1', 'u2', 'u4'], projectIds: ['p1', 'p2'], departmentId: 'd1' },
+  { id: 't2', name: 'Product', leadId: 'u2', memberIds: ['u2', 'u3'], projectIds: ['p3'], departmentId: 'd2' },
 ];
 
 export const MOCK_PROJECTS: Project[] = [
-  { id: 'p1', name: 'Mobile App Redesign', description: 'Complete overhaul of the iOS and Android applications.', teamId: 't1', status: 'active', progress: 65, issueCount: 24, updatedAt: '2024-03-05T10:00:00Z' },
-  { id: 'p2', name: 'API V2', description: 'Developing the next generation of our public API.', teamId: 't1', status: 'active', progress: 30, issueCount: 12, updatedAt: '2024-03-04T15:30:00Z' },
-  { id: 'p3', name: 'Q1 Roadmap', description: 'Planning and execution for the first quarter.', teamId: 't2', status: 'active', progress: 90, issueCount: 8, updatedAt: '2024-03-06T09:00:00Z' },
+  { id: 'p1', name: 'Mobile App Redesign', description: 'Complete overhaul of the iOS and Android applications.', teamId: 't1', departmentId: 'd1', status: 'active', progress: 65, issueCount: 24, updatedAt: '2024-03-05T10:00:00Z' },
+  { id: 'p2', name: 'API V2', description: 'Developing the next generation of our public API.', teamId: 't1', departmentId: 'd1', status: 'active', progress: 30, issueCount: 12, updatedAt: '2024-03-04T15:30:00Z' },
+  { id: 'p3', name: 'Q1 Roadmap', description: 'Planning and execution for the first quarter.', teamId: 't2', departmentId: 'd2', status: 'active', progress: 90, issueCount: 8, updatedAt: '2024-03-06T09:00:00Z' },
 ];
 
 export const MOCK_ISSUES: Issue[] = [
@@ -69,3 +74,8 @@ export const STATUS_LABELS = {
   review: 'Review',
   done: 'Done',
 };
+
+export const MOCK_ORGANIZATIONS: Organization[] = [
+  { id: 'org-1', name: 'Acme Corp', slug: 'acme-corp', logo: 'https://picsum.photos/seed/acme/100/100' },
+  { id: 'org-2', name: 'Stark Industries', slug: 'stark-ind', logo: 'https://picsum.photos/seed/stark/100/100' },
+];

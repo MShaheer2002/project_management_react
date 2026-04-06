@@ -1,4 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { 
+  Link, 
+  useLocation, 
+  useNavigate 
+} from 'react-router-dom';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   LayoutDashboard, 
   Inbox, 
@@ -11,14 +17,13 @@ import {
   History, 
   Settings,
   ChevronDown,
-  Plus,
+  Building2,
   Moon,
   Sun,
   LogOut,
   Search,
   PanelLeftClose,
   PanelLeftOpen,
-  Bell,
   Globe,
   UserCircle,
   Key,
@@ -26,18 +31,17 @@ import {
   FileText
 } from 'lucide-react';
 import { useApp } from '../AppContext';
-import { ViewType } from '../types';
 
 const SidebarItem: React.FC<{ 
   icon: React.ReactNode; 
   label: string; 
   active?: boolean; 
-  onClick: () => void;
+  to: string;
   badge?: number;
   collapsed?: boolean;
-}> = ({ icon, label, active, onClick, badge, collapsed }) => (
-  <button
-    onClick={onClick}
+}> = ({ icon, label, active, to, badge, collapsed }) => (
+  <Link
+    to={to}
     title={collapsed ? label : undefined}
     className={`w-full flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-colors ${
       active 
@@ -54,21 +58,27 @@ const SidebarItem: React.FC<{
         {badge}
       </span>
     )}
-  </button>
+  </Link>
 );
 
 export const Sidebar: React.FC = () => {
   const { 
-    currentView, 
-    setView, 
-    organization, 
+    organization,
     currentUser, 
     theme, 
     setTheme, 
     setCommandPaletteOpen,
     isSidebarCollapsed,
-    setSidebarCollapsed
+    setSidebarCollapsed,
+    setActiveModal,
+    showToast
   } = useApp();
+
+  const isAdmin = currentUser?.role === 'owner' || currentUser?.role === 'admin';
+  const isLead = isAdmin || currentUser?.role === 'member';
+
+  const location = useLocation();
+  const navigate = useNavigate();
 
   const cycleTheme = () => {
     if (theme === 'light') setTheme('dark');
@@ -76,60 +86,136 @@ export const Sidebar: React.FC = () => {
     else setTheme('light');
   };
 
-  const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'co-admin';
-  const isLead = isAdmin || currentUser?.role === 'team-lead';
+  const [isWorkspaceMenuOpen, setIsWorkspaceMenuOpen] = useState(false);
 
-  const navSections: { title: string; items: { id: ViewType; label: string; icon: React.ReactNode; badge?: number; adminOnly?: boolean; leadOnly?: boolean }[] }[] = [
+  const navSections: { title: string; items: { path: string; label: string; icon: React.ReactNode; badge?: number; adminOnly?: boolean; leadOnly?: boolean }[] }[] = [
     {
       title: 'Workspace',
       items: [
-        { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={16} /> },
-        { id: 'inbox', label: 'Inbox', icon: <Inbox size={16} />, badge: 3 },
-        { id: 'my-tasks', label: 'My Tasks', icon: <CheckSquare size={16} /> },
+        { path: '/', label: 'Dashboard', icon: <LayoutDashboard size={16} /> },
+        { path: '/inbox', label: 'Inbox', icon: <Inbox size={16} />, badge: 3 },
+        { path: '/my-tasks', label: 'My Tasks', icon: <CheckSquare size={16} /> },
       ]
     },
     {
       title: 'Planning',
       items: [
-        { id: 'issues', label: 'Issues', icon: <UserCircle size={16} /> },
-        { id: 'templates', label: 'Templates', icon: <FileText size={16} />, adminOnly: true },
-        { id: 'projects', label: 'Projects', icon: <Layers size={16} /> },
-        { id: 'roadmap', label: 'Roadmap', icon: <Map size={16} /> },
-        { id: 'cycles', label: 'Cycles', icon: <RotateCcw size={16} /> },
+        { path: '/issues', label: 'Issues', icon: <UserCircle size={16} /> },
+        { path: '/templates', label: 'Templates', icon: <FileText size={16} />, adminOnly: true },
+        { path: '/projects', label: 'Projects', icon: <Layers size={16} /> },
+        { path: '/roadmap', label: 'Roadmap', icon: <Map size={16} /> },
+        { path: '/cycles', label: 'Cycles', icon: <RotateCcw size={16} /> },
       ]
     },
     {
       title: 'Organization',
       items: [
-        { id: 'teams', label: 'Teams', icon: <Users size={16} /> },
-        { id: 'members', label: 'Members', icon: <Users size={16} /> },
-        { id: 'activity', label: 'Activity', icon: <History size={16} /> },
-        { id: 'analytics', label: 'Analytics', icon: <BarChart3 size={16} />, leadOnly: true },
-        { id: 'integrations', label: 'Integrations', icon: <Globe size={16} />, leadOnly: true },
-        { id: 'api-keys', label: 'API Keys', icon: <Key size={16} />, adminOnly: true },
-        { id: 'billing', label: 'Billing', icon: <CreditCard size={16} />, adminOnly: true },
-        { id: 'settings', label: 'Settings', icon: <Settings size={16} /> },
+        { path: '/departments', label: 'Departments', icon: <Building2 size={16} /> },
+        { path: '/teams', label: 'Teams', icon: <Users size={16} /> },
+        { path: '/members', label: 'Members', icon: <Users size={16} /> },
+        { path: '/activity', label: 'Activity', icon: <History size={16} /> },
+        { path: '/analytics', label: 'Analytics', icon: <BarChart3 size={16} />, leadOnly: true },
+        { path: '/integrations', label: 'Integrations', icon: <Globe size={16} />, leadOnly: true },
+        { path: '/api-keys', label: 'API Keys', icon: <Key size={16} />, adminOnly: true },
+        { path: '/billing', label: 'Billing', icon: <CreditCard size={16} />, adminOnly: true },
+        { path: '/settings', label: 'Settings', icon: <Settings size={16} /> },
       ]
     }
   ];
 
+  const workspaceMenuItems = [
+    { 
+      label: 'Settings', 
+      icon: <Settings size={14} />, 
+      onClick: () => { navigate('/settings'); setIsWorkspaceMenuOpen(false); } 
+    },
+    { 
+      label: 'Invite and manage members', 
+      icon: <Users size={14} />, 
+      onClick: () => { setActiveModal('invite-member'); setIsWorkspaceMenuOpen(false); } 
+    },
+    { 
+      label: 'Download desktop app', 
+      icon: <LayoutDashboard size={14} />, 
+      badge: 'Coming Soon',
+      disabled: true 
+    },
+    { 
+      label: 'Switch workspace', 
+      icon: <RotateCcw size={14} />, 
+      onClick: () => { showToast('Workspace switching placeholder', 'info'); setIsWorkspaceMenuOpen(false); } 
+    },
+    { 
+      type: 'divider'
+    },
+    { 
+      label: 'Logout', 
+      icon: <LogOut size={14} />, 
+      onClick: () => { navigate('/login'); setIsWorkspaceMenuOpen(false); },
+      variant: 'danger'
+    },
+  ];
+
   return (
-    <aside className={`${isSidebarCollapsed ? 'w-16' : 'w-64'} h-full flex flex-col bg-gray-50 dark:bg-sidebar-dark border-r border-gray-200 dark:border-border-dark select-none transition-all duration-300`}>
+    <aside className={`${isSidebarCollapsed ? 'w-16' : 'w-64'} h-full flex flex-col bg-gray-50 dark:bg-sidebar-dark border-r border-gray-200 dark:border-border-dark select-none transition-all duration-300 relative z-50`}>
       {/* Org Switcher */}
-      <div className="p-4 flex items-center justify-between">
+      <div className="p-4 relative">
         {!isSidebarCollapsed && (
-          <button className="flex-1 flex items-center justify-between p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-white/5 transition-colors overflow-hidden">
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded bg-primary flex items-center justify-center text-white text-xs font-bold shrink-0">
-                {organization?.name.charAt(0)}
+          <div className="relative">
+            <button 
+              onClick={() => setIsWorkspaceMenuOpen(!isWorkspaceMenuOpen)}
+              className={`w-full flex items-center justify-between p-2 rounded-lg transition-all ${isWorkspaceMenuOpen ? 'bg-gray-200 dark:bg-white/10' : 'hover:bg-gray-200 dark:hover:bg-white/5'}`}
+            >
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded bg-primary flex items-center justify-center text-white text-xs font-bold shrink-0 shadow-lg shadow-primary/20">
+                  {organization?.name.charAt(0)}
+                </div>
+                <span className="text-sm font-bold tracking-tight truncate">{organization?.name}</span>
               </div>
-              <span className="text-sm font-semibold truncate">{organization?.name}</span>
-            </div>
-            <ChevronDown size={14} className="text-gray-400" />
-          </button>
+              <ChevronDown size={14} className={`text-gray-400 transition-transform duration-200 ${isWorkspaceMenuOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            <AnimatePresence>
+              {isWorkspaceMenuOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                  transition={{ duration: 0.15, ease: "easeOut" }}
+                  className="absolute left-0 top-full mt-2 w-64 bg-white dark:bg-card-dark border border-gray-200 dark:border-border-dark rounded-xl shadow-2xl overflow-hidden py-1.5 z-50"
+                >
+                  {workspaceMenuItems.map((item, idx) => (
+                    item.type === 'divider' ? (
+                      <div key={idx} className="my-1.5 h-px bg-gray-100 dark:bg-border-dark" />
+                    ) : (
+                      <button
+                        key={idx}
+                        onClick={item.onClick}
+                        disabled={item.disabled}
+                        className={`w-full flex items-center justify-between px-3 py-2 text-xs font-medium transition-colors
+                          ${item.disabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-50 dark:hover:bg-white/5'}
+                          ${item.variant === 'danger' ? 'text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10' : 'text-gray-700 dark:text-gray-300'}
+                        `}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <span className={item.variant === 'danger' ? 'text-red-500' : 'text-gray-400'}>{item.icon}</span>
+                          <span>{item.label}</span>
+                        </div>
+                        {item.badge && (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-bold uppercase tracking-wider">
+                            {item.badge}
+                          </span>
+                        )}
+                      </button>
+                    )
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         )}
         {isSidebarCollapsed && (
-          <div className="w-8 h-8 rounded bg-primary flex items-center justify-center text-white text-sm font-bold mx-auto">
+          <div className="w-8 h-8 rounded bg-primary flex items-center justify-center text-white text-sm font-bold mx-auto shadow-lg shadow-primary/20">
             {organization?.name.charAt(0)}
           </div>
         )}
@@ -173,11 +259,11 @@ export const Sidebar: React.FC = () => {
               )}
               {visibleItems.map(item => (
                 <SidebarItem
-                  key={item.id}
+                  key={item.path}
                   icon={item.icon}
                   label={item.label}
-                  active={currentView === item.id}
-                  onClick={() => setView(item.id)}
+                  active={location.pathname === item.path}
+                  to={item.path}
                   badge={item.badge}
                   collapsed={isSidebarCollapsed}
                 />
@@ -205,7 +291,7 @@ export const Sidebar: React.FC = () => {
             {isSidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
           </button>
           <button 
-            onClick={() => setView('login')}
+            onClick={() => navigate('/login')}
             title="Logout"
             className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-white/5 text-gray-500 transition-colors"
           >
@@ -213,8 +299,8 @@ export const Sidebar: React.FC = () => {
           </button>
         </div>
         
-        <button 
-          onClick={() => setView('settings')}
+        <Link 
+          to="/settings"
           className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center' : 'gap-3'} p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-white/5 transition-colors`}
         >
           <img 
@@ -229,7 +315,7 @@ export const Sidebar: React.FC = () => {
               <span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">{currentUser?.role}</span>
             </div>
           )}
-        </button>
+        </Link>
       </div>
     </aside>
   );

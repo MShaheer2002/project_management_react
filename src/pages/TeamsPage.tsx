@@ -1,11 +1,12 @@
 import React from 'react';
-import { Users, Plus, Search, Mail, MoreVertical, Shield, User as UserIcon } from 'lucide-react';
+import { Users, Plus, MoreVertical, Shield } from 'lucide-react';
 import { MOCK_TEAMS, MOCK_USERS } from '../constants';
-
+import { useNavigate } from 'react-router-dom';
 import { useApp } from '../AppContext';
 
 export const TeamsPage: React.FC = () => {
-  const { setView, setActiveModal } = useApp();
+  const { setActiveModal } = useApp();
+  const navigate = useNavigate();
   return (
     <div className="flex flex-col h-full">
       <header className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-border-dark">
@@ -82,7 +83,7 @@ export const TeamsPage: React.FC = () => {
                 </div>
                 
                 <div 
-                  onClick={() => setView('team-detail')}
+                  onClick={() => navigate('/teams/1')}
                   className="px-5 py-3 bg-gray-50 dark:bg-black/20 border-t border-gray-200 dark:border-border-dark flex items-center justify-between cursor-pointer"
                 >
                   <span className="text-xs text-gray-400">{team.projectIds.length} active projects</span>

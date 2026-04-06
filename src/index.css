@@ -21,9 +21,66 @@
   }
 }
 
+@layer components {
+  .rich-text-content h1,
+  .rich-text-content h2,
+  .rich-text-content h3 {
+    @apply text-gray-900 dark:text-white font-semibold leading-tight mt-5 mb-3;
+  }
+
+  .rich-text-content h1 {
+    @apply text-3xl;
+  }
+
+  .rich-text-content h2 {
+    @apply text-2xl;
+  }
+
+  .rich-text-content h3 {
+    @apply text-xl;
+  }
+
+  .rich-text-content p {
+    @apply text-[15px] leading-7 text-gray-800 dark:text-gray-100 my-2;
+  }
+
+  .rich-text-content ul,
+  .rich-text-content ol {
+    @apply my-3 pl-6;
+  }
+
+  .rich-text-content ul {
+    list-style-type: disc;
+  }
+
+  .rich-text-content ol {
+    list-style-type: decimal;
+  }
+
+  .rich-text-content li {
+    @apply my-1;
+  }
+
+  .rich-text-content pre {
+    @apply bg-gray-100 dark:bg-[#151821] text-sm rounded-lg px-4 py-3 my-3 overflow-x-auto;
+  }
+
+  .rich-text-content a {
+    @apply text-primary underline underline-offset-2;
+  }
+}
+
 .dark {
   background-color: var(--color-bg-dark);
   color: var(--color-text-primary-dark);
+}
+
+.dark ::placeholder {
+  color: #6B7280; /* text-gray-500 equivalent for better visibility */
+}
+
+.dark hr {
+  border-color: var(--color-border-dark);
 }
 
 /* Custom Scrollbar */

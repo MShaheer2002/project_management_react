@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
+import { Routes, Route, Navigate, useNavigate, Link } from 'react-router-dom';
 import { AppProvider, useApp } from './AppContext';
 import { Sidebar } from './components/Sidebar';
 import { ContextPanel } from './components/ContextPanel';
 import { CommandPalette } from './components/CommandPalette';
 import { DashboardPage } from './pages/DashboardPage';
-import { IssuesPage } from './pages/IssuesPage';
-import { ProjectsPage } from './pages/ProjectsPage';
+import { IssuesPage } from './features/issues/components/IssuesPage';
+import { ProjectsPage } from './features/projects/components/ProjectsPage';
 import { TeamsPage } from './pages/TeamsPage';
 import { RoadmapPage } from './pages/RoadmapPage';
 import { SettingsPage } from './pages/SettingsPage';
@@ -21,7 +22,10 @@ import { BillingPage } from './pages/BillingPage';
 import { ApiKeysPage } from './pages/ApiKeysPage';
 import { ProjectDetailPage } from './pages/ProjectDetailPage';
 import { TeamDetailPage } from './pages/TeamDetailPage';
+import { DepartmentsPage } from '@/src/pages/DepartmentsPage';
+import { DepartmentDetailPage } from '@/src/pages/DepartmentDetailPage';
 import { CreateIssuePage } from './pages/CreateIssuePage';
+import { CreateTaskPage } from './pages/CreateTaskPage';
 import { TemplatesPage } from './pages/TemplatesPage';
 import { AuthPage } from './pages/AuthPage';
 import { ModalManager } from './components/modals/ModalManager';
@@ -37,16 +41,13 @@ import {
   LogOut, 
   Moon, 
   Sun,
-  Inbox,
-  RotateCcw,
-  BarChart3,
-  History,
   Globe
 } from 'lucide-react';
 
 const TopNavbar: React.FC = () => {
-  const { setCommandPaletteOpen, currentUser, setView, theme, setTheme } = useApp();
+  const { setCommandPaletteOpen, currentUser, theme, setTheme } = useApp();
   const [isUserMenuOpen, setUserMenuOpen] = useState(false);
+  const navigate = useNavigate();
 
   return (
     <header className="h-14 border-b border-gray-200 dark:border-border-dark bg-white/80 dark:bg-bg-dark/80 backdrop-blur-md flex items-center justify-between px-6 sticky top-0 z-30">
@@ -68,13 +69,14 @@ const TopNavbar: React.FC = () => {
 
       <div className="flex items-center gap-3">
         <button 
-          onClick={() => setView('create-issue')}
+          onClick={() => navigate('/tasks/new')}
           className="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-white/5 text-gray-400 transition-colors"
+          title="Create new task (Ctrl+Enter)"
         >
           <Plus size={18} />
         </button>
         <button 
-          onClick={() => setView('inbox')}
+          onClick={() => navigate('/inbox')}
           className="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-white/5 text-gray-400 transition-colors relative"
         >
           <Bell size={18} />
@@ -110,20 +112,22 @@ const TopNavbar: React.FC = () => {
                     <div className="text-xs text-gray-400 truncate">{currentUser?.email}</div>
                   </div>
                   <div className="p-1">
-                    <button 
-                      onClick={() => { setView('settings'); setUserMenuOpen(false); }}
+                    <Link 
+                      to="/settings"
+                      onClick={() => setUserMenuOpen(false)}
                       className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-white/5 text-sm text-left transition-colors"
                     >
                       <User size={16} className="text-gray-400" />
                       Profile
-                    </button>
-                    <button 
-                      onClick={() => { setView('settings'); setUserMenuOpen(false); }}
+                    </Link>
+                    <Link 
+                      to="/settings"
+                      onClick={() => setUserMenuOpen(false)}
                       className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-white/5 text-sm text-left transition-colors"
                     >
                       <Settings size={16} className="text-gray-400" />
                       Account Settings
-                    </button>
+                    </Link>
                     <div className="h-[1px] bg-gray-100 dark:bg-gray-800 my-1 mx-2" />
                     <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-400">Theme</div>
                     <div className="grid grid-cols-3 gap-1 p-1">
@@ -152,7 +156,7 @@ const TopNavbar: React.FC = () => {
                   </div>
                   <div className="p-1 border-t border-gray-200 dark:border-border-dark">
                     <button 
-                      onClick={() => { setView('login'); setUserMenuOpen(false); }}
+                      onClick={() => { navigate('/login'); setUserMenuOpen(false); }}
                       className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-red-500/10 text-red-500 text-sm text-left transition-colors"
                     >
                       <LogOut size={16} />
@@ -170,65 +174,10 @@ const TopNavbar: React.FC = () => {
 };
 
 const MainLayout: React.FC = () => {
-  const { currentView, currentUser } = useApp();
+  const { currentUser } = useApp();
 
-  if (currentView === 'marketing') {
-    return <MarketingPage />;
-  }
-
-  const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'co-admin';
-  const isLead = isAdmin || currentUser?.role === 'team-lead';
-
-  const renderContent = () => {
-    switch (currentView) {
-      case 'dashboard': return <DashboardPage />;
-      case 'inbox': return <NotificationsPage />;
-      case 'my-tasks': return <MyTasksPage />;
-      case 'issues': return <IssuesPage />;
-      case 'create-issue': return <CreateIssuePage />;
-      case 'templates': 
-        if (!isAdmin) return <DashboardPage />;
-        return <TemplatesPage />;
-      case 'projects': return <ProjectsPage />;
-      case 'project-detail': return <ProjectDetailPage />;
-      case 'teams': return <TeamsPage />;
-      case 'team-detail': return <TeamDetailPage />;
-      case 'members': return <MembersPage />;
-      case 'roadmap': return <RoadmapPage />;
-      case 'cycles': return <CyclesPage />;
-      case 'analytics': 
-        if (!isLead) return <DashboardPage />;
-        return <ReportsPage />;
-      case 'activity': return <ActivityPage />;
-      case 'integrations': 
-        if (!isLead) return <DashboardPage />;
-        return <IntegrationsPage />;
-      case 'api-keys': 
-        if (!isAdmin) return <DashboardPage />;
-        return <ApiKeysPage />;
-      case 'billing': 
-        if (!isAdmin) return <DashboardPage />;
-        return <BillingPage />;
-      case 'settings': return <SettingsPage />;
-      default: return <DashboardPage />;
-    }
-  };
-
-  if (['login', 'signup', 'org-creation', 'forgot-password', 'reset-password', 'email-verification'].includes(currentView)) {
-    return (
-      <>
-        <ModalManager />
-        <ToastContainer />
-        <AuthPage mode={
-          currentView === 'org-creation' ? 'org' : 
-          currentView === 'forgot-password' ? 'forgot-password' :
-          currentView === 'reset-password' ? 'reset-password' :
-          currentView === 'email-verification' ? 'email-verification' :
-          (currentView as 'login' | 'signup')
-        } />
-      </>
-    );
-  }
+  const isAdmin = currentUser?.role === 'owner' || currentUser?.role === 'admin';
+  const isLead = isAdmin || currentUser?.role === 'member';
 
   return (
     <div className="flex h-screen bg-white dark:bg-bg-dark text-text-primary-light dark:text-text-primary-dark overflow-hidden transition-colors duration-300">
@@ -238,7 +187,34 @@ const MainLayout: React.FC = () => {
       <div className="flex-1 flex flex-col overflow-hidden">
         <TopNavbar />
         <main className="flex-1 overflow-hidden relative">
-          {renderContent()}
+          <Routes>
+            <Route path="/" element={<DashboardPage />} />
+            <Route path="/inbox" element={<NotificationsPage />} />
+            <Route path="/my-tasks" element={<MyTasksPage />} />
+            <Route path="/issues" element={<IssuesPage />} />
+            <Route path="/issues/create" element={<CreateIssuePage />} />
+            <Route path="/projects" element={<ProjectsPage />} />
+            <Route path="/projects/:id" element={<ProjectDetailPage />} />
+            <Route path="/teams" element={<TeamsPage />} />
+            <Route path="/teams/:id" element={<TeamDetailPage />} />
+            <Route path="/departments" element={<DepartmentsPage />} />
+            <Route path="/departments/:id" element={<DepartmentDetailPage />} />
+            <Route path="/members" element={<MembersPage />} />
+            <Route path="/roadmap" element={<RoadmapPage />} />
+            <Route path="/cycles" element={<CyclesPage />} />
+            <Route path="/activity" element={<ActivityPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/tasks/new" element={<CreateTaskPage />} />
+            
+            {/* Lead/Admin Routes */}
+            <Route path="/analytics" element={isLead ? <ReportsPage /> : <Navigate to="/" />} />
+            <Route path="/integrations" element={isLead ? <IntegrationsPage /> : <Navigate to="/" />} />
+            <Route path="/templates" element={isAdmin ? <TemplatesPage /> : <Navigate to="/" />} />
+            <Route path="/api-keys" element={isAdmin ? <ApiKeysPage /> : <Navigate to="/" />} />
+            <Route path="/billing" element={isAdmin ? <BillingPage /> : <Navigate to="/" />} />
+            
+            <Route path="*" element={<Navigate to="/" />} />
+          </Routes>
         </main>
       </div>
       <AnimatePresence>
@@ -254,7 +230,16 @@ const MainLayout: React.FC = () => {
 export default function App() {
   return (
     <AppProvider>
-      <MainLayout />
+      <Routes>
+        <Route path="/marketing" element={<MarketingPage />} />
+        <Route path="/login" element={<AuthPage mode="login" />} />
+        <Route path="/signup" element={<AuthPage mode="signup" />} />
+        <Route path="/org-creation" element={<AuthPage mode="org" />} />
+        <Route path="/forgot-password" element={<AuthPage mode="forgot-password" />} />
+        <Route path="/reset-password" element={<AuthPage mode="reset-password" />} />
+        <Route path="/email-verification" element={<AuthPage mode="email-verification" />} />
+        <Route path="/*" element={<MainLayout />} />
+      </Routes>
     </AppProvider>
   );
 }

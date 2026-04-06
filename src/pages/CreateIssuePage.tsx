@@ -21,13 +21,16 @@ import {
   Image as ImageIcon,
   ChevronDown
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useApp } from '../AppContext';
 import { MOCK_PROJECTS, MOCK_USERS, PRIORITY_COLORS, STATUS_LABELS } from '../constants';
 import { Priority, Status } from '../types';
 import { motion } from 'motion/react';
+import { RichTextEditor } from '../components/RichTextEditor';
 
 export const CreateIssuePage: React.FC = () => {
-  const { setView, showToast } = useApp();
+  const { showToast } = useApp();
+  const navigate = useNavigate();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [projectId, setProjectId] = useState(MOCK_PROJECTS[0].id);
@@ -46,7 +49,7 @@ export const CreateIssuePage: React.FC = () => {
     setTimeout(() => {
       setIsSubmitting(false);
       showToast('Issue created successfully');
-      setView('issues');
+      navigate('/issues');
     }, 1000);
   };
 
@@ -56,7 +59,7 @@ export const CreateIssuePage: React.FC = () => {
       <header className="h-14 border-b border-gray-200 dark:border-border-dark flex items-center justify-between px-6 sticky top-0 z-10 bg-white/80 dark:bg-bg-dark/80 backdrop-blur-md">
         <div className="flex items-center gap-4">
           <button 
-            onClick={() => setView('issues')}
+            onClick={() => navigate('/issues')}
             className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-white/5 text-gray-400 transition-colors"
           >
             <ChevronLeft size={20} />
@@ -94,22 +97,14 @@ export const CreateIssuePage: React.FC = () => {
         {/* Left Section - Editor */}
         <div className="flex-1 overflow-y-auto p-8 border-r border-gray-200 dark:border-border-dark scrollbar-hide">
           <div className="max-w-3xl mx-auto space-y-8">
-            {/* Rich Text Editor Mock */}
+            {/* Functional Rich Editor Surface */}
             <div className="space-y-4">
-              <div className="flex items-center gap-1 p-1 bg-gray-50 dark:bg-white/5 rounded-lg border border-gray-200 dark:border-border-dark">
-                <button className="p-1.5 rounded hover:bg-gray-200 dark:hover:bg-white/10 text-gray-500"><Bold size={16} /></button>
-                <button className="p-1.5 rounded hover:bg-gray-200 dark:hover:bg-white/10 text-gray-500"><Italic size={16} /></button>
-                <div className="w-[1px] h-4 bg-gray-200 dark:bg-gray-700 mx-1" />
-                <button className="p-1.5 rounded hover:bg-gray-200 dark:hover:bg-white/10 text-gray-500"><List size={16} /></button>
-                <button className="p-1.5 rounded hover:bg-gray-200 dark:hover:bg-white/10 text-gray-500"><LinkIcon size={16} /></button>
-                <button className="p-1.5 rounded hover:bg-gray-200 dark:hover:bg-white/10 text-gray-500"><Code size={16} /></button>
-                <button className="p-1.5 rounded hover:bg-gray-200 dark:hover:bg-white/10 text-gray-500"><ImageIcon size={16} /></button>
-              </div>
-              <textarea 
-                placeholder="Add description..." 
+              <label className="text-[11px] font-black uppercase tracking-[0.2em] text-gray-400 block px-1">Issue Specification</label>
+              <RichTextEditor 
                 value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                className="w-full h-64 bg-transparent border-none outline-none resize-none text-gray-700 dark:text-gray-300 leading-relaxed placeholder:text-gray-300 dark:placeholder:text-gray-600"
+                onChange={setDescription}
+                placeholder="Describe this issue"
+                minHeight="350px"
               />
             </div>
 

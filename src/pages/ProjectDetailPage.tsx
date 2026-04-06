@@ -26,16 +26,18 @@ import {
   Upload
 } from 'lucide-react';
 import { MOCK_PROJECTS, MOCK_ISSUES, MOCK_USERS, STATUS_LABELS } from '../constants';
-import { IssuesPage } from './IssuesPage';
+import { IssuesPage } from '@/src/features/issues/components/IssuesPage';
 import { RoadmapPage } from './RoadmapPage';
 import { ActivityPage } from './ActivityPage';
 import { MembersPage } from './MembersPage';
+import { useNavigate } from 'react-router-dom';
 import { useApp } from '../AppContext';
 
 import { AnimatePresence, motion } from 'motion/react';
 
 export const ProjectDetailPage: React.FC = () => {
-  const { setView, showToast } = useApp();
+  const { showToast } = useApp();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'overview' | 'issues' | 'board' | 'roadmap' | 'members' | 'activity' | 'settings'>('overview');
   const project = MOCK_PROJECTS[0]; // Mocking first project for detail
 
@@ -123,7 +125,7 @@ export const ProjectDetailPage: React.FC = () => {
     <div className="flex flex-col h-full">
       <header className="px-6 pt-6 border-b border-gray-200 dark:border-border-dark">
         <div className="flex items-center gap-2 text-xs text-gray-400 mb-2">
-          <span onClick={() => setView('projects')} className="hover:text-primary cursor-pointer">Projects</span>
+          <span onClick={() => navigate('/projects')} className="hover:text-primary cursor-pointer">Projects</span>
           <ChevronRight size={12} />
           <span className="text-gray-900 dark:text-gray-100 font-medium">{project.name}</span>
         </div>
@@ -143,7 +145,7 @@ export const ProjectDetailPage: React.FC = () => {
               <Plus size={18} />
             </button>
             <button 
-              onClick={() => setView('create-issue')}
+              onClick={() => navigate('/issues/create')}
               className="px-4 py-2 rounded-lg bg-primary text-white text-sm font-bold hover:bg-primary/90 transition-all shadow-lg shadow-primary/20"
             >
               New Issue

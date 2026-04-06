@@ -14,17 +14,18 @@ import {
   Menu,
   X
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useApp } from '../AppContext';
 
 const Nav = () => {
-  const { setView } = useApp();
+  const navigate = useNavigate();
   const [isOpen, setIsOpen] = React.useState(false);
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-white/80 dark:bg-bg-dark/80 backdrop-blur-md border-b border-gray-200 dark:border-border-dark">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16 items-center">
-          <div className="flex items-center gap-2 cursor-pointer" onClick={() => setView('marketing')}>
+          <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate('/marketing')}>
             <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-white font-bold">L</div>
             <span className="text-xl font-bold tracking-tight">Linearis</span>
           </div>
@@ -37,8 +38,8 @@ const Nav = () => {
           </div>
 
           <div className="hidden md:flex items-center gap-4">
-            <button onClick={() => setView('login')} className="text-sm font-medium hover:text-primary transition-colors">Log in</button>
-            <button onClick={() => setView('signup')} className="px-4 py-2 bg-primary text-white text-sm font-semibold rounded-lg hover:bg-primary/90 transition-all shadow-lg shadow-primary/20">
+            <button onClick={() => navigate('/login')} className="text-sm font-medium hover:text-primary transition-colors">Log in</button>
+            <button onClick={() => navigate('/signup')} className="px-4 py-2 bg-primary text-white text-sm font-semibold rounded-lg hover:bg-primary/90 transition-all shadow-lg shadow-primary/20">
               Sign up
             </button>
           </div>
@@ -57,8 +58,8 @@ const Nav = () => {
           <a href="#product" className="block text-sm font-medium">Product</a>
           <a href="#features" className="block text-sm font-medium">Features</a>
           <a href="#pricing" className="block text-sm font-medium">Pricing</a>
-          <button onClick={() => setView('login')} className="w-full text-left text-sm font-medium">Log in</button>
-          <button onClick={() => setView('signup')} className="w-full px-4 py-2 bg-primary text-white text-sm font-semibold rounded-lg">Sign up</button>
+          <button onClick={() => navigate('/login')} className="w-full text-left text-sm font-medium">Log in</button>
+          <button onClick={() => navigate('/signup')} className="w-full px-4 py-2 bg-primary text-white text-sm font-semibold rounded-lg">Sign up</button>
         </div>
       )}
     </nav>
@@ -66,7 +67,7 @@ const Nav = () => {
 };
 
 const Hero = () => {
-  const { setView } = useApp();
+  const navigate = useNavigate();
   return (
     <section className="pt-32 pb-20 px-4">
       <div className="max-w-7xl mx-auto text-center space-y-8">
@@ -104,7 +105,7 @@ const Hero = () => {
           transition={{ duration: 0.5, delay: 0.3 }}
           className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4"
         >
-          <button onClick={() => setView('signup')} className="w-full sm:w-auto px-8 py-4 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-all shadow-xl shadow-primary/20 flex items-center justify-center gap-2 group">
+          <button onClick={() => navigate('/signup')} className="w-full sm:w-auto px-8 py-4 bg-primary text-white font-bold rounded-xl hover:bg-primary/90 transition-all shadow-xl shadow-primary/20 flex items-center justify-center gap-2 group">
             Get started for free
             <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
           </button>

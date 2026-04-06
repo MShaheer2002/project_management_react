@@ -1,10 +1,12 @@
 import React from 'react';
-import { Layers, Plus, Search, Filter, MoreHorizontal, Users, Clock } from 'lucide-react';
-import { useApp } from '../AppContext';
-import { MOCK_PROJECTS, MOCK_TEAMS } from '../constants';
+import { useNavigate } from 'react-router-dom';
+import { Layers, Plus, Search, MoreHorizontal, Users, Clock } from 'lucide-react';
+import { useApp } from '@/src/AppContext';
+import { MOCK_PROJECTS, MOCK_TEAMS } from '@/src/constants';
 
 export const ProjectsPage: React.FC = () => {
-  const { setView, setActiveModal } = useApp();
+  const { setActiveModal } = useApp();
+  const navigate = useNavigate();
   return (
     <div className="flex flex-col h-full">
       <header className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-border-dark">
@@ -40,7 +42,7 @@ export const ProjectsPage: React.FC = () => {
             return (
               <div 
                 key={project.id}
-                onClick={() => setView('project-detail')}
+                onClick={() => navigate(`/projects/${project.id}`)}
                 className="bg-white dark:bg-card-dark border border-gray-200 dark:border-border-dark rounded-xl p-5 shadow-sm hover:border-primary/50 transition-all group cursor-pointer"
               >
                 <div className="flex items-start justify-between mb-4">

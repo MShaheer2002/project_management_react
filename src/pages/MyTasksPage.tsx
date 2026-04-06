@@ -1,15 +1,37 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { CheckSquare, Clock, AlertCircle, Plus, Filter, Search, MoreHorizontal, CheckCircle2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useApp } from '../AppContext';
 import { MOCK_ISSUES, MOCK_PROJECTS, PRIORITY_COLORS, STATUS_LABELS } from '../constants';
-import { Priority, Status } from '../types';
+import { CreatedTask } from '../types';
+import { getStoredTasks } from '../lib/task-storage';
 
 export const MyTasksPage: React.FC = () => {
-  const { currentUser, setSelectedIssueId, setActiveModal } = useApp();
+  const { currentUser, setSelectedIssueId } = useApp();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'assigned' | 'created' | 'completed'>('assigned');
   const [search, setSearch] = useState('');
+  const [storedTasks, setStoredTasks] = useState<CreatedTask[]>([]);
 
-  const myIssues = MOCK_ISSUES.filter(issue => {
+  useEffect(() => {
+    setStoredTasks(getStoredTasks());
+  }, []);
+
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === 'created_tasks') {
+        setStoredTasks(getStoredTasks());
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
+
+  const allTasks = useMemo(() => {
+    return [...storedTasks, ...MOCK_ISSUES];
+  }, [storedTasks]);
+
+  const myIssues = allTasks.filter(issue => {
     const matchesSearch = issue.title.toLowerCase().includes(search.toLowerCase()) || 
                          issue.id.toLowerCase().includes(search.toLowerCase());
     
@@ -40,7 +62,7 @@ export const MyTasksPage: React.FC = () => {
             />
           </div>
           <button 
-            onClick={() => setActiveModal('create-task')}
+            onClick={() => navigate('/tasks/new')}
             className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary/90 transition-colors"
           >
             <Plus size={14} />
@@ -81,7 +103,11 @@ export const MyTasksPage: React.FC = () => {
               return (
                 <div 
                   key={issue.id}
-                  onClick={() => setSelectedIssueId(issue.id)}
+                  onClick={() => {
+                    if (MOCK_ISSUES.some(mockIssue => mockIssue.id === issue.id)) {
+                      setSelectedIssueId(issue.id);
+                    }
+                  }}
                   className="px-6 py-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-white/5 cursor-pointer transition-colors group"
                 >
                   <div className="flex items-center gap-4 flex-1 min-w-0">
@@ -94,6 +120,12 @@ export const MyTasksPage: React.FC = () => {
                         <span>{project?.name}</span>
                         <span>•</span>
                         <span>{STATUS_LABELS[issue.status]}</span>
+                        {'subtasks' in issue && issue.subtasks.length > 0 && (
+                          <>
+                            <span>•</span>
+                            <span>{issue.subtasks.filter(subtask => subtask.completed).length}/{issue.subtasks.length} subtasks</span>
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>
