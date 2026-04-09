@@ -11,7 +11,7 @@ import { TeamsPage } from './pages/TeamsPage';
 import { RoadmapPage } from './pages/RoadmapPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { MembersPage } from './pages/MembersPage';
-import { MyTasksPage } from './pages/MyTasksPage';
+import { MyIssuesPage } from './pages/MyIssuesPage';
 import { ActivityPage } from './pages/ActivityPage';
 import { NotificationsPage } from './pages/NotificationsPage';
 import { ReportsPage } from './pages/ReportsPage';
@@ -25,7 +25,6 @@ import { TeamDetailPage } from './pages/TeamDetailPage';
 import { DepartmentsPage } from '@/src/pages/DepartmentsPage';
 import { DepartmentDetailPage } from '@/src/pages/DepartmentDetailPage';
 import { CreateIssuePage } from './pages/CreateIssuePage';
-import { CreateTaskPage } from './pages/CreateTaskPage';
 import { TemplatesPage } from './pages/TemplatesPage';
 import { AuthPage } from './pages/AuthPage';
 import { ModalManager } from './components/modals/ModalManager';
@@ -43,6 +42,8 @@ import {
   Sun,
   Globe
 } from 'lucide-react';
+
+import { IssueDetailPage } from './pages/IssueDetailPage';
 
 const TopNavbar: React.FC = () => {
   const { setCommandPaletteOpen, currentUser, theme, setTheme } = useApp();
@@ -69,9 +70,9 @@ const TopNavbar: React.FC = () => {
 
       <div className="flex items-center gap-3">
         <button 
-          onClick={() => navigate('/tasks/new')}
+          onClick={() => navigate('/issues/create')}
           className="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-white/5 text-gray-400 transition-colors"
-          title="Create new task (Ctrl+Enter)"
+          title="Create new issue (Ctrl+Enter)"
         >
           <Plus size={18} />
         </button>
@@ -190,9 +191,10 @@ const MainLayout: React.FC = () => {
           <Routes>
             <Route path="/" element={<DashboardPage />} />
             <Route path="/inbox" element={<NotificationsPage />} />
-            <Route path="/my-tasks" element={<MyTasksPage />} />
+            <Route path="/issues/my" element={<MyIssuesPage />} />
             <Route path="/issues" element={<IssuesPage />} />
             <Route path="/issues/create" element={<CreateIssuePage />} />
+            <Route path="/issues/:issueId" element={<IssueDetailPage />} />
             <Route path="/projects" element={<ProjectsPage />} />
             <Route path="/projects/:id" element={<ProjectDetailPage />} />
             <Route path="/teams" element={<TeamsPage />} />
@@ -204,7 +206,6 @@ const MainLayout: React.FC = () => {
             <Route path="/cycles" element={<CyclesPage />} />
             <Route path="/activity" element={<ActivityPage />} />
             <Route path="/settings" element={<SettingsPage />} />
-            <Route path="/tasks/new" element={<CreateTaskPage />} />
             
             {/* Lead/Admin Routes */}
             <Route path="/analytics" element={isLead ? <ReportsPage /> : <Navigate to="/" />} />

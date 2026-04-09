@@ -1,6 +1,8 @@
 export type Priority = 'low' | 'medium' | 'high' | 'urgent';
 export type Status = 'backlog' | 'todo' | 'in-progress' | 'review' | 'done';
 export type UserRole = 'owner' | 'admin' | 'member' | 'guest';
+export type IssueType = 'task' | 'bug' | 'issue';
+export type Severity = 'low' | 'medium' | 'high';
 
 export interface User {
   id: string;
@@ -19,33 +21,43 @@ export interface Label {
   color: string;
 }
 
+export interface IssueSubtask {
+  id: string;
+  title: string;
+  completed: boolean;
+  order: number;
+}
+
 export interface Issue {
   id: string;
   title: string;
   description: string;
   status: Status;
   priority: Priority;
+  type: IssueType;
   assigneeId?: string;
   creatorId: string;
   projectId: string;
   teamId: string;
   labels: string[];
   dueDate?: string;
+  dueTime?: string;
   createdAt: string;
   updatedAt: string;
-}
-
-export interface TaskSubtask {
-  id: string;
-  title: string;
-  completed: boolean;
-}
-
-export interface CreatedTask extends Issue {
-  subtasks: TaskSubtask[];
+  subtasks: IssueSubtask[];
   estimate?: number;
   departmentId?: string;
-  dueTime?: string;
+  
+  // Bug specific fields
+  stepsToReproduce?: string;
+  expectedBehavior?: string;
+  actualBehavior?: string;
+  severity?: Severity;
+  
+  // Issue (Feature) specific fields
+  acceptanceCriteria?: string;
+  relatedIssues?: string[];
+  notes?: string;
 }
 
 export interface Project {
@@ -139,7 +151,7 @@ export interface ApiKey {
 }
 
 export type ModalType = 
-  | 'create-task'
+  | 'create-issue'
   | 'create-project'
   | 'create-cycle'
   | 'create-team'

@@ -1,16 +1,28 @@
-import React from 'react';
+import React, { useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { RotateCcw, Plus, Calendar, CheckCircle2, Clock } from 'lucide-react';
-import { MOCK_CYCLES } from '../constants';
+import { MOCK_CYCLES, MOCK_TEAMS } from '../constants';
 
 import { useApp } from '../AppContext';
 
 export const CyclesPage: React.FC = () => {
   const { setActiveModal } = useApp();
+  const [searchParams] = useSearchParams();
+  const teamId = searchParams.get('team') || undefined;
+  const teamName = useMemo(() => MOCK_TEAMS.find(t => t.id === teamId)?.name, [teamId]);
+
   return (
     <div className="flex flex-col h-full">
       <header className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-border-dark">
         <div className="flex items-center gap-4">
-          <h1 className="text-lg font-semibold">Cycles</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-lg font-semibold">{teamName ? `${teamName} — Cycles` : 'Cycles'}</h1>
+            {teamName && (
+              <span className="text-xs font-medium px-2 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20">
+                Team scope
+              </span>
+            )}
+          </div>
           <span className="text-xs text-gray-400 px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800">
             {MOCK_CYCLES.length} total
           </span>

@@ -1,15 +1,31 @@
-import React from 'react';
+import React, { useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Map, Plus, ChevronLeft, ChevronRight, MoreHorizontal } from 'lucide-react';
-import { MOCK_PROJECTS } from '../constants';
+import { MOCK_PROJECTS, MOCK_TEAMS } from '../constants';
 
 export const RoadmapPage: React.FC = () => {
+  const [searchParams] = useSearchParams();
+  const teamId = searchParams.get('team') || undefined;
+  const projects = useMemo(
+    () => (teamId ? MOCK_PROJECTS.filter(p => p.teamId === teamId) : MOCK_PROJECTS),
+    [teamId]
+  );
+  const teamName = useMemo(() => MOCK_TEAMS.find(t => t.id === teamId)?.name, [teamId]);
+
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <header className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-border-dark">
         <div className="flex items-center gap-4">
-          <h1 className="text-lg font-semibold">Roadmap</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-lg font-semibold">{teamName ? `${teamName} — Roadmap` : 'Roadmap'}</h1>
+            {teamName && (
+              <span className="text-xs font-medium px-2 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20">
+                Team scope
+              </span>
+            )}
+          </div>
           <div className="flex items-center bg-gray-100 dark:bg-white/5 rounded-md p-1">
             <button className="px-3 py-1 text-xs font-medium bg-white dark:bg-gray-800 rounded shadow-sm">Quarterly</button>
             <button className="px-3 py-1 text-xs font-medium text-gray-400">Monthly</button>
@@ -46,7 +62,7 @@ export const RoadmapPage: React.FC = () => {
 
           {/* Timeline Body */}
           <div className="flex-1 divide-y divide-gray-100 dark:divide-border-dark">
-            {MOCK_PROJECTS.map((project, idx) => (
+            {projects.map((project, idx) => (
               <div key={project.id} className="flex group">
                 <div className="w-64 border-r border-gray-200 dark:border-border-dark p-4 flex items-center justify-between">
                   <span className="text-sm font-medium truncate">{project.name}</span>

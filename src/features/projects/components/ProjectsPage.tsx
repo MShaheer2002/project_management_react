@@ -1,5 +1,5 @@
-import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useMemo } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Layers, Plus, Search, MoreHorizontal, Users, Clock } from 'lucide-react';
 import { useApp } from '@/src/AppContext';
 import { MOCK_PROJECTS, MOCK_TEAMS } from '@/src/constants';
@@ -7,13 +7,28 @@ import { MOCK_PROJECTS, MOCK_TEAMS } from '@/src/constants';
 export const ProjectsPage: React.FC = () => {
   const { setActiveModal } = useApp();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const teamId = searchParams.get('team') || undefined;
+  const visibleProjects = useMemo(
+    () => (teamId ? MOCK_PROJECTS.filter(p => p.teamId === teamId) : MOCK_PROJECTS),
+    [teamId]
+  );
+  const teamName = useMemo(() => MOCK_TEAMS.find(t => t.id === teamId)?.name, [teamId]);
+
   return (
     <div className="flex flex-col h-full">
       <header className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-border-dark">
         <div className="flex items-center gap-4">
-          <h1 className="text-lg font-semibold">Projects</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-lg font-semibold">{teamName ? `${teamName} — Projects` : 'Projects'}</h1>
+            {teamName && (
+              <span className="text-xs font-medium px-2 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20">
+                Team scope
+              </span>
+            )}
+          </div>
           <span className="text-xs text-gray-400 px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800">
-            {MOCK_PROJECTS.length} active
+            {visibleProjects.length} active
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -37,7 +52,7 @@ export const ProjectsPage: React.FC = () => {
 
       <div className="flex-1 overflow-y-auto p-6">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {MOCK_PROJECTS.map(project => {
+          {visibleProjects.map(project => {
             const team = MOCK_TEAMS.find(t => t.id === project.teamId);
             return (
               <div 

@@ -1,11 +1,17 @@
 import React, { useState } from 'react';
 import { History, Filter, Search, MoreHorizontal, User, MessageSquare, Plus, CheckCircle2, Layers, Users } from 'lucide-react';
 import { MOCK_ACTIVITIES, MOCK_USERS } from '../constants';
+import { Activity } from '../types';
 
-export const ActivityPage: React.FC = () => {
+interface ActivityPageProps {
+  activities?: Activity[];
+  title?: string;
+}
+
+export const ActivityPage: React.FC<ActivityPageProps> = ({ activities = MOCK_ACTIVITIES, title = 'Activity' }) => {
   const [search, setSearch] = useState('');
 
-  const filteredActivities = MOCK_ACTIVITIES.filter(activity => 
+  const filteredActivities = activities.filter(activity => 
     activity.description.toLowerCase().includes(search.toLowerCase())
   );
 
@@ -23,9 +29,9 @@ export const ActivityPage: React.FC = () => {
     <div className="flex flex-col h-full">
       <header className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-border-dark">
         <div className="flex items-center gap-4">
-          <h1 className="text-lg font-semibold">Activity</h1>
+          <h1 className="text-lg font-semibold">{title}</h1>
           <span className="text-xs text-gray-400 px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800">
-            {MOCK_ACTIVITIES.length} events
+            {activities.length} events
           </span>
         </div>
         <div className="flex items-center gap-2">

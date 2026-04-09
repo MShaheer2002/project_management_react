@@ -1,16 +1,36 @@
 import React, { useState } from 'react';
-import { X, User, Calendar, Tag, MoreHorizontal, MessageSquare, History, Paperclip, CheckCircle2, AlertCircle, Clock, Trash2, ExternalLink, ChevronDown, Send, Plus } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { X, User, Calendar, Tag, MoreHorizontal, MessageSquare, History, Paperclip, CheckCircle2, AlertCircle, Clock, Trash2, ExternalLink, ChevronDown, Send, Plus, CheckSquare, Bug, Zap, Maximize2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useApp } from '../AppContext';
-import { MOCK_ISSUES, MOCK_USERS, PRIORITY_COLORS, STATUS_LABELS } from '../constants';
-import { Status, Priority } from '../types';
+import { MOCK_ISSUES, MOCK_USERS, PRIORITY_COLORS, STATUS_LABELS, ISSUE_TYPE_CONFIG } from '../constants';
+import { Status, Priority, IssueType } from '../types';
+import { getStoredIssues, updateStoredIssue } from '../lib/issue-storage';
+import { SubtaskList } from '../features/issues/components/SubtaskList';
+
+const TypeBadge: React.FC<{ type: IssueType }> = ({ type }) => {
+  const config = ISSUE_TYPE_CONFIG[type];
+  return (
+    <span className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${config.color}`}>
+      {type === 'task' && <CheckSquare size={12} />}
+      {type === 'bug' && <Bug size={12} />}
+      {type === 'issue' && <Zap size={12} />}
+      {config.label}
+    </span>
+  );
+};
 
 export const ContextPanel: React.FC = () => {
   const { selectedIssueId, setSelectedIssueId, showToast } = useApp();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'comments' | 'activity'>('comments');
   const [comment, setComment] = useState('');
   
-  const issue = MOCK_ISSUES.find(i => i.id === selectedIssueId);
+  const issue = React.useMemo(() => {
+    const all = [...MOCK_ISSUES, ...getStoredIssues()];
+    return all.find(i => i.id === selectedIssueId);
+  }, [selectedIssueId]);
+
   const assignee = MOCK_USERS.find(u => u.id === issue?.assigneeId);
 
   if (!selectedIssueId) return null;
@@ -43,9 +63,15 @@ export const ContextPanel: React.FC = () => {
             <span>{issue?.id}</span>
           </div>
           <div className="h-4 w-px bg-gray-200 dark:bg-border-dark" />
-          <button className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-400 hover:text-primary transition-colors">
-            <ExternalLink size={12} />
-            Open in new tab
+          <button 
+            onClick={() => {
+              navigate(`/issues/${issue?.id}`);
+              setSelectedIssueId(null);
+            }}
+            className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-400 hover:text-primary transition-colors"
+          >
+            <Maximize2 size={12} />
+            Open Full Page
           </button>
         </div>
         <div className="flex items-center gap-2">
@@ -72,6 +98,9 @@ export const ContextPanel: React.FC = () => {
       <div className="flex-1 overflow-y-auto p-6 space-y-8 scrollbar-hide">
         {/* Title & Description */}
         <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <TypeBadge type={issue?.type || 'task'} />
+          </div>
           <div className="group relative">
             <h2 className="text-xl font-semibold leading-tight pr-8 group-hover:text-primary transition-colors cursor-pointer">
               {issue?.title}
@@ -80,6 +109,44 @@ export const ContextPanel: React.FC = () => {
           <div className="text-sm text-text-secondary-light dark:text-text-secondary-dark leading-relaxed min-h-[60px] hover:bg-gray-50 dark:hover:bg-white/5 p-2 rounded-lg transition-all cursor-text">
             {issue?.description || 'No description provided.'}
           </div>
+
+          {issue?.type === 'bug' && (
+            <div className="space-y-4 pt-4 border-t border-gray-100 dark:border-border-dark">
+              {issue.stepsToReproduce && (
+                <div>
+                  <h4 className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Steps to Reproduce</h4>
+                  <p className="text-xs text-gray-600 dark:text-gray-400 whitespace-pre-wrap">{issue.stepsToReproduce}</p>
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-4">
+                {issue.expectedBehavior && (
+                  <div>
+                    <h4 className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Expected</h4>
+                    <p className="text-xs text-gray-600 dark:text-gray-400">{issue.expectedBehavior}</p>
+                  </div>
+                )}
+                {issue.actualBehavior && (
+                  <div>
+                    <h4 className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Actual</h4>
+                    <p className="text-xs text-gray-600 dark:text-gray-400">{issue.actualBehavior}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {issue?.type === 'issue' && issue.acceptanceCriteria && (
+            <div className="space-y-2 pt-4 border-t border-gray-100 dark:border-border-dark">
+              <h4 className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Acceptance Criteria</h4>
+              <p className="text-xs text-gray-600 dark:text-gray-400 whitespace-pre-wrap">{issue.acceptanceCriteria}</p>
+            </div>
+          )}
+
+          {issue && (
+            <div className="pt-4 border-t border-gray-100 dark:border-border-dark">
+              <SubtaskList issue={issue} />
+            </div>
+          )}
         </div>
 
         {/* Metadata Grid */}
@@ -167,7 +234,7 @@ export const ContextPanel: React.FC = () => {
         </div>
 
         {/* Tabs */}
-        <div className="border-t border-gray-200 dark:border-border-dark pt-6">
+        <div className="pt-6">
           <div className="flex gap-6 border-b border-gray-200 dark:border-border-dark mb-4">
             <button 
               onClick={() => setActiveTab('comments')}
@@ -229,19 +296,30 @@ export const ContextPanel: React.FC = () => {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
-                className="space-y-4"
+                className="space-y-0 relative"
               >
+                {/* Vertical Line - More subtle and aesthetic */}
+                <div className="absolute left-[7px] top-3 bottom-3 w-[1.5px] bg-gray-100 dark:bg-white/[0.06] rounded-full" />
+
                 {[
                   { user: 'Sarah Chen', action: 'changed status to', value: 'In Progress', time: '2h ago' },
                   { user: 'John Doe', action: 'assigned to', value: 'Sarah Chen', time: '5h ago' },
                   { user: 'John Doe', action: 'created issue', value: '', time: '1d ago' },
                 ].map((item, i) => (
-                  <div key={i} className="flex items-center gap-3 text-xs">
-                    <div className="w-1.5 h-1.5 rounded-full bg-gray-300 dark:bg-gray-700" />
-                    <span className="font-semibold">{item.user}</span>
-                    <span className="text-gray-400">{item.action}</span>
-                    {item.value && <span className="font-medium text-primary">{item.value}</span>}
-                    <span className="text-[10px] text-gray-400 ml-auto">{item.time}</span>
+                  <div key={i} className="flex items-start gap-6 relative pb-8 last:pb-0">
+                    {/* Timeline Node */}
+                    <div className="mt-1.5 w-3.5 h-3.5 rounded-full bg-white dark:bg-sidebar-dark border-2 border-gray-200 dark:border-white/10 shrink-0 relative z-10 flex items-center justify-center">
+                      <div className="w-1 h-1 rounded-full bg-gray-300 dark:bg-gray-600" />
+                    </div>
+
+                    <div className="flex-1 flex items-center justify-between pt-0.5">
+                      <div className="text-xs">
+                        <span className="font-bold text-gray-900 dark:text-gray-100">{item.user}</span>
+                        <span className="text-gray-400 mx-2">{item.action}</span>
+                        {item.value && <span className="font-bold text-primary">{item.value}</span>}
+                      </div>
+                      <span className="text-[10px] text-gray-400">{item.time}</span>
+                    </div>
                   </div>
                 ))}
               </motion.div>

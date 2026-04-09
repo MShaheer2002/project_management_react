@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   CheckCircle2, 
   Clock, 
@@ -13,6 +13,8 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../AppContext';
 import { MOCK_ISSUES, MOCK_PROJECTS, STATUS_LABELS, PRIORITY_COLORS } from '../constants';
+import { Issue } from '../types';
+import { getStoredIssues } from '../lib/issue-storage';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
 
 const StatCard: React.FC<{ label: string; value: string | number; icon: React.ReactNode; trend?: string }> = ({ label, value, icon, trend }) => (
@@ -47,6 +49,28 @@ const chartData = [
 export const DashboardPage: React.FC = () => {
   const { setSelectedIssueId, setActiveModal } = useApp();
   const navigate = useNavigate();
+  const [storedIssues, setStoredIssues] = useState<Issue[]>([]);
+
+  useEffect(() => {
+    setStoredIssues(getStoredIssues());
+  }, []);
+
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === 'created_issues') {
+        setStoredIssues(getStoredIssues());
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
+
+  const allIssues = useMemo(() => {
+    return [...MOCK_ISSUES, ...storedIssues];
+  }, [storedIssues]);
+
+  const openIssuesCount = allIssues.filter(i => i.status !== 'done').length;
+  const completedIssuesCount = allIssues.filter(i => i.status === 'done').length;
 
   return (
     <div className="p-8 space-y-8 overflow-y-auto h-full scrollbar-hide">
@@ -57,21 +81,21 @@ export const DashboardPage: React.FC = () => {
         </div>
         <div className="flex gap-3">
           <button 
-            onClick={() => navigate('/tasks/new')}
+            onClick={() => navigate('/issues/create')}
             className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20 transition-all active:scale-95"
           >
             <Plus size={18} />
-            <span>New Task</span>
+            <span>New Issue</span>
           </button>
         </div>
       </header>
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard label="Issues Completed" value={12} icon={<CheckCircle2 size={20} />} trend="+24%" />
+        <StatCard label="Issues Completed" value={completedIssuesCount} icon={<CheckCircle2 size={20} />} trend="+24%" />
         <StatCard label="Active Projects" value={MOCK_PROJECTS.length} icon={<Layers size={20} />} />
         <StatCard label="Team Members" value={8} icon={<Users size={20} />} />
-        <StatCard label="Open Issues" value={MOCK_ISSUES.length} icon={<AlertCircle size={20} />} trend="-12%" />
+        <StatCard label="Open Issues" value={openIssuesCount} icon={<AlertCircle size={20} />} trend="-12%" />
       </div>
 
       {/* Charts Section */}
@@ -118,12 +142,12 @@ export const DashboardPage: React.FC = () => {
           <div className="bg-white dark:bg-card-dark rounded-xl border border-gray-200 dark:border-border-dark shadow-sm overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-200 dark:border-border-dark flex items-center justify-between">
               <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400">Assigned to me</h3>
-              <button onClick={() => navigate('/my-tasks')} className="text-xs text-primary font-semibold flex items-center gap-1 hover:underline">
+              <button onClick={() => navigate('/issues/my')} className="text-xs text-primary font-semibold flex items-center gap-1 hover:underline">
                 View all <ArrowRight size={12} />
               </button>
             </div>
             <div className="divide-y divide-gray-100 dark:divide-border-dark">
-              {MOCK_ISSUES.slice(0, 5).map(issue => (
+              {allIssues.slice(0, 5).map(issue => (
                 <div 
                   key={issue.id} 
                   onClick={() => setSelectedIssueId(issue.id)}
@@ -198,9 +222,9 @@ export const DashboardPage: React.FC = () => {
               <Calendar size={14} className="text-gray-400" />
             </div>
             <div className="divide-y divide-gray-100 dark:divide-border-dark">
-              {MOCK_ISSUES.filter(i => i.dueDate).sort((a, b) => new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime()).slice(0, 4).map(issue => {
+              {allIssues.filter(i => i.dueDate).sort((a, b) => new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime()).slice(0, 4).map(issue => {
                 const dueDate = new Date(issue.dueDate!);
-                const today = new Date('2026-03-09T10:13:55-07:00'); // Using provided current time
+                const today = new Date();
                 const diffTime = dueDate.getTime() - today.getTime();
                 const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
                 
@@ -251,7 +275,7 @@ export const DashboardPage: React.FC = () => {
                   </div>
                 );
               })}
-              {MOCK_ISSUES.filter(i => i.dueDate).length === 0 && (
+              {allIssues.filter(i => i.dueDate).length === 0 && (
                 <div className="p-8 text-center">
                   <p className="text-xs text-gray-400">No upcoming deadlines.</p>
                 </div>

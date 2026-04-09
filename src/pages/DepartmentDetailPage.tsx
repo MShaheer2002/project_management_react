@@ -37,6 +37,7 @@ import {
 import { useApp } from '../AppContext';
 import { Department, User, Team, Project, Activity } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
+import { ActivityPage } from './ActivityPage';
 import { 
   BarChart, 
   Bar, 
@@ -86,21 +87,23 @@ export const DepartmentDetailPage: React.FC = () => {
   const members = useMemo(() => MOCK_USERS.filter(u => u.departmentId === id), [id]);
   const teams = useMemo(() => MOCK_TEAMS.filter(t => t.departmentId === id), [id]);
   const projects = useMemo(() => MOCK_PROJECTS.filter(p => p.departmentId === id), [id]);
-  const activities = useMemo(() => MOCK_ACTIVITIES.filter(a => members.some(m => m.id === a.actorId)), [id, members]);
-
+  const activities = useMemo(
+    () => MOCK_ACTIVITIES.filter(a => members.some(m => m.id === a.actorId)),
+    [members]
+  );
   // Derived Analytics Data
   const velocityData = [
-    { day: 'Mon', tasks: 4, velocity: 65 },
-    { day: 'Tue', tasks: 7, velocity: 72 },
-    { day: 'Wed', tasks: 5, velocity: 68 },
-    { day: 'Thu', tasks: 9, velocity: 85 },
-    { day: 'Fri', tasks: 12, velocity: 90 },
+    { day: 'Mon', issues: 4, velocity: 65 },
+    { day: 'Tue', issues: 7, velocity: 72 },
+    { day: 'Wed', issues: 5, velocity: 68 },
+    { day: 'Thu', issues: 9, velocity: 85 },
+    { day: 'Fri', issues: 12, velocity: 90 },
   ];
 
   const workloadData = useMemo(() => {
     return teams.map(t => ({
       name: t.name,
-      tasks: MOCK_ISSUES.filter(i => i.teamId === t.id).length,
+      issues: MOCK_ISSUES.filter(i => i.teamId === t.id).length,
       completion: Math.floor(Math.random() * 40) + 60
     }));
   }, [teams]);
@@ -180,7 +183,7 @@ export const DepartmentDetailPage: React.FC = () => {
                     cursor={{ fill: 'transparent' }}
                     contentStyle={{ backgroundColor: '#151821', border: 'none', borderRadius: '12px', fontSize: '11px', color: '#fff' }}
                   />
-                  <Bar dataKey="tasks" fill="#8B5CF6" radius={[0, 4, 4, 0]} barSize={20} />
+                  <Bar dataKey="issues" fill="#8B5CF6" radius={[0, 4, 4, 0]} barSize={20} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -385,48 +388,7 @@ export const DepartmentDetailPage: React.FC = () => {
     </div>
   );
 
-  const renderActivity = () => (
-    <div className="p-8 max-w-4xl mx-auto">
-      <div className="bg-white dark:bg-card-dark border border-gray-200 dark:border-border-dark rounded-2xl shadow-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-border-dark flex items-center gap-2">
-          <History size={16} className="text-gray-400" />
-          <h3 className="text-xs font-bold uppercase tracking-wider">Recent Activity</h3>
-        </div>
-        <div className="p-6 space-y-8">
-          {activities.length > 0 ? activities.map((activity, idx) => {
-            const actor = MOCK_USERS.find(u => u.id === activity.actorId);
-            return (
-              <div key={activity.id} className="relative flex gap-4">
-                {idx !== activities.length - 1 && (
-                  <div className="absolute left-[13px] top-8 bottom-[-32px] w-[1px] bg-gray-100 dark:bg-border-dark" />
-                )}
-                <div className="w-7 h-7 shrink-0 rounded-full bg-gray-50 dark:bg-white/5 flex items-center justify-center z-10 border border-white dark:border-card-dark overflow-hidden">
-                  <img src={actor?.avatar} className="w-full h-full object-cover" alt="" />
-                </div>
-                <div className="pb-2">
-                  <div className="text-sm">
-                    <span className="font-bold text-gray-900 dark:text-white">{actor?.name}</span>
-                    <span className="text-gray-500 dark:text-gray-400 ml-1.5">{activity.description}</span>
-                  </div>
-                  <div className="text-[11px] text-gray-400 mt-1 font-medium flex items-center gap-1">
-                    <Clock size={10} />
-                    {activity.timestamp}
-                  </div>
-                </div>
-              </div>
-            );
-          }) : (
-            <div className="py-20 flex flex-col items-center justify-center text-gray-400 text-center">
-              <div className="w-16 h-16 rounded-full bg-gray-50 dark:bg-white/5 flex items-center justify-center mb-4">
-                <History size={32} className="opacity-20" />
-              </div>
-              <p className="font-medium">No activity recorded yet.</p>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
+  const renderActivity = () => <ActivityPage activities={activities} title="Department Activity" />;
 
   const renderSettings = () => (
     <div className="p-8 max-w-4xl mx-auto space-y-12 pb-24">

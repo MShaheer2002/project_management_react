@@ -17,7 +17,7 @@ export const ModalManager: React.FC = () => {
   return (
     <>
       {activeModal === 'create-project' && <CreateProjectModal />}
-      {activeModal === 'create-task' && <CreateIssueModal />}
+      {activeModal === 'create-issue' && <CreateIssueModal />}
       {activeModal === 'create-cycle' && <CreateCycleModal />}
       {activeModal === 'create-team' && <CreateTeamModal />}
       {activeModal === 'create-department' && <CreateDepartmentModal />}

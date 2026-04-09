@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { 
   Layers, 
   Settings, 
@@ -6,7 +7,6 @@ import {
   Activity, 
   LayoutDashboard, 
   Kanban, 
-  Calendar, 
   Map, 
   ChevronRight,
   Plus,
@@ -25,23 +25,45 @@ import {
   ChevronDown,
   Upload
 } from 'lucide-react';
-import { MOCK_PROJECTS, MOCK_ISSUES, MOCK_USERS, STATUS_LABELS } from '../constants';
+import { MOCK_PROJECTS, MOCK_ISSUES, MOCK_USERS, STATUS_LABELS, PRIORITY_COLORS } from '../constants';
+import { Issue } from '../types';
+import { getStoredIssues } from '../lib/issue-storage';
 import { IssuesPage } from '@/src/features/issues/components/IssuesPage';
 import { RoadmapPage } from './RoadmapPage';
 import { ActivityPage } from './ActivityPage';
 import { MembersPage } from './MembersPage';
-import { useNavigate } from 'react-router-dom';
 import { useApp } from '../AppContext';
-
 import { AnimatePresence, motion } from 'motion/react';
 
 export const ProjectDetailPage: React.FC = () => {
-  const { showToast } = useApp();
+  const { id } = useParams<{ id: string }>();
+  const { showToast, setSelectedIssueId } = useApp();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'overview' | 'issues' | 'board' | 'roadmap' | 'members' | 'activity' | 'settings'>('overview');
-  const project = MOCK_PROJECTS[0]; // Mocking first project for detail
+  const [storedIssues, setStoredIssues] = useState<Issue[]>([]);
+  
+  const project = useMemo(() => 
+    MOCK_PROJECTS.find(p => p.id === id) || MOCK_PROJECTS[0], 
+  [id]);
 
-  const projectIssues = MOCK_ISSUES.filter(i => i.projectId === project.id);
+  useEffect(() => {
+    setStoredIssues(getStoredIssues());
+  }, []);
+
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === 'created_issues') {
+        setStoredIssues(getStoredIssues());
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
+
+  const projectIssues = useMemo(() => {
+    const all = [...MOCK_ISSUES, ...storedIssues];
+    return all.filter(i => i.projectId === project.id);
+  }, [storedIssues, project.id]);
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: <LayoutDashboard size={14} /> },
@@ -69,7 +91,11 @@ export const ProjectDetailPage: React.FC = () => {
                   <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400 mb-4">Recent Issues</h3>
                   <div className="divide-y divide-gray-100 dark:divide-border-dark">
                     {projectIssues.slice(0, 3).map(issue => (
-                      <div key={issue.id} className="py-3 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-white/5 transition-colors cursor-pointer rounded-lg px-2 -mx-2">
+                      <div 
+                        key={issue.id} 
+                        onClick={() => setSelectedIssueId(issue.id)}
+                        className="py-3 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-white/5 transition-colors cursor-pointer rounded-lg px-2 -mx-2"
+                      >
                         <div className="flex items-center gap-3">
                           <span className="text-xs font-mono text-gray-400">{issue.id}</span>
                           <span className="text-sm font-medium">{issue.title}</span>

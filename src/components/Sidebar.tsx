@@ -1,22 +1,19 @@
-import React, { useState } from 'react';
-import { 
-  Link, 
-  useLocation, 
-  useNavigate 
-} from 'react-router-dom';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  LayoutDashboard, 
-  Inbox, 
-  CheckSquare, 
-  Layers, 
-  Users, 
-  Map, 
-  RotateCcw, 
-  BarChart3, 
-  History, 
+import {
+  LayoutDashboard,
+  Inbox,
+  CheckSquare,
+  Layers,
+  Users,
+  Map,
+  RotateCcw,
+  BarChart3,
+  History,
   Settings,
   ChevronDown,
+  ChevronRight,
   Building2,
   Moon,
   Sun,
@@ -25,60 +22,138 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Globe,
-  UserCircle,
   Key,
   CreditCard,
-  FileText
+  FileText,
+  CircleDot,
+  LayoutGrid,
+  FolderKanban,
 } from 'lucide-react';
 import { useApp } from '../AppContext';
+import { MOCK_TEAMS } from '../constants';
 
-const SidebarItem: React.FC<{ 
-  icon: React.ReactNode; 
-  label: string; 
-  active?: boolean; 
+const focusMinimal = 'outline-none focus:outline-none focus-visible:outline-none focus-visible:ring-0';
+
+function useNavActive() {
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+
+  return useCallback(
+    (to: string) => {
+      const [path, rawQuery] = to.split('?');
+      if (location.pathname !== path) return false;
+      if (!rawQuery) {
+        const teamScoped = ['/issues', '/projects', '/cycles', '/roadmap'];
+        if (teamScoped.includes(path)) {
+          return searchParams.get('team') == null;
+        }
+        return true;
+      }
+      const expected = new URLSearchParams(rawQuery);
+      for (const [key, value] of expected.entries()) {
+        if (searchParams.get(key) !== value) return false;
+      }
+      return true;
+    },
+    [location.pathname, searchParams.toString()]
+  );
+}
+
+const SidebarNavLink: React.FC<{
   to: string;
-  badge?: number;
+  icon: React.ReactNode;
+  label: string;
+  active: boolean;
   collapsed?: boolean;
-}> = ({ icon, label, active, to, badge, collapsed }) => (
+  badge?: number;
+  indent?: boolean;
+}> = ({ to, icon, label, active, collapsed, badge, indent }) => (
   <Link
     to={to}
     title={collapsed ? label : undefined}
-    className={`w-full flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-colors ${
-      active 
-        ? 'bg-primary/10 text-primary font-medium' 
-        : 'text-text-secondary-light dark:text-text-secondary-dark hover:bg-gray-100 dark:hover:bg-white/5'
-    } ${collapsed ? 'justify-center' : ''}`}
+    className={`group flex items-center justify-between rounded-md text-[13px] font-medium transition-colors duration-150 ease-out ${focusMinimal} ${
+      collapsed
+        ? 'justify-center min-h-11 min-w-11 mx-auto rounded-lg py-0 px-0'
+        : `min-h-9 px-2 ${indent ? 'ml-5 pl-2' : ''}`
+    } ${
+      active
+        ? 'bg-black/[0.06] dark:bg-white/[0.08] text-gray-900 dark:text-gray-100'
+        : 'text-gray-600 dark:text-gray-400 hover:bg-black/[0.04] dark:hover:bg-white/[0.05] hover:text-gray-900 dark:hover:text-gray-100'
+    }`}
   >
-    <div className="flex items-center gap-2.5">
-      <span className={active ? 'text-primary' : 'text-gray-400 dark:text-gray-500'}>{icon}</span>
-      {!collapsed && <span>{label}</span>}
-    </div>
+    <span className="flex items-center gap-2.5 min-w-0">
+      <span
+        className={`shrink-0 flex items-center justify-center ${
+          active ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400 dark:text-gray-500 group-hover:text-gray-600 dark:group-hover:text-gray-300'
+        }`}
+      >
+        {icon}
+      </span>
+      {!collapsed && <span className="truncate">{label}</span>}
+    </span>
     {!collapsed && badge !== undefined && (
-      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-200 dark:bg-gray-800 text-gray-600 dark:text-gray-400">
+      <span className="shrink-0 text-[10px] font-medium tabular-nums px-1.5 py-0.5 rounded-md bg-black/[0.05] dark:bg-white/10 text-gray-500 dark:text-gray-400">
         {badge}
       </span>
     )}
   </Link>
 );
 
+const SectionLabel: React.FC<{ children: React.ReactNode; collapsed?: boolean }> = ({ children, collapsed }) => {
+  if (collapsed) return null;
+  return (
+    <div className="px-2 py-1.5 text-[11px] font-medium text-gray-500 dark:text-gray-500 tracking-tight">
+      {children}
+    </div>
+  );
+};
+
 export const Sidebar: React.FC = () => {
-  const { 
+  const {
     organization,
-    currentUser, 
-    theme, 
-    setTheme, 
+    currentUser,
+    theme,
+    setTheme,
     setCommandPaletteOpen,
     isSidebarCollapsed,
     setSidebarCollapsed,
     setActiveModal,
-    showToast
+    showToast,
   } = useApp();
 
   const isAdmin = currentUser?.role === 'owner' || currentUser?.role === 'admin';
   const isLead = isAdmin || currentUser?.role === 'member';
 
-  const location = useLocation();
   const navigate = useNavigate();
+  const location = useLocation();
+  const isNavActive = useNavActive();
+
+  const [isWorkspaceMenuOpen, setIsWorkspaceMenuOpen] = useState(false);
+  const [teamsOpen, setTeamsOpen] = useState(true);
+  const [orgOpen, setOrgOpen] = useState(false);
+  const [expandedTeamIds, setExpandedTeamIds] = useState<Set<string>>(
+    () => new Set(MOCK_TEAMS.map(t => t.id))
+  );
+  const [teamsFlyoutOpen, setTeamsFlyoutOpen] = useState(false);
+  const [orgFlyoutOpen, setOrgFlyoutOpen] = useState(false);
+  const teamsFlyoutButtonRef = useRef<HTMLButtonElement>(null);
+  const orgFlyoutButtonRef = useRef<HTMLButtonElement>(null);
+
+  const toggleTeamExpanded = (id: string) => {
+    setExpandedTeamIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    if (isSidebarCollapsed) {
+      setTeamsFlyoutOpen(false);
+      setOrgFlyoutOpen(false);
+    }
+  }, [isSidebarCollapsed]);
 
   const cycleTheme = () => {
     if (theme === 'light') setTheme('dark');
@@ -86,237 +161,735 @@ export const Sidebar: React.FC = () => {
     else setTheme('light');
   };
 
-  const [isWorkspaceMenuOpen, setIsWorkspaceMenuOpen] = useState(false);
-
-  const navSections: { title: string; items: { path: string; label: string; icon: React.ReactNode; badge?: number; adminOnly?: boolean; leadOnly?: boolean }[] }[] = [
+  const workspaceMenuItems: Array<{
+    label?: string;
+    icon?: React.ReactNode;
+    onClick?: () => void;
+    badge?: string;
+    disabled?: boolean;
+    variant?: 'danger';
+    type?: 'divider';
+  }> = [
     {
-      title: 'Workspace',
-      items: [
-        { path: '/', label: 'Dashboard', icon: <LayoutDashboard size={16} /> },
-        { path: '/inbox', label: 'Inbox', icon: <Inbox size={16} />, badge: 3 },
-        { path: '/my-tasks', label: 'My Tasks', icon: <CheckSquare size={16} /> },
-      ]
+      label: 'Settings',
+      icon: <Settings size={14} />,
+      onClick: () => {
+        navigate('/settings');
+        setIsWorkspaceMenuOpen(false);
+      },
     },
     {
-      title: 'Planning',
-      items: [
-        { path: '/issues', label: 'Issues', icon: <UserCircle size={16} /> },
-        { path: '/templates', label: 'Templates', icon: <FileText size={16} />, adminOnly: true },
-        { path: '/projects', label: 'Projects', icon: <Layers size={16} /> },
-        { path: '/roadmap', label: 'Roadmap', icon: <Map size={16} /> },
-        { path: '/cycles', label: 'Cycles', icon: <RotateCcw size={16} /> },
-      ]
+      label: 'Invite and manage members',
+      icon: <Users size={14} />,
+      onClick: () => {
+        setActiveModal('invite-member');
+        setIsWorkspaceMenuOpen(false);
+      },
     },
     {
-      title: 'Organization',
-      items: [
-        { path: '/departments', label: 'Departments', icon: <Building2 size={16} /> },
-        { path: '/teams', label: 'Teams', icon: <Users size={16} /> },
-        { path: '/members', label: 'Members', icon: <Users size={16} /> },
-        { path: '/activity', label: 'Activity', icon: <History size={16} /> },
-        { path: '/analytics', label: 'Analytics', icon: <BarChart3 size={16} />, leadOnly: true },
-        { path: '/integrations', label: 'Integrations', icon: <Globe size={16} />, leadOnly: true },
-        { path: '/api-keys', label: 'API Keys', icon: <Key size={16} />, adminOnly: true },
-        { path: '/billing', label: 'Billing', icon: <CreditCard size={16} />, adminOnly: true },
-        { path: '/settings', label: 'Settings', icon: <Settings size={16} /> },
-      ]
-    }
+      label: 'Download desktop app',
+      icon: <LayoutDashboard size={14} />,
+      badge: 'Soon',
+      disabled: true,
+    },
+    {
+      label: 'Switch workspace',
+      icon: <RotateCcw size={14} />,
+      onClick: () => {
+        showToast('Workspace switching placeholder', 'info');
+        setIsWorkspaceMenuOpen(false);
+      },
+    },
+    { type: 'divider' },
+    {
+      label: 'Logout',
+      icon: <LogOut size={14} />,
+      onClick: () => {
+        navigate('/login');
+        setIsWorkspaceMenuOpen(false);
+      },
+      variant: 'danger',
+    },
   ];
 
-  const workspaceMenuItems = [
-    { 
-      label: 'Settings', 
-      icon: <Settings size={14} />, 
-      onClick: () => { navigate('/settings'); setIsWorkspaceMenuOpen(false); } 
-    },
-    { 
-      label: 'Invite and manage members', 
-      icon: <Users size={14} />, 
-      onClick: () => { setActiveModal('invite-member'); setIsWorkspaceMenuOpen(false); } 
-    },
-    { 
-      label: 'Download desktop app', 
-      icon: <LayoutDashboard size={14} />, 
-      badge: 'Coming Soon',
-      disabled: true 
-    },
-    { 
-      label: 'Switch workspace', 
-      icon: <RotateCcw size={14} />, 
-      onClick: () => { showToast('Workspace switching placeholder', 'info'); setIsWorkspaceMenuOpen(false); } 
-    },
-    { 
-      type: 'divider'
-    },
-    { 
-      label: 'Logout', 
-      icon: <LogOut size={14} />, 
-      onClick: () => { navigate('/login'); setIsWorkspaceMenuOpen(false); },
-      variant: 'danger'
-    },
-  ];
+  const orgItems: { path: string; label: string; icon: React.ReactNode; adminOnly?: boolean; leadOnly?: boolean }[] =
+    [
+      { path: '/departments', label: 'Departments', icon: <Building2 size={16} /> },
+      { path: '/teams', label: 'Team directory', icon: <Users size={16} /> },
+      { path: '/members', label: 'Members', icon: <Users size={16} /> },
+      { path: '/activity', label: 'Activity', icon: <History size={16} /> },
+      { path: '/analytics', label: 'Analytics', icon: <BarChart3 size={16} />, leadOnly: true },
+      { path: '/integrations', label: 'Integrations', icon: <Globe size={16} />, leadOnly: true },
+      { path: '/templates', label: 'Templates', icon: <FileText size={16} />, adminOnly: true },
+      { path: '/api-keys', label: 'API Keys', icon: <Key size={16} />, adminOnly: true },
+      { path: '/billing', label: 'Billing', icon: <CreditCard size={16} />, adminOnly: true },
+      { path: '/settings', label: 'Settings', icon: <Settings size={16} /> },
+    ];
+
+  const widthClass = isSidebarCollapsed ? 'w-14' : 'w-60';
 
   return (
-    <aside className={`${isSidebarCollapsed ? 'w-16' : 'w-64'} h-full flex flex-col bg-gray-50 dark:bg-sidebar-dark border-r border-gray-200 dark:border-border-dark select-none transition-all duration-300 relative z-50`}>
-      {/* Org Switcher */}
-      <div className="p-4 relative">
-        {!isSidebarCollapsed && (
+    <motion.aside
+      layout
+      transition={{ layout: { duration: 0.28, ease: [0.22, 1, 0.36, 1] } }}
+      className={`${widthClass} h-full flex flex-col bg-gray-50 dark:bg-sidebar-dark select-none relative z-50 overflow-hidden transition-[width] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]`}
+    >
+      {/* Workspace */}
+      <div className="px-2 pt-2 pb-1">
+        {!isSidebarCollapsed ? (
           <div className="relative">
-            <button 
+            <button
+              type="button"
               onClick={() => setIsWorkspaceMenuOpen(!isWorkspaceMenuOpen)}
-              className={`w-full flex items-center justify-between p-2 rounded-lg transition-all ${isWorkspaceMenuOpen ? 'bg-gray-200 dark:bg-white/10' : 'hover:bg-gray-200 dark:hover:bg-white/5'}`}
+              className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md transition-colors duration-150 ${focusMinimal} ${
+                isWorkspaceMenuOpen
+                  ? 'bg-black/[0.06] dark:bg-white/[0.08]'
+                  : 'hover:bg-black/[0.04] dark:hover:bg-white/[0.05]'
+              }`}
             >
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded bg-primary flex items-center justify-center text-white text-xs font-bold shrink-0 shadow-lg shadow-primary/20">
-                  {organization?.name.charAt(0)}
-                </div>
-                <span className="text-sm font-bold tracking-tight truncate">{organization?.name}</span>
+              <div className="w-8 h-8 rounded-md bg-primary flex items-center justify-center text-white text-xs font-semibold shrink-0">
+                {organization?.name.charAt(0)}
               </div>
-              <ChevronDown size={14} className={`text-gray-400 transition-transform duration-200 ${isWorkspaceMenuOpen ? 'rotate-180' : ''}`} />
+              <div className="flex-1 text-left min-w-0">
+                <div className="text-xs font-medium text-gray-500 dark:text-gray-400 truncate">
+                  {organization?.name}
+                </div>
+              </div>
+              <ChevronDown
+                size={14}
+                className={`shrink-0 text-gray-400 transition-transform duration-200 ease-out ${isWorkspaceMenuOpen ? 'rotate-180' : ''}`}
+              />
             </button>
 
             <AnimatePresence>
               {isWorkspaceMenuOpen && (
                 <motion.div
-                  initial={{ opacity: 0, y: -10, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -10, scale: 0.95 }}
-                  transition={{ duration: 0.15, ease: "easeOut" }}
-                  className="absolute left-0 top-full mt-2 w-64 bg-white dark:bg-card-dark border border-gray-200 dark:border-border-dark rounded-xl shadow-2xl overflow-hidden py-1.5 z-50"
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  transition={{ duration: 0.12, ease: 'easeOut' }}
+                  className="absolute left-0 right-0 top-full mt-1 bg-white dark:bg-card-dark rounded-lg shadow-xl overflow-hidden py-1 z-50"
                 >
-                  {workspaceMenuItems.map((item, idx) => (
+                  {workspaceMenuItems.map((item, idx) =>
                     item.type === 'divider' ? (
-                      <div key={idx} className="my-1.5 h-px bg-gray-100 dark:bg-border-dark" />
+                      <div key={idx} className="my-1 h-px bg-gray-100 dark:bg-border-dark" />
                     ) : (
                       <button
                         key={idx}
+                        type="button"
                         onClick={item.onClick}
                         disabled={item.disabled}
-                        className={`w-full flex items-center justify-between px-3 py-2 text-xs font-medium transition-colors
-                          ${item.disabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-50 dark:hover:bg-white/5'}
-                          ${item.variant === 'danger' ? 'text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10' : 'text-gray-700 dark:text-gray-300'}
-                        `}
+                        className={`w-full flex items-center justify-between px-3 py-2 text-xs font-medium transition-colors duration-100 ${focusMinimal} ${
+                          item.disabled
+                            ? 'opacity-50 cursor-not-allowed'
+                            : 'hover:bg-gray-50 dark:hover:bg-white/5'
+                        } ${
+                          item.variant === 'danger'
+                            ? 'text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10'
+                            : 'text-gray-700 dark:text-gray-300'
+                        }`}
                       >
-                        <div className="flex items-center gap-2.5">
-                          <span className={item.variant === 'danger' ? 'text-red-500' : 'text-gray-400'}>{item.icon}</span>
-                          <span>{item.label}</span>
-                        </div>
+                        <span className="flex items-center gap-2.5">
+                          <span className={item.variant === 'danger' ? 'text-red-500' : 'text-gray-400'}>
+                            {item.icon}
+                          </span>
+                          {item.label}
+                        </span>
                         {item.badge && (
-                          <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-bold uppercase tracking-wider">
+                          <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-gray-100 dark:bg-white/10 text-gray-500 font-medium">
                             {item.badge}
                           </span>
                         )}
                       </button>
                     )
-                  ))}
+                  )}
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
-        )}
-        {isSidebarCollapsed && (
-          <div className="w-8 h-8 rounded bg-primary flex items-center justify-center text-white text-sm font-bold mx-auto shadow-lg shadow-primary/20">
+        ) : (
+          <button
+            type="button"
+            onClick={() => setIsWorkspaceMenuOpen(!isWorkspaceMenuOpen)}
+            className={`w-10 h-10 mx-auto flex items-center justify-center rounded-lg bg-primary text-white text-xs font-semibold transition-transform duration-150 active:scale-[0.96] ${focusMinimal}`}
+            title={organization?.name ?? 'Workspace'}
+          >
             {organization?.name.charAt(0)}
-          </div>
+          </button>
         )}
       </div>
 
-      {/* Search / Command Palette Trigger */}
-      <div className="px-4 mb-4">
-        <button 
+      {/* Search */}
+      <div className="px-2 pb-2">
+        <button
+          type="button"
           onClick={() => setCommandPaletteOpen(true)}
-          className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-between'} px-3 py-1.5 rounded-md border border-gray-200 dark:border-border-dark bg-white dark:bg-black/20 text-xs text-gray-400 hover:border-primary/50 transition-colors`}
+          className={`w-full flex items-center gap-2 rounded-md bg-black/[0.03] dark:bg-white/[0.04] px-2 py-2 text-xs text-gray-500 dark:text-gray-400 hover:bg-black/[0.05] dark:hover:bg-white/[0.06] transition-colors duration-150 ${focusMinimal} ${
+            isSidebarCollapsed ? 'justify-center min-h-11 px-0' : ''
+          }`}
         >
-          <div className="flex items-center gap-2">
-            <Search size={14} />
-            {!isSidebarCollapsed && <span>Search...</span>}
-          </div>
+          <Search size={16} className="shrink-0 opacity-70" />
           {!isSidebarCollapsed && (
-            <div className="flex items-center gap-1 opacity-50">
-              <span className="px-1 py-0.5 rounded bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-border-dark">⌘</span>
-              <span className="px-1 py-0.5 rounded bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-border-dark">K</span>
-            </div>
+            <>
+              <span className="flex-1 text-left font-medium">Search…</span>
+              <span className="hidden sm:flex items-center gap-0.5 opacity-50 text-[10px] tabular-nums">⌘K</span>
+            </>
           )}
         </button>
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 px-3 space-y-6 overflow-y-auto scrollbar-hide">
-        {navSections.map(section => {
-          const visibleItems = section.items.filter(item => {
-            if (item.adminOnly && !isAdmin) return false;
-            if (item.leadOnly && !isLead) return false;
-            return true;
-          });
-          if (visibleItems.length === 0) return null;
+      <motion.nav
+        layout
+        transition={{ layout: { duration: 0.22, ease: [0.22, 1, 0.36, 1] } }}
+        className="flex-1 px-2 pb-2 overflow-y-auto scrollbar-hide flex flex-col gap-3 min-h-0"
+      >
+        <motion.div
+          layout
+          transition={{ layout: { duration: 0.22, ease: [0.22, 1, 0.36, 1] } }}
+          className="flex flex-col gap-0.5"
+        >
+          <SectionLabel collapsed={isSidebarCollapsed}>Your work</SectionLabel>
+          <SidebarNavLink
+            to="/"
+            icon={<LayoutDashboard size={16} />}
+            label="Dashboard"
+            active={isNavActive('/')}
+            collapsed={isSidebarCollapsed}
+          />
+          <SidebarNavLink
+            to="/inbox"
+            icon={<Inbox size={16} />}
+            label="Inbox"
+            active={isNavActive('/inbox')}
+            collapsed={isSidebarCollapsed}
+            badge={3}
+          />
+          <SidebarNavLink
+            to="/issues/my"
+            icon={<CheckSquare size={16} />}
+            label="My issues"
+            active={isNavActive('/issues/my')}
+            collapsed={isSidebarCollapsed}
+          />
+        </motion.div>
 
-          return (
-            <div key={section.title} className="space-y-1">
-              {!isSidebarCollapsed && (
-                <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-400">
-                  {section.title}
-                </div>
-              )}
-              {visibleItems.map(item => (
-                <SidebarItem
-                  key={item.path}
-                  icon={item.icon}
-                  label={item.label}
-                  active={location.pathname === item.path}
-                  to={item.path}
-                  badge={item.badge}
-                  collapsed={isSidebarCollapsed}
-                />
-              ))}
+        <motion.div
+          layout
+          transition={{ layout: { duration: 0.22, ease: [0.22, 1, 0.36, 1] } }}
+          className="flex flex-col gap-0.5"
+        >
+          <SectionLabel collapsed={isSidebarCollapsed}>Browse</SectionLabel>
+          <SidebarNavLink
+            to="/issues"
+            icon={<CircleDot size={16} />}
+            label="All issues"
+            active={isNavActive('/issues')}
+            collapsed={isSidebarCollapsed}
+          />
+          <SidebarNavLink
+            to="/projects"
+            icon={<FolderKanban size={16} />}
+            label="All projects"
+            active={isNavActive('/projects')}
+            collapsed={isSidebarCollapsed}
+          />
+        </motion.div>
+
+        {/* Teams */}
+        <motion.div
+          layout
+          transition={{ layout: { duration: 0.22, ease: [0.22, 1, 0.36, 1] } }}
+          className="flex flex-col gap-0.5"
+        >
+          {!isSidebarCollapsed ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setTeamsOpen(!teamsOpen)}
+                className={`flex items-center justify-between w-full px-2 py-1.5 rounded-md text-[11px] font-medium text-gray-500 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors duration-150 ${focusMinimal}`}
+              >
+                <span>Your teams</span>
+                <motion.span
+                  animate={{ rotate: teamsOpen ? 0 : -90 }}
+                  transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+                >
+                  <ChevronDown size={14} className="opacity-70" />
+                </motion.span>
+              </button>
+
+              <AnimatePresence initial={false}>
+                {teamsOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                    className="overflow-hidden flex flex-col gap-0.5"
+                  >
+                    {MOCK_TEAMS.map(team => {
+                      const expanded = expandedTeamIds.has(team.id);
+
+                      return (
+                        <motion.div
+                          key={team.id}
+                          layout
+                          transition={{ layout: { duration: 0.22, ease: [0.22, 1, 0.36, 1] } }}
+                          className="rounded-md overflow-hidden"
+                        >
+                          <div className="flex items-stretch gap-0 min-h-9">
+                            <Link
+                              to={`/teams/${team.id}`}
+                              className={`flex-1 flex items-center px-2 py-1.5 min-w-0 rounded-md hover:bg-black/[0.04] dark:hover:bg-white/[0.05] transition-colors duration-150 ${focusMinimal}`}
+                            >
+                              <motion.span
+                                layout="position"
+                                className="text-[13px] font-medium text-gray-800 dark:text-gray-100 truncate"
+                              >
+                                {team.name}
+                              </motion.span>
+                            </Link>
+                            <button
+                              type="button"
+                              aria-expanded={expanded}
+                              aria-label={expanded ? 'Collapse team' : 'Expand team'}
+                              onClick={e => {
+                                e.preventDefault();
+                                toggleTeamExpanded(team.id);
+                              }}
+                              className={`shrink-0 px-1.5 rounded-md text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-black/[0.04] dark:hover:bg-white/[0.05] transition-colors duration-150 ${focusMinimal}`}
+                            >
+                              <motion.span
+                                animate={{ rotate: expanded ? 90 : 0 }}
+                                transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+                                className="flex"
+                              >
+                                <ChevronRight size={16} />
+                              </motion.span>
+                            </button>
+                          </div>
+
+                          <AnimatePresence initial={false}>
+                            {expanded && (
+                              <motion.div
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: 'auto' }}
+                                exit={{ opacity: 0, height: 0 }}
+                                transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+                                className="overflow-hidden flex flex-col gap-0.5 pt-0.5 pb-1"
+                              >
+                                <SidebarNavLink
+                                  to={`/issues?team=${team.id}`}
+                                  icon={<LayoutGrid size={15} />}
+                                  label="Issues"
+                                  active={isNavActive(`/issues?team=${team.id}`)}
+                                  indent
+                                />
+                                <SidebarNavLink
+                                  to={`/projects?team=${team.id}`}
+                                  icon={<Layers size={15} />}
+                                  label="Projects"
+                                  active={isNavActive(`/projects?team=${team.id}`)}
+                                  indent
+                                />
+                                <SidebarNavLink
+                                  to={`/teams/${team.id}`}
+                                  icon={<Users size={15} />}
+                                  label="Team"
+                                  active={location.pathname === `/teams/${team.id}`}
+                                  indent
+                                />
+                                <SidebarNavLink
+                                  to={`/cycles?team=${team.id}`}
+                                  icon={<RotateCcw size={15} />}
+                                  label="Cycles"
+                                  active={isNavActive(`/cycles?team=${team.id}`)}
+                                  indent
+                                />
+                                <SidebarNavLink
+                                  to={`/roadmap?team=${team.id}`}
+                                  icon={<Map size={15} />}
+                                  label="Roadmap"
+                                  active={isNavActive(`/roadmap?team=${team.id}`)}
+                                  indent
+                                />
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </motion.div>
+                      );
+                    })}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </>
+          ) : (
+            <div className="flex justify-center py-0.5">
+              <button
+                ref={teamsFlyoutButtonRef}
+                type="button"
+                onClick={() => setTeamsFlyoutOpen(o => !o)}
+                aria-haspopup="dialog"
+                aria-expanded={teamsFlyoutOpen}
+                title="Teams"
+                className={`min-h-11 min-w-11 flex items-center justify-center rounded-lg text-gray-500 dark:text-gray-400 transition-all duration-150 ease-out active:scale-[0.96] ${focusMinimal} ${
+                  teamsFlyoutOpen
+                    ? 'bg-black/[0.08] dark:bg-white/10 text-gray-900 dark:text-gray-100'
+                    : 'hover:bg-black/[0.05] dark:hover:bg-white/[0.06]'
+                }`}
+              >
+                <LayoutGrid size={18} />
+              </button>
             </div>
-          );
-        })}
-      </nav>
+          )}
+        </motion.div>
 
-      {/* Bottom Section */}
-      <div className="p-4 border-t border-gray-200 dark:border-border-dark space-y-2">
-        <div className={`flex items-center ${isSidebarCollapsed ? 'flex-col gap-2' : 'justify-between'}`}>
-          <button 
+        <AnimatePresence>
+          {isSidebarCollapsed && teamsFlyoutOpen && (
+            <TeamsFlyoutPanel
+              key="teams-flyout"
+              anchorRef={teamsFlyoutButtonRef}
+              onClose={() => setTeamsFlyoutOpen(false)}
+              isNavActive={isNavActive}
+              locationPathname={location.pathname}
+            />
+          )}
+        </AnimatePresence>
+
+        {/* Organization — tight gap from teams */}
+        {!isSidebarCollapsed ? (
+          <motion.div
+            layout
+            transition={{ layout: { duration: 0.22, ease: [0.22, 1, 0.36, 1] } }}
+            className="flex flex-col gap-0.5 -mt-0.5"
+          >
+            <button
+              type="button"
+              onClick={() => setOrgOpen(!orgOpen)}
+              className={`flex items-center justify-between w-full px-2 py-1.5 rounded-md text-[11px] font-medium text-gray-500 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors duration-150 ${focusMinimal}`}
+            >
+              <span>Organization</span>
+              <motion.span
+                animate={{ rotate: orgOpen ? 0 : -90 }}
+                transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+              >
+                <ChevronDown size={14} className="opacity-70" />
+              </motion.span>
+            </button>
+            <AnimatePresence initial={false}>
+              {orgOpen && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                  className="overflow-hidden flex flex-col gap-0.5"
+                >
+                  {orgItems.map(item => {
+                    if (item.adminOnly && !isAdmin) return null;
+                    if (item.leadOnly && !isLead) return null;
+                    return (
+                      <SidebarNavLink
+                        key={item.path}
+                        to={item.path}
+                        icon={item.icon}
+                        label={item.label}
+                        active={isNavActive(item.path)}
+                      />
+                    );
+                  })}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </motion.div>
+        ) : (
+          <div className="flex justify-center py-0.5">
+            <button
+              ref={orgFlyoutButtonRef}
+              type="button"
+              onClick={() => setOrgFlyoutOpen(o => !o)}
+              aria-haspopup="dialog"
+              aria-expanded={orgFlyoutOpen}
+              title="Organization"
+              className={`min-h-11 min-w-11 flex items-center justify-center rounded-lg text-gray-500 dark:text-gray-400 transition-all duration-150 ease-out active:scale-[0.96] ${focusMinimal} ${
+                orgFlyoutOpen
+                  ? 'bg-black/[0.08] dark:bg-white/10 text-gray-900 dark:text-gray-100'
+                  : 'hover:bg-black/[0.05] dark:hover:bg-white/[0.06]'
+              }`}
+            >
+              <Building2 size={18} />
+            </button>
+          </div>
+        )}
+      </motion.nav>
+
+      <AnimatePresence>
+        {isSidebarCollapsed && orgFlyoutOpen && (
+          <OrgFlyoutPanel
+            key="org-flyout"
+            anchorRef={orgFlyoutButtonRef}
+            onClose={() => setOrgFlyoutOpen(false)}
+            isNavActive={isNavActive}
+            orgItems={orgItems}
+            isAdmin={isAdmin}
+            isLead={isLead}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Footer */}
+      <div className="p-2 mt-auto">
+        <div className={`flex items-center ${isSidebarCollapsed ? 'flex-col gap-1' : 'justify-between gap-0.5'}`}>
+          <button
+            type="button"
             onClick={cycleTheme}
-            title={`Current: ${theme} (Click to cycle)`}
-            className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-white/5 text-gray-500 transition-colors"
+            title={`Theme: ${theme}`}
+            className={`rounded-md text-gray-500 hover:bg-black/[0.05] dark:hover:bg-white/[0.06] transition-colors duration-150 ${focusMinimal} ${isSidebarCollapsed ? 'min-h-11 min-w-11 flex items-center justify-center' : 'p-2'}`}
           >
             {theme === 'light' ? <Sun size={18} /> : theme === 'dark' ? <Moon size={18} /> : <Globe size={18} />}
           </button>
-          <button 
+          <button
+            type="button"
             onClick={() => setSidebarCollapsed(!isSidebarCollapsed)}
-            title={isSidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
-            className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-white/5 text-gray-500 transition-colors"
+            title={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            className={`rounded-md text-gray-500 hover:bg-black/[0.05] dark:hover:bg-white/[0.06] transition-colors duration-150 ${focusMinimal} ${isSidebarCollapsed ? 'min-h-11 min-w-11 flex items-center justify-center' : 'p-2'}`}
           >
             {isSidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
           </button>
-          <button 
+          <button
+            type="button"
             onClick={() => navigate('/login')}
-            title="Logout"
-            className="p-2 rounded-md hover:bg-gray-200 dark:hover:bg-white/5 text-gray-500 transition-colors"
+            title="Log out"
+            className={`rounded-md text-gray-500 hover:bg-black/[0.05] dark:hover:bg-white/[0.06] transition-colors duration-150 ${focusMinimal} ${isSidebarCollapsed ? 'min-h-11 min-w-11 flex items-center justify-center' : 'p-2'}`}
           >
             <LogOut size={18} />
           </button>
         </div>
-        
-        <Link 
+
+        <Link
           to="/settings"
-          className={`w-full flex items-center ${isSidebarCollapsed ? 'justify-center' : 'gap-3'} p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-white/5 transition-colors`}
+          className={`mt-2 flex items-center gap-2.5 p-1.5 rounded-md hover:bg-black/[0.04] dark:hover:bg-white/[0.05] transition-colors duration-150 ${focusMinimal} ${
+            isSidebarCollapsed ? 'justify-center min-h-11' : ''
+          }`}
         >
-          <img 
-            src={currentUser?.avatar} 
-            alt={currentUser?.name} 
+          <img
+            src={currentUser?.avatar}
+            alt={currentUser?.name}
             className="w-8 h-8 rounded-full object-cover shrink-0"
             referrerPolicy="no-referrer"
           />
           {!isSidebarCollapsed && (
-            <div className="flex flex-col items-start overflow-hidden">
-              <span className="text-sm font-medium truncate w-full">{currentUser?.name}</span>
-              <span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">{currentUser?.role}</span>
+            <div className="flex flex-col items-start overflow-hidden min-w-0">
+              <span className="text-[13px] font-medium truncate w-full text-gray-900 dark:text-gray-100">
+                {currentUser?.name}
+              </span>
+              <span className="text-[10px] text-gray-500 dark:text-gray-400 font-medium capitalize">
+                {currentUser?.role}
+              </span>
             </div>
           )}
         </Link>
       </div>
-    </aside>
+    </motion.aside>
+  );
+};
+
+/** Collapsed rail: flyout for Organization items */
+const OrgFlyoutPanel: React.FC<{
+  anchorRef: React.RefObject<HTMLButtonElement | null>;
+  onClose: () => void;
+  isNavActive: (to: string) => boolean;
+  orgItems: { path: string; label: string; icon: React.ReactNode; adminOnly?: boolean; leadOnly?: boolean }[];
+  isAdmin: boolean;
+  isLead: boolean;
+}> = ({ anchorRef, onClose, isNavActive, orgItems, isAdmin, isLead }) => {
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [style, setStyle] = useState<React.CSSProperties>({});
+
+  const updatePosition = useCallback(() => {
+    const el = anchorRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const maxH = Math.min(window.innerHeight - 24, 480);
+    let top = rect.top - 8;
+    if (top + maxH > window.innerHeight - 12) top = window.innerHeight - maxH - 12;
+    if (top < 12) top = 12;
+    setStyle({
+      position: 'fixed',
+      left: rect.right + 8,
+      top,
+      width: 200,
+      maxHeight: maxH,
+      zIndex: 60,
+    });
+  }, [anchorRef]);
+
+  useLayoutEffect(() => {
+    updatePosition();
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+    };
+  }, [updatePosition]);
+
+  useEffect(() => {
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (panelRef.current?.contains(t)) return;
+      if (anchorRef.current?.contains(t)) return;
+      onClose();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [onClose, anchorRef]);
+
+  return (
+    <motion.div
+      ref={panelRef}
+      initial={{ opacity: 0, x: -6 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -6 }}
+      transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
+      style={style}
+      className="overflow-y-auto rounded-lg bg-white dark:bg-card-dark shadow-2xl py-2 flex flex-col gap-0.5"
+    >
+      <div className="px-3 py-1.5 text-[11px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Organization</div>
+      {orgItems.map(item => {
+        if (item.adminOnly && !isAdmin) return null;
+        if (item.leadOnly && !isLead) return null;
+        const active = isNavActive(item.path);
+        return (
+          <Link
+            key={item.path}
+            to={item.path}
+            onClick={onClose}
+            className={`flex items-center gap-2.5 px-3 py-2 mx-1 rounded-md text-[13px] font-medium transition-colors duration-100 ${focusMinimal} ${
+              active
+                ? 'bg-black/[0.06] dark:bg-white/[0.08] text-gray-900 dark:text-gray-100'
+                : 'text-gray-600 dark:text-gray-400 hover:bg-black/[0.04] dark:hover:bg-white/[0.05]'
+            }`}
+          >
+            <span className={active ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400 dark:text-gray-500'}>
+              {item.icon}
+            </span>
+            {item.label}
+          </Link>
+        );
+      })}
+    </motion.div>
+  );
+};
+
+/** Collapsed rail: flyout with full team names + large tap targets */
+const TeamsFlyoutPanel: React.FC<{
+  anchorRef: React.RefObject<HTMLButtonElement | null>;
+  onClose: () => void;
+  isNavActive: (to: string) => boolean;
+  locationPathname: string;
+}> = ({ anchorRef, onClose, isNavActive, locationPathname }) => {
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [style, setStyle] = useState<React.CSSProperties>({});
+
+  const updatePosition = useCallback(() => {
+    const el = anchorRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const maxH = Math.min(window.innerHeight - 24, 480);
+    let top = rect.top - 8;
+    if (top + maxH > window.innerHeight - 12) top = window.innerHeight - maxH - 12;
+    if (top < 12) top = 12;
+    setStyle({
+      position: 'fixed',
+      left: rect.right + 8,
+      top,
+      width: 236,
+      maxHeight: maxH,
+      zIndex: 60,
+    });
+  }, [anchorRef]);
+
+  useLayoutEffect(() => {
+    updatePosition();
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+    };
+  }, [updatePosition]);
+
+  useEffect(() => {
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (panelRef.current?.contains(t)) return;
+      if (anchorRef.current?.contains(t)) return;
+      onClose();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [onClose, anchorRef]);
+
+  return (
+    <motion.div
+      ref={panelRef}
+      initial={{ opacity: 0, x: -6 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -6 }}
+      transition={{ duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
+      style={style}
+      className="overflow-y-auto rounded-lg bg-white dark:bg-card-dark shadow-2xl py-2"
+    >
+        <div className="px-3 py-1.5 text-[11px] font-medium text-gray-500 dark:text-gray-400">Teams</div>
+        {MOCK_TEAMS.map(team => {
+          return (
+            <div key={team.id} className="px-2 pb-3 last:pb-1">
+              <Link
+                to={`/teams/${team.id}`}
+                onClick={onClose}
+                className={`flex items-center px-2 py-2.5 min-h-11 rounded-md hover:bg-black/[0.04] dark:hover:bg-white/[0.05] transition-colors ${focusMinimal}`}
+              >
+                <span className="text-[13px] font-medium text-gray-900 dark:text-gray-100 truncate">{team.name}</span>
+              </Link>
+              <div className="grid grid-cols-1 gap-0.5 pl-1">
+                {[
+                  { to: `/issues?team=${team.id}`, label: 'Issues', active: isNavActive(`/issues?team=${team.id}`) },
+                  { to: `/projects?team=${team.id}`, label: 'Projects', active: isNavActive(`/projects?team=${team.id}`) },
+                  { to: `/teams/${team.id}`, label: 'Team', active: locationPathname === `/teams/${team.id}` },
+                  { to: `/cycles?team=${team.id}`, label: 'Cycles', active: isNavActive(`/cycles?team=${team.id}`) },
+                  { to: `/roadmap?team=${team.id}`, label: 'Roadmap', active: isNavActive(`/roadmap?team=${team.id}`) },
+                ].map(link => (
+                  <Link
+                    key={link.to}
+                    to={link.to}
+                    onClick={onClose}
+                    className={`block px-3 py-2 rounded-md text-[12px] font-medium min-h-9 flex items-center transition-colors duration-100 ${focusMinimal} ${
+                      link.active
+                        ? 'bg-black/[0.06] dark:bg-white/[0.08] text-gray-900 dark:text-gray-100'
+                        : 'text-gray-600 dark:text-gray-400 hover:bg-black/[0.04] dark:hover:bg-white/[0.05]'
+                    }`}
+                  >
+                    {link.label}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+    </motion.div>
   );
 };

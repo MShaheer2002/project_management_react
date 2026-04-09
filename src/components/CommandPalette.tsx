@@ -13,7 +13,7 @@ export const CommandPalette: React.FC = () => {
     { id: 'create-issue', label: 'Create new issue', icon: <Plus size={16} />, category: 'Quick Actions', action: () => navigate('/issues/create') },
     { id: 'go-dashboard', label: 'Go to Dashboard', icon: <LayoutDashboard size={16} />, category: 'Navigation', action: () => navigate('/') },
     { id: 'go-inbox', label: 'Go to Inbox', icon: <Inbox size={16} />, category: 'Navigation', action: () => navigate('/inbox') },
-    { id: 'go-my-issues', label: 'Go to My Issues', icon: <UserCircle size={16} />, category: 'Navigation', action: () => navigate('/my-tasks') },
+    { id: 'go-my-issues', label: 'Go to My Issues', icon: <UserCircle size={16} />, category: 'Navigation', action: () => navigate('/issues/my') },
     { id: 'go-projects', label: 'Go to Projects', icon: <Layers size={16} />, category: 'Navigation', action: () => navigate('/projects') },
     { id: 'go-teams', label: 'Go to Teams', icon: <Users size={16} />, category: 'Navigation', action: () => navigate('/teams') },
     { id: 'go-roadmap', label: 'Go to Roadmap', icon: <Map size={16} />, category: 'Navigation', action: () => navigate('/roadmap') },
