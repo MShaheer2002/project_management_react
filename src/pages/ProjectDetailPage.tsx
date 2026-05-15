@@ -28,7 +28,7 @@ import {
 import { MOCK_PROJECTS, MOCK_ISSUES, MOCK_USERS, STATUS_LABELS, PRIORITY_COLORS } from '../constants';
 import { Issue } from '../types';
 import { getStoredIssues } from '../lib/issue-storage';
-import { IssuesPage } from '@/src/features/issues/components/IssuesPage';
+import { IssuesPage } from '@/features/issues/components/IssuesPage';
 import { RoadmapPage } from './RoadmapPage';
 import { ActivityPage } from './ActivityPage';
 import { MembersPage } from './MembersPage';

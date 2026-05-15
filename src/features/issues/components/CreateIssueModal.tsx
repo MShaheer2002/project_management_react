@@ -2,13 +2,13 @@ import React from 'react';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Controller, useForm } from 'react-hook-form';
-import { Modal } from '@/src/components/modals/Modal';
-import { useApp } from '@/src/AppContext';
-import { MOCK_PROJECTS, MOCK_USERS, ISSUE_TYPE_CONFIG } from '@/src/constants';
-import { Priority, IssueType, Severity, Issue } from '@/src/types';
+import { Modal } from '@/components/modals/Modal';
+import { useApp } from '@/AppContext';
+import { MOCK_PROJECTS, MOCK_USERS, ISSUE_TYPE_CONFIG } from '@/constants';
+import { Priority, IssueType, Severity, Issue } from '@/types';
 import { Tag, Paperclip, ChevronDown, Loader2, CheckSquare, Bug, Zap } from 'lucide-react';
-import { RichTextEditor } from '@/src/components/RichTextEditor';
-import { generateNextIssueId, saveCreatedIssue } from '@/src/lib/issue-storage';
+import { RichTextEditor } from '@/components/RichTextEditor';
+import { generateNextIssueId, saveCreatedIssue } from '@/lib/issue-storage';
 
 const issueSchema = z.object({
   title: z.string().min(1, 'Title is required').max(100, 'Title is too long'),

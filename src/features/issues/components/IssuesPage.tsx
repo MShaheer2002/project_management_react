@@ -1,10 +1,10 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CheckCircle2, Clock, AlertCircle, MoreHorizontal, Plus, Filter, Search as SearchIcon, ArrowUpDown, Calendar, Building2, CheckSquare, Bug, Zap } from 'lucide-react';
-import { useApp } from '@/src/AppContext';
-import { MOCK_ISSUES, MOCK_USERS, MOCK_DEPARTMENTS, MOCK_PROJECTS, MOCK_TEAMS, PRIORITY_COLORS, STATUS_LABELS, ISSUE_TYPE_CONFIG } from '@/src/constants';
-import { Issue, IssueType, Priority, Status } from '@/src/types';
-import { getStoredIssues } from '@/src/lib/issue-storage';
+import { useApp } from '@/AppContext';
+import { MOCK_ISSUES, MOCK_USERS, MOCK_DEPARTMENTS, MOCK_PROJECTS, MOCK_TEAMS, PRIORITY_COLORS, STATUS_LABELS, ISSUE_TYPE_CONFIG } from '@/constants';
+import { Issue, IssueType, Priority, Status } from '@/types';
+import { getStoredIssues } from '@/lib/issue-storage';
 
 const TypeBadge: React.FC<{ type: IssueType }> = ({ type }) => {
   const config = ISSUE_TYPE_CONFIG[type];
@@ -37,7 +37,7 @@ const StatusIcon: React.FC<{ status: Status }> = ({ status }) => {
   }
 };
 
-import { KanbanBoard } from '@/src/components/board/KanbanBoard';
+import { KanbanBoard } from '@/components/board/KanbanBoard';
 
 export const IssuesPage: React.FC<{ projectId?: string; initialViewMode?: 'list' | 'kanban' | 'calendar' }> = ({ projectId, initialViewMode = 'list' }) => {
   const { setSelectedIssueId, showToast } = useApp();
