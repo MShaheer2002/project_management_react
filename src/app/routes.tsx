@@ -26,7 +26,7 @@ import { DepartmentsPage } from '@/pages/DepartmentsPage';
 import { DepartmentDetailPage } from '@/pages/DepartmentDetailPage';
 import { CreateIssuePage } from '@/pages/CreateIssuePage';
 import { TemplatesPage } from '@/pages/TemplatesPage';
-import { AuthPage } from '@/pages/AuthPage';
+import { LoginPage, SignupPage, VerifyEmailPage, CreateWorkspacePage, ForgotPasswordPage, ResetPasswordPage } from '@/pages/auth';
 import { IssueDetailPage } from '@/pages/IssueDetailPage';
 
 export const AppRoutes: React.FC = () => {
@@ -38,12 +38,12 @@ export const AppRoutes: React.FC = () => {
     <Routes>
       {/* Public / Auth routes */}
       <Route path="/marketing" element={<MarketingPage />} />
-      <Route path="/login" element={<AuthPage mode="login" />} />
-      <Route path="/signup" element={<AuthPage mode="signup" />} />
-      <Route path="/org-creation" element={<AuthPage mode="org" />} />
-      <Route path="/forgot-password" element={<AuthPage mode="forgot-password" />} />
-      <Route path="/reset-password" element={<AuthPage mode="reset-password" />} />
-      <Route path="/email-verification" element={<AuthPage mode="email-verification" />} />
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/signup" element={<SignupPage />} />
+      <Route path="/org-creation" element={<CreateWorkspacePage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
+      <Route path="/email-verification" element={<VerifyEmailPage />} />
 
       {/* Authenticated routes with MainLayout */}
       <Route element={<MainLayout />}>
