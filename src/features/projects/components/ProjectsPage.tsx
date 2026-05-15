@@ -1,8 +1,8 @@
 import React, { useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Layers, Plus, Search, MoreHorizontal, Users, Clock } from 'lucide-react';
-import { useApp } from '@/src/AppContext';
-import { MOCK_PROJECTS, MOCK_TEAMS } from '@/src/constants';
+import { useApp } from '@/AppContext';
+import { MOCK_PROJECTS, MOCK_TEAMS } from '@/constants';
 
 export const ProjectsPage: React.FC = () => {
   const { setActiveModal } = useApp();
