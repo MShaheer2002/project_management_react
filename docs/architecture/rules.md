@@ -760,6 +760,188 @@ import { Modal } from '../../../shared/components/ui/Modal';
 
 ---
 
+## 13. Backend Integration & Feature Documentation
+
+Every feature that integrates with the backend **must** have its own documentation under `docs/features/<feature-name>/`. This is non-negotiable — undocumented integrations create black boxes that no one can debug, maintain, or onboard into.
+
+### R13.1 — Every feature integration gets a docs folder
+
+```
+docs/features/
+├── auth/
+│   ├── integration.md       # API endpoints, request/response shapes, flow diagrams
+│   ├── guide.md             # How to use auth in the frontend (hooks, stores, guards)
+│   └── decisions.md         # Why we chose this approach (optional, for complex features)
+├── issues/
+│   ├── integration.md
+│   └── guide.md
+├── projects/
+│   ├── integration.md
+│   └── guide.md
+└── ...per feature as integrated
+```
+
+### R13.2 — `integration.md` is mandatory for every backend-connected feature
+
+This file documents the contract between frontend and backend. It must contain:
+
+1. **Endpoints** — Every API endpoint the feature calls, with method, path, and purpose
+2. **Request/Response types** — Exact shapes with TypeScript interfaces
+3. **Auth requirements** — Which endpoints need auth, what roles can access them
+4. **Error responses** — What error codes the backend returns and how the frontend handles each
+5. **Flow diagrams** — For multi-step flows (e.g., auth: signup → verify → workspace creation)
+
+```markdown
+<!-- Example: docs/features/auth/integration.md -->
+
+# Auth — Backend Integration
+
+## Endpoints
+
+| Method | Path                    | Purpose                  | Auth Required |
+|--------|-------------------------|--------------------------|---------------|
+| POST   | /api/auth/signup        | Create account           | No            |
+| POST   | /api/auth/login         | Email + password login   | No            |
+| POST   | /api/auth/verify-email  | Verify OTP code          | No            |
+| POST   | /api/auth/forgot-password | Request reset link     | No            |
+| POST   | /api/auth/reset-password  | Set new password       | No            |
+| GET    | /api/auth/me            | Get current user         | Yes           |
+| POST   | /api/auth/logout        | Invalidate session       | Yes           |
+| GET    | /api/auth/google        | Google OAuth redirect    | No            |
+| GET    | /api/auth/github        | GitHub OAuth redirect    | No            |
+
+## Request / Response Types
+
+### POST /api/auth/signup
+Request:
+  { name: string, email: string, password: string }
+Response (201):
+  { user: { id, name, email }, message: "Verification email sent" }
+Error (409):
+  { error: "EMAIL_ALREADY_EXISTS", message: "..." }
+
+...for every endpoint
+```
+
+### R13.3 — `guide.md` documents frontend usage
+
+This file explains how other developers (or your future self) should use the feature's frontend code:
+
+1. **Hooks** — What hooks exist, what they return, when to use them
+2. **Stores** — What Zustand stores the feature uses, their state shape
+3. **Components** — Key components and their props
+4. **Guards** — How route protection works for this feature
+5. **Examples** — Copy-paste code snippets for common use cases
+
+```markdown
+<!-- Example: docs/features/auth/guide.md -->
+
+# Auth — Frontend Guide
+
+## Stores
+- `useAuthStore` — holds `currentUser`, `organization`, `token`
+- Access: `const user = useAuthStore(s => s.currentUser)`
+
+## Hooks
+- `useLogin()` — returns `useMutation` for email/password login
+- `useSignup()` — returns `useMutation` for account creation
+- `useLogout()` — clears auth state and redirects to /login
+
+## Guards
+- `AuthGuard` — redirects to /login if no token
+- `GuestGuard` — redirects to / if already authenticated
+
+## Usage
+  const { mutate: login, isPending } = useLogin();
+  login({ email, password }, { onSuccess: () => navigate('/') });
+```
+
+### R13.4 — Documentation is written BEFORE or DURING integration, not after
+
+The integration doc is your plan. Write the endpoints table and request/response types first, then implement against it. This prevents:
+- Building against assumptions that don't match the backend
+- Forgetting to handle error cases
+- Losing knowledge of what was built
+
+### R13.5 — Keep docs in sync with code
+
+When an endpoint changes, the integration doc must be updated in the same PR. Stale docs are worse than no docs. If you change a request shape, update `integration.md`. If you add a hook, update `guide.md`.
+
+### R13.6 — `decisions.md` for non-obvious choices (optional)
+
+If you made a significant architectural choice (e.g., "we use httpOnly cookies instead of localStorage for tokens because..."), document it. This prevents the next developer from "fixing" something that was intentional.
+
+### R13.7 — Environment variables are documented per feature
+
+Every feature that needs env vars must list them in its `integration.md`:
+
+```markdown
+## Environment Variables
+| Variable              | Required | Default       | Description                |
+|-----------------------|----------|---------------|----------------------------|
+| VITE_API_URL          | Yes      | /api          | Backend API base URL       |
+| VITE_GOOGLE_CLIENT_ID | Yes      | —             | Google OAuth client ID     |
+| VITE_GITHUB_CLIENT_ID | Yes      | —             | GitHub OAuth client ID     |
+```
+
+### R13.8 — API client configuration
+
+All backend calls go through the shared Axios instance (`shared/services/api.ts`). Feature services import this client — they never create their own Axios instances or use raw `fetch`.
+
+```ts
+// CORRECT — feature service uses shared API client
+import { api } from '@shared/services/api';
+export const authService = {
+  login: (data: LoginRequest) => api.post<LoginResponse>('/auth/login', data).then(r => r.data),
+};
+
+// FORBIDDEN — raw fetch or custom axios
+export const login = (data: LoginRequest) => fetch('/api/auth/login', { ... });
+```
+
+### R13.9 — Token management is centralized in the auth store
+
+Auth tokens, refresh logic, and session management live exclusively in `useAuthStore` and the API interceptor. No other feature manages tokens or auth headers.
+
+```ts
+// shared/services/api.ts — interceptor adds token automatically
+api.interceptors.request.use((config) => {
+  const token = useAuthStore.getState().token;
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
+```
+
+Features never pass tokens manually — the interceptor handles it globally.
+
+### R13.10 — Error handling follows a consistent pattern
+
+Every service call that hits the backend must handle errors through a standard pattern:
+
+```ts
+// In the hook (TanStack Query handles retries and error state)
+export const useLogin = () => {
+  const showToast = useToastStore(s => s.showToast);
+  return useMutation({
+    mutationFn: authService.login,
+    onError: (error: AxiosError<ApiError>) => {
+      const message = error.response?.data?.message || 'Something went wrong';
+      showToast(message, 'error');
+    },
+  });
+};
+```
+
+Backend error responses must follow a consistent shape:
+```ts
+interface ApiError {
+  error: string;    // Machine-readable code (e.g., "EMAIL_ALREADY_EXISTS")
+  message: string;  // Human-readable message for the user
+}
+```
+
+---
+
 ## Quick Reference — Decision Tree
 
 ```
@@ -809,4 +991,8 @@ Is it global state (auth, theme, toast)?
 
 Does the feature only have a page right now?
   → That's fine. features/<domain>/pages/ + index.ts is enough. Add folders when needed.
+
+Are you integrating a feature with the backend?
+  → Create docs/features/<feature>/integration.md FIRST, then implement.
+  → Add docs/features/<feature>/guide.md for frontend usage.
 ```

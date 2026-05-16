@@ -30,9 +30,10 @@ import { LoginPage, SignupPage, VerifyEmailPage, CreateWorkspacePage, ForgotPass
 import { IssueDetailPage } from '@/pages/IssueDetailPage';
 
 export const AppRoutes: React.FC = () => {
-  const currentUser = useAuthStore((s) => s.currentUser);
-  const isAdmin = currentUser?.role === 'owner' || currentUser?.role === 'admin';
-  const isLead = isAdmin || currentUser?.role === 'member';
+  const workspace = useAuthStore((s) => s.workspace);
+  const role = workspace?.role;
+  const isAdmin = role === 'owner' || role === 'admin';
+  const isLead = isAdmin || role === 'member';
 
   return (
     <Routes>
