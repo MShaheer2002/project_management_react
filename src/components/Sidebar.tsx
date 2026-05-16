@@ -29,6 +29,8 @@ import {
   LayoutGrid,
   FolderKanban,
 } from 'lucide-react';
+import { useAuth } from '@clerk/clerk-react';
+import { useAuthStore } from '@/app/stores/useAuthStore';
 import { useApp } from '../AppContext';
 import { MOCK_TEAMS } from '../constants';
 
@@ -121,6 +123,18 @@ export const Sidebar: React.FC = () => {
     showToast,
   } = useApp();
 
+  // Clerk auth — for real sign-out
+  const { signOut } = useAuth();
+
+  /**
+   * Logout handler — clears Zustand store + Clerk session, then redirects.
+   */
+  const handleLogout = async () => {
+    console.log('[Sidebar] Logging out...');
+    useAuthStore.getState().clear();          // Clear Zustand auth state
+    await signOut({ redirectUrl: '/login' }); // Clerk sign-out + redirect
+  };
+
   const isAdmin = currentUser?.role === 'owner' || currentUser?.role === 'admin';
   const isLead = isAdmin || currentUser?.role === 'member';
 
@@ -205,8 +219,8 @@ export const Sidebar: React.FC = () => {
       label: 'Logout',
       icon: <LogOut size={14} />,
       onClick: () => {
-        navigate('/login');
         setIsWorkspaceMenuOpen(false);
+        handleLogout();
       },
       variant: 'danger',
     },
@@ -350,10 +364,10 @@ export const Sidebar: React.FC = () => {
         >
           <SectionLabel collapsed={isSidebarCollapsed}>Your work</SectionLabel>
           <SidebarNavLink
-            to="/"
+            to="/dashboard"
             icon={<LayoutDashboard size={16} />}
             label="Dashboard"
-            active={isNavActive('/')}
+            active={isNavActive('/dashboard')}
             collapsed={isSidebarCollapsed}
           />
           <SidebarNavLink
@@ -657,7 +671,7 @@ export const Sidebar: React.FC = () => {
           </button>
           <button
             type="button"
-            onClick={() => navigate('/login')}
+            onClick={handleLogout}
             title="Log out"
             className={`rounded-md text-gray-500 hover:bg-black/[0.05] dark:hover:bg-white/[0.06] transition-colors duration-150 ${focusMinimal} ${isSidebarCollapsed ? 'min-h-11 min-w-11 flex items-center justify-center' : 'p-2'}`}
           >

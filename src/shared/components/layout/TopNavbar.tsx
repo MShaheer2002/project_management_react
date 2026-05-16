@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { useAuth } from '@clerk/clerk-react';
 import { useAuthStore } from '@/app/stores/useAuthStore';
 import { useThemeStore } from '@/app/stores/useThemeStore';
 import { useUIStore } from '@/app/stores/useUIStore';
@@ -18,12 +19,21 @@ import {
 } from 'lucide-react';
 
 export const TopNavbar: React.FC = () => {
+  const { signOut } = useAuth();
   const setCommandPaletteOpen = useUIStore((s) => s.setCommandPaletteOpen);
   const currentUser = useAuthStore((s) => s.currentUser);
   const theme = useThemeStore((s) => s.theme);
   const setTheme = useThemeStore((s) => s.setTheme);
   const [isUserMenuOpen, setUserMenuOpen] = useState(false);
   const navigate = useNavigate();
+
+  /** Logout — clear store + Clerk sign-out */
+  const handleLogout = async () => {
+    console.log('[TopNavbar] Logging out...');
+    setUserMenuOpen(false);
+    useAuthStore.getState().clear();
+    await signOut({ redirectUrl: '/login' });
+  };
 
   return (
     <header className="h-14 border-b border-gray-200 dark:border-border-dark bg-white/80 dark:bg-bg-dark/80 backdrop-blur-md flex items-center justify-between px-6 sticky top-0 z-30">
@@ -132,7 +142,7 @@ export const TopNavbar: React.FC = () => {
                   </div>
                   <div className="p-1 border-t border-gray-200 dark:border-border-dark">
                     <button
-                      onClick={() => { navigate('/login'); setUserMenuOpen(false); }}
+                      onClick={handleLogout}
                       className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-red-500/10 text-red-500 text-sm text-left transition-colors"
                     >
                       <LogOut size={16} />

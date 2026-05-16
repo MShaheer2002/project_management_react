@@ -27,7 +27,7 @@ export function attachErrorInterceptor(instance: AxiosInstance) {
 
       // Network error — no response received
       if (!error.response) {
-        showToast('Network error. Check your connection.', 'error');
+        showToast('Please check your internet connection and try again.', 'error', 'Network error');
         return Promise.reject(error);
       }
 
@@ -45,7 +45,7 @@ export function attachErrorInterceptor(instance: AxiosInstance) {
 
         case 403:
           if (errorCode !== 'USER_NOT_SYNCED') {
-            showToast("You don't have permission to do that.", 'error');
+            showToast("You don't have permission to perform this action.", 'error', 'Access denied');
           }
           break;
 
@@ -58,12 +58,12 @@ export function attachErrorInterceptor(instance: AxiosInstance) {
           break;
 
         case 429:
-          showToast('Too many requests. Please wait a moment.', 'error');
+          showToast('Please wait a moment before trying again.', 'warning', 'Too many requests');
           break;
 
         default:
           if (status >= 500) {
-            showToast('Server error. Please try again later.', 'error');
+            showToast('Something went wrong on our end. Please try again later.', 'error', 'Server error');
           }
           break;
       }

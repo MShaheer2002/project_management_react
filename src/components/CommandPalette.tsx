@@ -11,7 +11,7 @@ export const CommandPalette: React.FC = () => {
 
   const actions: { id: string; label: string; icon: React.ReactNode; category: string; action: () => void }[] = [
     { id: 'create-issue', label: 'Create new issue', icon: <Plus size={16} />, category: 'Quick Actions', action: () => navigate('/issues/create') },
-    { id: 'go-dashboard', label: 'Go to Dashboard', icon: <LayoutDashboard size={16} />, category: 'Navigation', action: () => navigate('/') },
+    { id: 'go-dashboard', label: 'Go to Dashboard', icon: <LayoutDashboard size={16} />, category: 'Navigation', action: () => navigate('/dashboard') },
     { id: 'go-inbox', label: 'Go to Inbox', icon: <Inbox size={16} />, category: 'Navigation', action: () => navigate('/inbox') },
     { id: 'go-my-issues', label: 'Go to My Issues', icon: <UserCircle size={16} />, category: 'Navigation', action: () => navigate('/issues/my') },
     { id: 'go-projects', label: 'Go to Projects', icon: <Layers size={16} />, category: 'Navigation', action: () => navigate('/projects') },

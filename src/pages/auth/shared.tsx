@@ -43,17 +43,33 @@ export const FormInput: React.FC<{
   </div>
 );
 
-/* ─── OTP input (6 digits) ─── */
-export const OTPInput: React.FC<{ length?: number }> = ({ length = 6 }) => {
+/**
+ * OTP Input — 6-digit code entry with auto-advance, backspace, and paste support.
+ * Calls `onComplete` with the full code string whenever all digits are filled.
+ */
+export const OTPInput: React.FC<{ length?: number; onComplete?: (code: string) => void }> = ({ length = 6, onComplete }) => {
   const refs = useRef<(HTMLInputElement | null)[]>([]);
 
+  // Collect the full code from all inputs and notify parent
+  const collectCode = () => {
+    const code = refs.current.map((r) => r?.value || '').join('');
+    if (code.length === length && onComplete) onComplete(code);
+  };
+
+  // Auto-advance to next input when a digit is entered
   const handleInput = (idx: number, val: string) => {
     if (val.length === 1 && idx < length - 1) refs.current[idx + 1]?.focus();
+    collectCode();
   };
+
+  // Backspace moves focus to previous input
   const handleKeyDown = (idx: number, e: React.KeyboardEvent) => {
-    if (e.key === 'Backspace' && !(e.target as HTMLInputElement).value && idx > 0)
+    if (e.key === 'Backspace' && !(e.target as HTMLInputElement).value && idx > 0) {
       refs.current[idx - 1]?.focus();
+    }
   };
+
+  // Handle pasting a full code (e.g., from email)
   const handlePaste = (e: React.ClipboardEvent) => {
     e.preventDefault();
     const data = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, length);
@@ -63,6 +79,7 @@ export const OTPInput: React.FC<{ length?: number }> = ({ length = 6 }) => {
         if (i < length - 1) refs.current[i + 1]?.focus();
       }
     });
+    collectCode();
   };
 
   return (
@@ -84,8 +101,12 @@ export const OTPInput: React.FC<{ length?: number }> = ({ length = 6 }) => {
 };
 
 /* ─── social button ─── */
-export const SocialButton: React.FC<{ icon: React.ReactNode; label: string }> = ({ icon, label }) => (
-  <button className="flex items-center justify-center gap-2.5 py-3 bg-gray-50 dark:bg-white/[0.04] border border-gray-200 dark:border-white/[0.08] rounded-xl text-sm font-medium hover:bg-gray-100 dark:hover:bg-white/[0.07] hover:border-gray-300 dark:hover:border-white/[0.12] dark:text-white transition-all active:scale-[0.98]">
+export const SocialButton: React.FC<{ icon: React.ReactNode; label: string; onClick?: () => void }> = ({ icon, label, onClick }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className="flex items-center justify-center gap-2.5 py-3 bg-gray-50 dark:bg-white/[0.04] border border-gray-200 dark:border-white/[0.08] rounded-xl text-sm font-medium hover:bg-gray-100 dark:hover:bg-white/[0.07] hover:border-gray-300 dark:hover:border-white/[0.12] dark:text-white transition-all active:scale-[0.98]"
+  >
     {icon}
     {label}
   </button>
@@ -104,13 +125,14 @@ export const Divider: React.FC<{ text: string }> = ({ text }) => (
 );
 
 /* ─── primary submit button ─── */
-export const SubmitButton: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+export const SubmitButton: React.FC<{ children: React.ReactNode; disabled?: boolean }> = ({ children, disabled }) => (
   <button
     type="submit"
-    className="w-full py-3.5 bg-primary text-white rounded-xl font-semibold text-sm hover:bg-primary/90 transition-all flex items-center justify-center gap-2 group shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 active:scale-[0.98]"
+    disabled={disabled}
+    className="w-full py-3.5 bg-primary text-white rounded-xl font-semibold text-sm hover:bg-primary/90 transition-all flex items-center justify-center gap-2 group shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-primary"
   >
     {children}
-    <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+    {!disabled && <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />}
   </button>
 );
 

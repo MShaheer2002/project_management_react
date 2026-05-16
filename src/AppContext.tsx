@@ -4,7 +4,6 @@ import { useAuthStore } from '@/app/stores/useAuthStore';
 import { useUIStore } from '@/app/stores/useUIStore';
 import { useToastStore } from '@/app/stores/useToastStore';
 import { User, Organization, ModalType, Toast } from './types';
-import { MOCK_USERS, MOCK_ORGANIZATIONS } from './constants';
 
 /**
  * COMPATIBILITY LAYER — delegates to Zustand stores.
@@ -30,21 +29,14 @@ interface AppContextType {
   activeModal: ModalType;
   setActiveModal: (modal: ModalType) => void;
   toasts: Toast[];
-  showToast: (message: string, type?: 'success' | 'error' | 'info') => void;
+  showToast: (message: string, type?: 'success' | 'error' | 'info' | 'warning', title?: string) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Initialize auth with mock data (temporary until real auth exists)
-  const { currentUser, setCurrentUser } = useAuthStore();
-
-  useEffect(() => {
-    if (!currentUser) {
-      useAuthStore.getState().setCurrentUser(MOCK_USERS[0]);
-      useAuthStore.getState().setOrganization(MOCK_ORGANIZATIONS[0]);
-    }
-  }, []);
+  // Auth is now handled by Clerk + AuthSync — no mock initialization needed.
+  // This AppProvider only exists as a compatibility layer for useApp() consumers.
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -73,7 +65,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       value={{
         theme,
         setTheme,
-        currentUser: auth.currentUser,
+        currentUser: auth.currentUser ? { ...auth.currentUser, role: (auth.workspace?.role as any) || 'member' } as User : null,
         setCurrentUser: auth.setCurrentUser,
         organization: auth.organization,
         setOrganization: auth.setOrganization,

@@ -1,34 +1,111 @@
 import React from 'react';
-import { useApp } from '../AppContext';
-import { CheckCircle2, AlertCircle, Info, X } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Info, AlertTriangle, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { useToastStore, type ToastType } from '@/app/stores/useToastStore';
 
+/**
+ * Toast icon + color config per type.
+ * Follows the semantic color rules from rules.md §7.0.1
+ */
+const toastConfig: Record<ToastType, {
+  icon: React.ReactNode;
+  containerClass: string;
+  iconBgClass: string;
+  progressClass: string;
+}> = {
+  success: {
+    icon: <CheckCircle2 size={18} />,
+    containerClass: 'bg-white dark:bg-card-dark border-gray-200 dark:border-border-dark',
+    iconBgClass: 'bg-green-500/10 text-green-500',
+    progressClass: 'bg-green-500',
+  },
+  error: {
+    icon: <AlertCircle size={18} />,
+    containerClass: 'bg-white dark:bg-card-dark border-red-200 dark:border-red-900/50',
+    iconBgClass: 'bg-red-500/10 text-red-500',
+    progressClass: 'bg-red-500',
+  },
+  warning: {
+    icon: <AlertTriangle size={18} />,
+    containerClass: 'bg-white dark:bg-card-dark border-orange-200 dark:border-orange-900/50',
+    iconBgClass: 'bg-orange-500/10 text-orange-500',
+    progressClass: 'bg-orange-500',
+  },
+  info: {
+    icon: <Info size={18} />,
+    containerClass: 'bg-white dark:bg-card-dark border-blue-200 dark:border-blue-900/50',
+    iconBgClass: 'bg-blue-500/10 text-blue-500',
+    progressClass: 'bg-blue-500',
+  },
+};
+
+/**
+ * ToastContainer — renders all active toast notifications.
+ * Positioned bottom-right, stacked vertically.
+ * Each toast has: colored icon, optional title, message, dismiss button, auto-dismiss progress bar.
+ */
 export const ToastContainer: React.FC = () => {
-  const { toasts } = useApp();
+  const toasts = useToastStore((s) => s.toasts);
+  const dismissToast = useToastStore((s) => s.dismissToast);
 
   return (
-    <div className="fixed bottom-6 right-6 z-[200] flex flex-col gap-3">
-      <AnimatePresence>
-        {toasts.map((toast) => (
-          <motion.div
-            key={toast.id}
-            initial={{ opacity: 0, x: 20, scale: 0.95 }}
-            animate={{ opacity: 1, x: 0, scale: 1 }}
-            exit={{ opacity: 0, x: 20, scale: 0.95 }}
-            className={`flex items-center gap-3 px-4 py-3 rounded-xl shadow-2xl border ${
-              toast.type === 'success' 
-                ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400'
-                : toast.type === 'error'
-                ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-700 dark:text-red-400'
-                : 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-400'
-            }`}
-          >
-            {toast.type === 'success' && <CheckCircle2 size={18} />}
-            {toast.type === 'error' && <AlertCircle size={18} />}
-            {toast.type === 'info' && <Info size={18} />}
-            <span className="text-sm font-medium">{toast.message}</span>
-          </motion.div>
-        ))}
+    <div className="fixed bottom-5 right-5 z-[200] flex flex-col gap-3 max-w-[420px] w-full pointer-events-none">
+      <AnimatePresence mode="popLayout">
+        {toasts.map((toast) => {
+          const config = toastConfig[toast.type];
+
+          return (
+            <motion.div
+              key={toast.id}
+              layout
+              initial={{ opacity: 0, y: 16, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, x: 80, scale: 0.95 }}
+              transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] as [number, number, number, number] }}
+              className={`pointer-events-auto relative overflow-hidden rounded-xl border shadow-lg dark:shadow-black/30 ${config.containerClass}`}
+            >
+              {/* Content row */}
+              <div className="flex items-start gap-3 p-4">
+                {/* Icon */}
+                <div className={`shrink-0 w-9 h-9 rounded-lg flex items-center justify-center ${config.iconBgClass}`}>
+                  {config.icon}
+                </div>
+
+                {/* Text */}
+                <div className="flex-1 min-w-0 pt-0.5">
+                  {toast.title && (
+                    <p className="text-sm font-semibold text-gray-900 dark:text-white leading-snug">
+                      {toast.title}
+                    </p>
+                  )}
+                  <p className={`text-sm text-gray-600 dark:text-gray-400 leading-relaxed ${toast.title ? 'mt-0.5' : ''}`}>
+                    {toast.message}
+                  </p>
+                </div>
+
+                {/* Dismiss button */}
+                <button
+                  onClick={() => dismissToast(toast.id)}
+                  className="shrink-0 p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/5 transition-colors"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+
+              {/* Auto-dismiss progress bar */}
+              {toast.duration && toast.duration > 0 && (
+                <div className="h-[2px] w-full bg-gray-100 dark:bg-white/5">
+                  <motion.div
+                    initial={{ width: '100%' }}
+                    animate={{ width: '0%' }}
+                    transition={{ duration: toast.duration / 1000, ease: 'linear' }}
+                    className={`h-full ${config.progressClass}`}
+                  />
+                </div>
+              )}
+            </motion.div>
+          );
+        })}
       </AnimatePresence>
     </div>
   );

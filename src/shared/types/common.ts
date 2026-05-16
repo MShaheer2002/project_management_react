@@ -1,7 +1,9 @@
 export interface Toast {
   id: string;
   message: string;
-  type: 'success' | 'error' | 'info';
+  type: 'success' | 'error' | 'info' | 'warning';
+  title?: string;
+  duration?: number;
 }
 
 export type ModalType =

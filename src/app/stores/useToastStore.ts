@@ -1,18 +1,49 @@
 import { create } from 'zustand';
-import { Toast } from '@/types';
+
+export type ToastType = 'success' | 'error' | 'info' | 'warning';
+
+export interface Toast {
+  id: string;
+  type: ToastType;
+  title?: string;        // Optional bold title line
+  message: string;       // Main message text
+  duration?: number;     // Auto-dismiss in ms (default 5000, 0 = manual dismiss only)
+}
 
 interface ToastState {
   toasts: Toast[];
-  showToast: (message: string, type?: 'success' | 'error' | 'info') => void;
+  showToast: (message: string, type?: ToastType, title?: string, duration?: number) => void;
+  dismissToast: (id: string) => void;
 }
 
 export const useToastStore = create<ToastState>()((set) => ({
   toasts: [],
-  showToast: (message, type = 'success') => {
+
+  /**
+   * Show a toast notification.
+   * @param message  - Main message text
+   * @param type     - 'success' | 'error' | 'info' | 'warning' (default: 'success')
+   * @param title    - Optional bold title (e.g., "Sign-up failed")
+   * @param duration - Auto-dismiss in ms (default: 5000, use 0 for persistent)
+   */
+  showToast: (message, type = 'success', title, duration) => {
     const id = Math.random().toString(36).substring(2, 9);
-    set((state) => ({ toasts: [...state.toasts, { id, message, type }] }));
-    setTimeout(() => {
-      set((state) => ({ toasts: state.toasts.filter((t) => t.id !== id) }));
-    }, 3000);
+    const autoDismiss = duration ?? (type === 'error' ? 6000 : 5000);
+
+    set((state) => ({
+      toasts: [...state.toasts, { id, type, title, message, duration: autoDismiss }],
+    }));
+
+    // Auto-dismiss after duration (unless duration is 0)
+    if (autoDismiss > 0) {
+      setTimeout(() => {
+        set((state) => ({ toasts: state.toasts.filter((t) => t.id !== id) }));
+      }, autoDismiss);
+    }
+  },
+
+  /** Manually dismiss a toast by ID */
+  dismissToast: (id) => {
+    set((state) => ({ toasts: state.toasts.filter((t) => t.id !== id) }));
   },
 }));
