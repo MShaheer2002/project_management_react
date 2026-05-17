@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 
 export interface AuthUser {
   id: string;
@@ -13,6 +14,7 @@ export interface AuthWorkspace {
   slug: string;
   logo?: string;
   role: 'owner' | 'admin' | 'member' | 'guest';
+  defaultTeamId?: string; // Auto-created team — needed for invites, first project/issue creation
 }
 
 interface AuthState {
@@ -30,44 +32,58 @@ interface AuthState {
   setOrganization: (org: any) => void;
 }
 
-export const useAuthStore = create<AuthState>()((set) => ({
-  currentUser: null,
-  workspace: null,
-  isAuthenticated: false,
-  organization: null,
-
-  setAuth: (currentUser, workspace) =>
-    set({
-      currentUser,
-      workspace,
-      isAuthenticated: true,
-      organization: workspace ? { id: workspace.id, name: workspace.name, slug: workspace.slug, logo: workspace.logo } : null,
-    }),
-
-  setWorkspace: (workspace) =>
-    set({
-      workspace,
-      organization: { id: workspace.id, name: workspace.name, slug: workspace.slug, logo: workspace.logo },
-    }),
-
-  clear: () =>
-    set({
+/**
+ * Auth store — persists workspace to localStorage so it survives page refresh.
+ * User data is re-synced from Clerk on every load (via AuthSync),
+ * but workspace is persisted so the user doesn't need to re-select it.
+ */
+export const useAuthStore = create<AuthState>()(
+  persist(
+    (set) => ({
       currentUser: null,
       workspace: null,
       isAuthenticated: false,
       organization: null,
-    }),
 
-  // Legacy compat — bridges old useApp() calls that set user/org directly
-  setCurrentUser: (user) =>
-    set((state) => ({
-      currentUser: user ? { id: user.id, name: user.name, email: user.email, avatar: user.avatar } : null,
-      isAuthenticated: !!user,
-    })),
+      setAuth: (currentUser, workspace) =>
+        set({
+          currentUser,
+          workspace,
+          isAuthenticated: true,
+          organization: workspace ? { id: workspace.id, name: workspace.name, slug: workspace.slug, logo: workspace.logo } : null,
+        }),
 
-  setOrganization: (org) =>
-    set({
-      organization: org,
-      workspace: org ? { id: org.id, name: org.name, slug: org.slug, logo: org.logo, role: 'owner' } : null,
+      setWorkspace: (workspace) =>
+        set({
+          workspace,
+          organization: { id: workspace.id, name: workspace.name, slug: workspace.slug, logo: workspace.logo },
+        }),
+
+      clear: () =>
+        set({
+          currentUser: null,
+          workspace: null,
+          isAuthenticated: false,
+          organization: null,
+        }),
+
+      // Legacy compat
+      setCurrentUser: (user) =>
+        set(() => ({
+          currentUser: user ? { id: user.id, name: user.name, email: user.email, avatar: user.avatar } : null,
+          isAuthenticated: !!user,
+        })),
+
+      setOrganization: (org) =>
+        set({
+          organization: org,
+          workspace: org ? { id: org.id, name: org.name, slug: org.slug, logo: org.logo, role: 'owner' } : null,
+        }),
     }),
-}));
+    {
+      name: 'linearis-auth',
+      // Only persist workspace — user is re-synced from Clerk each load
+      partialize: (state) => ({ workspace: state.workspace }),
+    }
+  )
+);

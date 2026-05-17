@@ -73,18 +73,26 @@ export const AppRoutes: React.FC = () => {
       <Route element={<GuestGuard />}>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
-        <Route path="/email-verification" element={<VerifyEmailPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
       </Route>
+
+      {/*
+       * Transitional auth routes — outside BOTH guards.
+       * /email-verification: user starts unauthenticated, becomes authenticated mid-page
+       *   when Clerk verifies the code. If wrapped in GuestGuard, the guard would kick
+       *   them to /dashboard the moment the session activates — before navigate('/org-creation') fires.
+       * /org-creation: user is authenticated but has no workspace yet.
+       *   Must be outside AuthGuard's MainLayout (no sidebar/navbar during onboarding).
+       */}
+      <Route path="/email-verification" element={<VerifyEmailPage />} />
+      <Route path="/org-creation" element={<CreateWorkspacePage />} />
 
       {/*
        * Authenticated routes — only accessible when signed in.
        * If a guest visits /dashboard, AuthGuard redirects them to /login.
        */}
       <Route element={<AuthGuard />}>
-        {/* Workspace creation — authenticated but no MainLayout (onboarding step) */}
-        <Route path="/org-creation" element={<CreateWorkspacePage />} />
 
         {/* Main app layout (sidebar + navbar + content) */}
         <Route element={<MainLayout />}>

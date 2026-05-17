@@ -62,7 +62,7 @@ export const SignupPage: React.FC = () => {
       const clerkError = err.errors?.[0];
       const message = clerkError?.longMessage || clerkError?.message || 'Sign up failed. Please try again.';
       console.error('[Signup] Sign-up failed:', clerkError?.code, message);
-      showToast(message, 'error', 'Sign-up failed');
+      showToast(message, 'error',);
     } finally {
       setIsSubmitting(false);
     }
@@ -87,7 +87,7 @@ export const SignupPage: React.FC = () => {
     } catch (err: any) {
       const message = err.errors?.[0]?.message || 'OAuth sign-up failed';
       console.error('[Signup] OAuth failed:', message);
-      showToast(message, 'error', 'OAuth failed');
+      showToast(message, 'error',);
     }
   };
 

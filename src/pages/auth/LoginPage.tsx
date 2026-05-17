@@ -58,7 +58,7 @@ export const LoginPage: React.FC = () => {
       const clerkError = err.errors?.[0];
       const message = clerkError?.longMessage || clerkError?.message || 'Invalid email or password';
       console.error('[Login] Sign-in failed:', clerkError?.code, message);
-      showToast(message, 'error', 'Sign-in failed');
+      showToast(message, 'error' );
     } finally {
       setIsSubmitting(false);
     }
@@ -82,7 +82,7 @@ export const LoginPage: React.FC = () => {
     } catch (err: any) {
       const message = err.errors?.[0]?.message || 'OAuth sign-in failed';
       console.error('[Login] OAuth failed:', message);
-      showToast(message, 'error', 'OAuth failed');
+      showToast(message, 'error',);
     }
   };
 

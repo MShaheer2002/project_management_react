@@ -32,7 +32,15 @@ import {
 import { useAuth } from '@clerk/clerk-react';
 import { useAuthStore } from '@/app/stores/useAuthStore';
 import { useApp } from '../AppContext';
-import { MOCK_TEAMS } from '../constants';
+// TEAMS removed — teams will come from backend API (GET /workspaces/:id/teams or similar)
+// import { TEAMS } from '../constants';
+
+/**
+ * TODO: Replace with real API call via TanStack Query:
+ *   const { data: teams = [] } = useTeams();
+ * For now: empty array — sidebar teams section shows empty state.
+ */
+const TEAMS: { id: string; name: string; leadId: string; memberIds: string[]; projectIds: string[]; departmentId?: string }[] = [];
 
 const focusMinimal = 'outline-none focus:outline-none focus-visible:outline-none focus-visible:ring-0';
 
@@ -146,7 +154,7 @@ export const Sidebar: React.FC = () => {
   const [teamsOpen, setTeamsOpen] = useState(true);
   const [orgOpen, setOrgOpen] = useState(false);
   const [expandedTeamIds, setExpandedTeamIds] = useState<Set<string>>(
-    () => new Set(MOCK_TEAMS.map(t => t.id))
+    () => new Set(TEAMS.map(t => t.id))
   );
   const [teamsFlyoutOpen, setTeamsFlyoutOpen] = useState(false);
   const [orgFlyoutOpen, setOrgFlyoutOpen] = useState(false);
@@ -193,14 +201,7 @@ export const Sidebar: React.FC = () => {
       },
     },
     {
-      label: 'Invite and manage members',
-      icon: <Users size={14} />,
-      onClick: () => {
-        setActiveModal('invite-member');
-        setIsWorkspaceMenuOpen(false);
-      },
-    },
-    {
+
       label: 'Download desktop app',
       icon: <LayoutDashboard size={14} />,
       badge: 'Soon',
@@ -440,7 +441,7 @@ export const Sidebar: React.FC = () => {
                     transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
                     className="overflow-hidden flex flex-col gap-0.5"
                   >
-                    {MOCK_TEAMS.map(team => {
+                    {TEAMS.map(team => {
                       const expanded = expandedTeamIds.has(team.id);
 
                       return (
@@ -869,7 +870,7 @@ const TeamsFlyoutPanel: React.FC<{
       className="overflow-y-auto rounded-lg bg-white dark:bg-card-dark shadow-2xl py-2"
     >
         <div className="px-3 py-1.5 text-[11px] font-medium text-gray-500 dark:text-gray-400">Teams</div>
-        {MOCK_TEAMS.map(team => {
+        {TEAMS.map(team => {
           return (
             <div key={team.id} className="px-2 pb-3 last:pb-1">
               <Link

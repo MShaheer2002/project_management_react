@@ -44,7 +44,18 @@ export function attachErrorInterceptor(instance: AxiosInstance) {
           break;
 
         case 403:
-          if (errorCode !== 'USER_NOT_SYNCED') {
+          if (errorCode === 'NOT_WORKSPACE_MEMBER') {
+            // User was removed from workspace — clear stored workspace and refetch
+            // Per workspace_integration.md §9: Global 403 Handler
+            console.warn('[ErrorInterceptor] NOT_WORKSPACE_MEMBER — clearing workspace, redirecting to onboarding');
+            useAuthStore.getState().setAuth(
+              useAuthStore.getState().currentUser!,
+              null // clear workspace
+            );
+            if (typeof window !== 'undefined') {
+              window.location.href = '/org-creation';
+            }
+          } else if (errorCode !== 'USER_NOT_SYNCED') {
             showToast("You don't have permission to perform this action.", 'error', 'Access denied');
           }
           break;

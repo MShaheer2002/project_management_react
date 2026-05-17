@@ -1,24 +1,25 @@
 import React from 'react';
 import { useUser } from '@clerk/clerk-react';
 import { Navigate, Outlet } from 'react-router-dom';
+import { useAuthStore } from '@/app/stores/useAuthStore';
 
 /**
  * GuestGuard
  *
  * Protects public-only routes (login, signup, etc.) from already-authenticated users.
- * - If Clerk is still loading → show loading spinner
- * - If user IS signed in → redirect to / (dashboard)
- * - If user is NOT signed in → render the public route
  *
- * Usage in routes.tsx:
- *   <Route element={<GuestGuard />}>
- *     <Route path="/login" element={<LoginPage />} />
- *   </Route>
+ * If signed in:
+ *   - Has workspace → redirect to /dashboard
+ *   - No workspace  → redirect to /org-creation (must complete onboarding first)
+ *
+ * If not signed in:
+ *   - Render the public route normally
  */
 export const GuestGuard: React.FC = () => {
   const { isSignedIn, isLoaded } = useUser();
+  const workspace = useAuthStore((s) => s.workspace);
 
-  // Clerk still initializing — show loading state
+  // Clerk still loading — show loading state to prevent flash
   if (!isLoaded) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-white dark:bg-bg-dark">
@@ -32,11 +33,15 @@ export const GuestGuard: React.FC = () => {
     );
   }
 
-  // Already signed in → redirect to dashboard
+  // Already signed in → send to dashboard or onboarding
   if (isSignedIn) {
-    return <Navigate to="/dashboard" replace />;
+    if (workspace) {
+      return <Navigate to="/dashboard" replace />;
+    }
+    // Signed in but no workspace — must create one first
+    return <Navigate to="/org-creation" replace />;
   }
 
-  // Not signed in → render the public route (login, signup, etc.)
+  // Not signed in → render the public route
   return <Outlet />;
 };

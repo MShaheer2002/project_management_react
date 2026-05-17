@@ -8,7 +8,10 @@ import { attachErrorInterceptor } from './interceptors';
  */
 export const publicApi = axios.create({
   baseURL: process.env.BASE_URL || 'http://localhost:8000',
-  headers: { 'Content-Type': 'application/json' },
+  headers: {
+    'Content-Type': 'application/json',
+    'ngrok-skip-browser-warning': 'true', // Required for ngrok free tier to avoid CORS/interstitial
+  },
   timeout: 15000,
 });
 
