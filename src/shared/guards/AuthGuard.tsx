@@ -1,6 +1,7 @@
 import React from 'react';
 import { useUser } from '@clerk/clerk-react';
 import { Navigate, Outlet } from 'react-router-dom';
+import { useAuthStore } from '@/app/stores/useAuthStore';
 
 /**
  * AuthGuard
@@ -17,9 +18,11 @@ import { Navigate, Outlet } from 'react-router-dom';
  */
 export const AuthGuard: React.FC = () => {
   const { isSignedIn, isLoaded } = useUser();
+  const workspace = useAuthStore((s) => s.workspace);
+  const authSyncStatus = useAuthStore((s) => s.authSyncStatus);
 
-  // Clerk still initializing — show loading state to prevent redirect flash
-  if (!isLoaded) {
+  // Clerk or backend workspace sync still initializing — show loading state to prevent app flash
+  if (!isLoaded || (isSignedIn && authSyncStatus !== 'ready')) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-white dark:bg-bg-dark">
         <div className="flex flex-col items-center gap-3">
@@ -35,6 +38,11 @@ export const AuthGuard: React.FC = () => {
   // Not signed in → redirect to login
   if (!isSignedIn) {
     return <Navigate to="/login" replace />;
+  }
+
+  // Signed in but no workspace — force onboarding before app routes render
+  if (!workspace) {
+    return <Navigate to="/org-creation" replace />;
   }
 
   // Signed in → render the protected route

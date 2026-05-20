@@ -1,8 +1,9 @@
 import React, { useEffect } from 'react';
 import { useUser, useAuth } from '@clerk/clerk-react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuthStore, type AuthWorkspace } from '@/app/stores/useAuthStore';
 import axios from 'axios';
+import { authService } from '@features/auth';
 
 /**
  * AuthSync
@@ -34,6 +35,7 @@ const ONBOARDING_EXEMPT_PATHS = [
   '/forgot-password',
   '/reset-password',
   '/sso-callback',
+  '/invite',
   '/org-creation',  // Already on onboarding — don't redirect in a loop
 ];
 
@@ -41,9 +43,9 @@ export const AuthSync: React.FC<{ children: React.ReactNode }> = ({ children }) 
   const { user, isLoaded, isSignedIn } = useUser();
   const { getToken } = useAuth();
   const setAuth = useAuthStore((s) => s.setAuth);
+  const setAuthSyncStatus = useAuthStore((s) => s.setAuthSyncStatus);
   const clear = useAuthStore((s) => s.clear);
   const navigate = useNavigate();
-  const location = useLocation();
 
   useEffect(() => {
     if (!isLoaded) {
@@ -58,23 +60,70 @@ export const AuthSync: React.FC<{ children: React.ReactNode }> = ({ children }) 
       return;
     }
 
+    let cancelled = false;
+    const markReady = () => {
+      if (!cancelled) setAuthSyncStatus('ready');
+    };
+
+    const existingAuth = useAuthStore.getState();
+    const isInitialSync =
+      existingAuth.authSyncStatus !== 'ready' ||
+      existingAuth.currentUser?.id !== user.id ||
+      !existingAuth.workspace;
+
+    if (isInitialSync) {
+      setAuthSyncStatus('loading');
+    }
     console.log('[AuthSync] User signed in:', user.id, '| Email:', user.primaryEmailAddress?.emailAddress);
 
     const syncUser = async () => {
-      // ── Step 1: Build user object from Clerk (always available) ──
-      const clerkUser = {
+      const token = await getToken();
+      if (!token) {
+        if (!cancelled) clear();
+        return;
+      }
+
+      // ── Step 1: Sync user profile from backend /me ──
+      const fallbackUser = {
         id: user.id,
         name: user.fullName || user.firstName || '',
         email: user.primaryEmailAddress?.emailAddress || '',
         avatar: user.imageUrl,
       };
 
+      let backendUser = fallbackUser;
+
+      try {
+        const me = await authService.getMe(token);
+        backendUser = {
+          id: me.id,
+          name: me.name,
+          email: me.email,
+          avatar: me.avatar || undefined,
+        };
+      } catch (err: any) {
+        const status = err.response?.status;
+        const code = err.response?.data?.error?.code;
+        if (status === 403 && code === 'USER_NOT_SYNCED') {
+          console.log('[AuthSync] Backend user not synced yet.');
+          if (!cancelled) setAuth(fallbackUser, null);
+          return;
+        }
+        if (status === 401) {
+          if (!cancelled) {
+            clear();
+            navigate('/login', { replace: true });
+          }
+          return;
+        }
+        console.log('[AuthSync] GET /me failed. Falling back to Clerk profile for this load.');
+      }
+
       // ── Step 2: Check workspaces from backend ──
       const baseUrl = process.env.BASE_URL || 'http://localhost:8000';
       let backendWorkspaces: AuthWorkspace[] | null = null;
 
       try {
-        const token = await getToken();
         // Raw axios to avoid error interceptor toasts during silent sync
         const { data } = await axios.get(`${baseUrl}/workspaces`, {
           headers: {
@@ -102,8 +151,9 @@ export const AuthSync: React.FC<{ children: React.ReactNode }> = ({ children }) 
 
       // ── Step 3: Decide — workspace exists or onboarding needed ──
       const persistedWorkspace = useAuthStore.getState().workspace;
+      const currentPath = window.location.pathname;
       const isExemptPage = ONBOARDING_EXEMPT_PATHS.some(
-        (p) => location.pathname === p || (p !== '/' && location.pathname.startsWith(p + '/'))
+        (p) => currentPath === p || (p !== '/' && currentPath.startsWith(p + '/'))
       );
 
       if (backendWorkspaces !== null) {
@@ -115,35 +165,43 @@ export const AuthSync: React.FC<{ children: React.ReactNode }> = ({ children }) 
             : null;
           const active = match || backendWorkspaces[0];
           console.log('[AuthSync] Active workspace:', active.name, '| Role:', active.role);
-          setAuth(clerkUser, active);
+          if (!cancelled) setAuth(backendUser, active);
         } else {
           // ❌ User has ZERO workspaces — MUST create one before using the app
           console.log('[AuthSync] User has no workspaces (confirmed by backend)');
-          setAuth(clerkUser, null);
+          if (!cancelled) setAuth(backendUser, null);
           if (!isExemptPage) {
             console.log('[AuthSync] REDIRECTING to /org-creation (no workspace)');
-            navigate('/org-creation', { replace: true });
+            if (!cancelled) navigate('/org-creation', { replace: true });
           }
         }
       } else {
         // Backend unreachable — check persisted workspace
         if (persistedWorkspace) {
           console.log('[AuthSync] Using persisted workspace:', persistedWorkspace.name);
-          setAuth(clerkUser, persistedWorkspace);
+          if (!cancelled) setAuth(backendUser, persistedWorkspace);
         } else {
           // No backend, no persisted workspace — onboarding required
           console.log('[AuthSync] No workspace found anywhere (backend down, nothing persisted)');
-          setAuth(clerkUser, null);
+          if (!cancelled) setAuth(backendUser, null);
           if (!isExemptPage) {
             console.log('[AuthSync] REDIRECTING to /org-creation (no workspace, offline)');
-            navigate('/org-creation', { replace: true });
+            if (!cancelled) navigate('/org-creation', { replace: true });
           }
         }
       }
     };
 
-    syncUser();
-  }, [isLoaded, isSignedIn, user?.id]);
+    syncUser()
+      .catch((err) => {
+        console.error('[AuthSync] Unexpected sync failure:', err);
+        markReady();
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [clear, getToken, isLoaded, isSignedIn, navigate, setAuth, setAuthSyncStatus, user?.id]);
 
   return <>{children}</>;
 };

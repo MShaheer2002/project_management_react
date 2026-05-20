@@ -34,6 +34,9 @@ export function attachErrorInterceptor(instance: AxiosInstance) {
       const { status, data } = error.response;
       const errorCode = data?.error?.code;
       const errorMessage = data?.error?.message || 'Something went wrong';
+      const skipGlobalErrorToast = (
+        error.config as (typeof error.config & { skipGlobalErrorToast?: boolean }) | undefined
+      )?.skipGlobalErrorToast;
 
       switch (status) {
         case 401:
@@ -55,13 +58,15 @@ export function attachErrorInterceptor(instance: AxiosInstance) {
             if (typeof window !== 'undefined') {
               window.location.href = '/org-creation';
             }
-          } else if (errorCode !== 'USER_NOT_SYNCED') {
+          } else if (errorCode !== 'USER_NOT_SYNCED' && !skipGlobalErrorToast) {
             showToast("You don't have permission to perform this action.", 'error', 'Access denied');
           }
           break;
 
         case 409:
-          showToast(errorMessage, 'error');
+          if (!skipGlobalErrorToast) {
+            showToast(errorMessage, 'error');
+          }
           break;
 
         case 422:
@@ -73,7 +78,7 @@ export function attachErrorInterceptor(instance: AxiosInstance) {
           break;
 
         default:
-          if (status >= 500) {
+          if (status >= 500 && !skipGlobalErrorToast) {
             showToast('Something went wrong on our end. Please try again later.', 'error', 'Server error');
           }
           break;

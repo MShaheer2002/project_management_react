@@ -1,6 +1,7 @@
 import { privateApi } from '@shared/services/privateApi';
 import { publicApi } from '@shared/services/publicApi';
 import type { ApiResponse } from '@shared/services/types';
+import type { AxiosRequestConfig } from 'axios';
 
 /**
  * Workspace API response types.
@@ -31,6 +32,116 @@ export interface SlugCheckResponse {
   available: boolean;
 }
 
+export type InvitationRole = 'ADMIN' | 'MEMBER' | 'GUEST';
+
+export interface SendInvitationInput {
+  workspaceId: string;
+  email: string;
+  role: InvitationRole;
+  teamId: string;
+  departmentId?: string;
+}
+
+export interface InvitationResponse {
+  id: string;
+  email: string;
+  role: InvitationRole;
+  teamId: string;
+  departmentId?: string | null;
+  status?: string;
+  createdAt?: string;
+}
+
+export interface UpdateWorkspaceInput {
+  workspaceId: string;
+  name?: string;
+  logo?: string | null;
+}
+
+export interface WorkspaceMemberResponse {
+  id: string;
+  email: string;
+  name: string;
+  avatar: string | null;
+  role: string;
+  invitedById?: string | null;
+  joinedAt?: string;
+  team?: {
+    id: string;
+    name: string;
+    leadId?: string | null;
+    departmentId?: string | null;
+    joinedAt?: string;
+    department?: WorkspaceMemberDepartment | null;
+  } | null;
+  teams?: WorkspaceMemberTeam[];
+  department?: WorkspaceMemberDepartment | null;
+  departments?: WorkspaceMemberDepartment[];
+}
+
+export interface WorkspaceMemberDepartment {
+  id: string;
+  name: string;
+  color?: string | null;
+  icon?: string | null;
+  joinedAt?: string;
+}
+
+export interface WorkspaceMemberTeam {
+  id: string;
+  name: string;
+  leadId?: string | null;
+  departmentId?: string | null;
+  joinedAt?: string;
+  department?: WorkspaceMemberDepartment | null;
+}
+
+export interface UpdateMemberRoleInput {
+  workspaceId: string;
+  userId: string;
+  role: InvitationRole;
+}
+
+export interface RemoveMemberInput {
+  workspaceId: string;
+  userId: string;
+}
+
+export interface WorkspaceInvitationResponse {
+  id: string;
+  email: string;
+  role: string;
+  status: string;
+  teamId?: string;
+  teamName?: string | null;
+  departmentId?: string | null;
+  departmentName?: string | null;
+  invitedByName?: string | null;
+  createdAt?: string;
+  expiresAt?: string;
+}
+
+export interface InvitationResolveResponse {
+  workspaceId: string;
+  workspaceName: string;
+  workspaceSlug: string;
+  workspaceLogo?: string | null;
+  role: string;
+  teamName: string;
+  departmentName?: string | null;
+  invitedEmail: string;
+}
+
+export interface InvitationAcceptResponse {
+  workspaceId: string;
+  workspaceName: string;
+  workspaceSlug: string;
+  workspaceLogo?: string | null;
+  role: string;
+  defaultTeamId?: string;
+  alreadyAccepted?: boolean;
+}
+
 /**
  * Reserved slugs — rejected by the backend.
  * Frontend validates these client-side to avoid unnecessary API calls.
@@ -45,7 +156,8 @@ const RESERVED_SLUGS = new Set([
 /**
  * Workspace service — handles all workspace-related API calls.
  * Uses privateApi (authenticated) for most endpoints.
- * Uses publicApi for slug availability check (no auth needed during onboarding).
+ * Uses privateApi for slug availability check because the backend requires a
+ * signed-in Clerk user during onboarding.
  *
  * Per R4.2: Services are the only data access layer.
  * Per R4.3: All methods return promises.
@@ -71,13 +183,28 @@ export const workspaceService = {
     return data.data;
   },
 
+  getById: async (workspaceId: string): Promise<WorkspaceResponse> => {
+    const { data } = await privateApi.get<ApiResponse<WorkspaceResponse>>(`/workspaces/${workspaceId}`);
+    return data.data;
+  },
+
+  update: async (input: UpdateWorkspaceInput): Promise<WorkspaceResponse> => {
+    const { workspaceId, ...payload } = input;
+    const { data } = await privateApi.patch<ApiResponse<WorkspaceResponse>>(`/workspaces/${workspaceId}`, payload);
+    return data.data;
+  },
+
+  delete: async (workspaceId: string): Promise<void> => {
+    await privateApi.delete(`/workspaces/${workspaceId}`);
+  },
+
   /**
    * GET /workspaces/check-slug/:slug — check if a slug is available.
-   * Public endpoint — no auth needed (used during onboarding before workspace exists).
+   * Authenticated endpoint — no workspace context needed, but Clerk auth is required.
    */
   checkSlug: async (slug: string): Promise<boolean> => {
     try {
-      const { data } = await publicApi.get<ApiResponse<SlugCheckResponse>>(`/workspaces/check-slug/${slug}`);
+      const { data } = await privateApi.get<ApiResponse<SlugCheckResponse>>(`/workspaces/check-slug/${slug}`);
       return data.data.available;
     } catch {
       // If the check fails (network/server error), assume available and let backend validate on submit
@@ -97,5 +224,71 @@ export const workspaceService = {
     if (slug.startsWith('-') || slug.endsWith('-')) return 'Cannot start or end with a hyphen';
     if (RESERVED_SLUGS.has(slug)) return 'This URL is reserved';
     return null;
+  },
+
+  /**
+   * POST /workspaces/:workspaceId/invitations — send an invitation email.
+   * Requires ADMIN or OWNER in the active workspace.
+   */
+  sendInvitation: async (input: SendInvitationInput): Promise<InvitationResponse> => {
+    const { workspaceId, ...payload } = input;
+    const { data } = await privateApi.post<ApiResponse<InvitationResponse>>(
+      `/workspaces/${workspaceId}/invitations`,
+      payload,
+      { skipGlobalErrorToast: true } as AxiosRequestConfig & { skipGlobalErrorToast: boolean }
+    );
+    return data.data;
+  },
+
+  getMembers: async (workspaceId: string): Promise<WorkspaceMemberResponse[]> => {
+    const { data } = await privateApi.get<ApiResponse<WorkspaceMemberResponse[]>>(
+      `/workspaces/${workspaceId}/members`
+    );
+    return data.data;
+  },
+
+  updateMemberRole: async (input: UpdateMemberRoleInput): Promise<WorkspaceMemberResponse> => {
+    const { workspaceId, userId, role } = input;
+    const { data } = await privateApi.patch<ApiResponse<WorkspaceMemberResponse>>(
+      `/workspaces/${workspaceId}/members/${userId}`,
+      { role },
+      { skipGlobalErrorToast: true } as AxiosRequestConfig & { skipGlobalErrorToast: boolean }
+    );
+    return data.data;
+  },
+
+  removeMember: async (input: RemoveMemberInput): Promise<void> => {
+    const { workspaceId, userId } = input;
+    await privateApi.delete(`/workspaces/${workspaceId}/members/${userId}`, {
+      skipGlobalErrorToast: true,
+    } as AxiosRequestConfig & { skipGlobalErrorToast: boolean });
+  },
+
+  getInvitations: async (workspaceId: string): Promise<WorkspaceInvitationResponse[]> => {
+    const { data } = await privateApi.get<ApiResponse<WorkspaceInvitationResponse[]>>(
+      `/workspaces/${workspaceId}/invitations`
+    );
+    return data.data;
+  },
+
+  revokeInvitation: async (workspaceId: string, invitationId: string): Promise<void> => {
+    await privateApi.delete(`/workspaces/${workspaceId}/invitations/${invitationId}`);
+  },
+
+  resolveInvitation: async (token: string): Promise<InvitationResolveResponse> => {
+    const { data } = await publicApi.get<ApiResponse<InvitationResolveResponse>>('/invitations/resolve', {
+      params: { t: token },
+      skipGlobalErrorToast: true,
+    } as AxiosRequestConfig & { skipGlobalErrorToast: boolean });
+    return data.data;
+  },
+
+  acceptInvitation: async (token: string): Promise<InvitationAcceptResponse> => {
+    const { data } = await privateApi.post<ApiResponse<InvitationAcceptResponse>>(
+      '/invitations/accept',
+      { token },
+      { skipGlobalErrorToast: true } as AxiosRequestConfig & { skipGlobalErrorToast: boolean }
+    );
+    return data.data;
   },
 };

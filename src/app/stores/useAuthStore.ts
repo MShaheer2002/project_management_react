@@ -17,13 +17,17 @@ export interface AuthWorkspace {
   defaultTeamId?: string; // Auto-created team — needed for invites, first project/issue creation
 }
 
+export type AuthSyncStatus = 'idle' | 'loading' | 'ready';
+
 interface AuthState {
   currentUser: AuthUser | null;
   workspace: AuthWorkspace | null;
   isAuthenticated: boolean;
+  authSyncStatus: AuthSyncStatus;
 
   setAuth: (user: AuthUser, workspace: AuthWorkspace | null) => void;
   setWorkspace: (workspace: AuthWorkspace) => void;
+  setAuthSyncStatus: (status: AuthSyncStatus) => void;
   clear: () => void;
 
   // Legacy compat — used by AppContext shim until fully migrated
@@ -43,6 +47,7 @@ export const useAuthStore = create<AuthState>()(
       currentUser: null,
       workspace: null,
       isAuthenticated: false,
+      authSyncStatus: 'idle',
       organization: null,
 
       setAuth: (currentUser, workspace) =>
@@ -50,20 +55,25 @@ export const useAuthStore = create<AuthState>()(
           currentUser,
           workspace,
           isAuthenticated: true,
+          authSyncStatus: 'ready',
           organization: workspace ? { id: workspace.id, name: workspace.name, slug: workspace.slug, logo: workspace.logo } : null,
         }),
 
       setWorkspace: (workspace) =>
         set({
           workspace,
+          authSyncStatus: 'ready',
           organization: { id: workspace.id, name: workspace.name, slug: workspace.slug, logo: workspace.logo },
         }),
+
+      setAuthSyncStatus: (authSyncStatus) => set({ authSyncStatus }),
 
       clear: () =>
         set({
           currentUser: null,
           workspace: null,
           isAuthenticated: false,
+          authSyncStatus: 'idle',
           organization: null,
         }),
 

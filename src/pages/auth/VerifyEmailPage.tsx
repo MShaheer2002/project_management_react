@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { Mail, ShieldCheck } from 'lucide-react';
 import { useSignUp } from '@clerk/clerk-react';
@@ -18,7 +18,9 @@ import { Logo, OTPInput, SubmitButton, BackLink, AuthFooter } from './shared';
  */
 export const VerifyEmailPage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const showToast = useToastStore((s) => s.showToast);
+  const redirectTo = getSafeRedirect(searchParams.get('redirect')) || '/org-creation';
 
   // Clerk's sign-up hook — persists the in-progress sign-up across navigation
   const { signUp, setActive, isLoaded } = useSignUp();
@@ -46,9 +48,8 @@ export const VerifyEmailPage: React.FC = () => {
         // Email verified! Activate the session so the user is now logged in
         console.log('[VerifyEmail] Email verified. Activating session:', result.createdSessionId);
         await setActive({ session: result.createdSessionId });
-        console.log('[VerifyEmail] Session active. Redirecting to /org-creation');
-        // New user → redirect to workspace creation
-        navigate('/org-creation');
+        console.log('[VerifyEmail] Session active. Redirecting to:', redirectTo);
+        navigate(redirectTo);
       } else {
         console.log('[VerifyEmail] Verification not complete. Status:', result.status);
       }
@@ -157,3 +158,8 @@ export const VerifyEmailPage: React.FC = () => {
     </div>
   );
 };
+
+function getSafeRedirect(value: string | null): string | null {
+  if (!value) return null;
+  return value.startsWith('/') && !value.startsWith('//') ? value : null;
+}

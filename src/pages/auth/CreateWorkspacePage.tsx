@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useUser } from '@clerk/clerk-react';
 import { motion } from 'motion/react';
 import { Building, Globe, CheckCircle2, AlertCircle, Loader2, Check } from 'lucide-react';
 import { useAuthStore } from '@/app/stores/useAuthStore';
@@ -19,7 +20,7 @@ import { Logo, FormInput, SubmitButton, AuthFooter } from './shared';
  * - Slug real-time availability check (debounced 300ms)
  * - Reserved slug rejection (client-side)
  * - Team size selector (optional)
- * - POST /workspaces on submit, with fallback to local mock if backend unavailable
+ * - POST /workspaces on submit
  *
  * Error handling per workspace_integration.md §2:
  * - WORKSPACE_SLUG_TAKEN (409) → inline error on slug field
@@ -38,8 +39,11 @@ const TEAM_SIZES = [
 
 export const CreateWorkspacePage: React.FC = () => {
   const navigate = useNavigate();
+  const { isLoaded, isSignedIn } = useUser();
   const showToast = useToastStore((s) => s.showToast);
   const setWorkspace = useAuthStore((s) => s.setWorkspace);
+  const workspace = useAuthStore((s) => s.workspace);
+  const authSyncStatus = useAuthStore((s) => s.authSyncStatus);
 
   // ── Form state ──
   const [orgName, setOrgName] = useState('');
@@ -53,6 +57,19 @@ export const CreateWorkspacePage: React.FC = () => {
   const [slugChecking, setSlugChecking] = useState(false);
   const [slugAvailable, setSlugAvailable] = useState<boolean | null>(null); // null = not checked yet
   const slugCheckTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!isLoaded) return;
+
+    if (!isSignedIn) {
+      navigate('/login', { replace: true });
+      return;
+    }
+
+    if (authSyncStatus === 'ready' && workspace) {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [authSyncStatus, isLoaded, isSignedIn, navigate, workspace]);
 
   /**
    * Auto-generate slug from org name.
@@ -132,7 +149,6 @@ export const CreateWorkspacePage: React.FC = () => {
   /**
    * Submit workspace creation.
    * Calls POST /workspaces via workspaceService.
-   * Falls back to local Zustand mock if backend is unreachable.
    */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -200,20 +216,7 @@ export const CreateWorkspacePage: React.FC = () => {
           showToast(errorMessage || 'Invalid input', 'error', 'Validation error');
         }
       } else if (!err.response) {
-        // Backend unreachable — fall back to local workspace creation
-        console.warn('[Workspace] Backend unreachable. Creating workspace locally.');
-        const mockWorkspace = {
-          id: `ws_${Date.now()}`,
-          name: trimmedName,
-          slug: finalSlug,
-          logo: undefined,
-          role: 'owner' as const,
-          defaultTeamId: `team_${Date.now()}`, // Mock default team
-        };
-        setWorkspace(mockWorkspace);
-        showToast('Workspace created!', 'success', 'Welcome to Linearis');
-        console.log('[Workspace] Redirecting to /dashboard (local fallback)');
-        navigate('/dashboard');
+        showToast('Could not reach the backend. Please try again when the server is available.', 'error', 'Workspace creation failed');
       } else {
         // Other errors — error interceptor already toasted for 401/429/500
         console.error('[Workspace] Creation failed:', status, errorMessage);
@@ -257,6 +260,23 @@ export const CreateWorkspacePage: React.FC = () => {
     }
     return null;
   };
+
+  if (!isLoaded || (isSignedIn && authSyncStatus !== 'ready')) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white dark:bg-bg-dark">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-white font-bold animate-pulse">
+            L
+          </div>
+          <p className="text-sm text-gray-400">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isSignedIn || workspace) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-white dark:bg-bg-dark selection:bg-primary/30">

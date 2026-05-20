@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { Mail, Lock, Chrome, Github, Layers, Star } from 'lucide-react';
 import { useSignIn } from '@clerk/clerk-react';
@@ -15,7 +15,9 @@ import { Logo, FormInput, SocialButton, Divider, SubmitButton, AuthFooter } from
  */
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const showToast = useToastStore((s) => s.showToast);
+  const redirectTo = getSafeRedirect(searchParams.get('redirect')) || '/dashboard';
 
   // Clerk's headless sign-in hook — handles all auth logic
   const { signIn, setActive, isLoaded } = useSignIn();
@@ -47,9 +49,9 @@ export const LoginPage: React.FC = () => {
       if (result.status === 'complete') {
         console.log('[Login] Sign-in complete. Activating session:', result.createdSessionId);
         await setActive({ session: result.createdSessionId });
-        console.log('[Login] Session activated. Redirecting to /dashboard');
+        console.log('[Login] Session activated. Redirecting to:', redirectTo);
         // AuthSync will detect the session and populate the store
-        navigate('/dashboard');
+        navigate(redirectTo);
       } else {
         console.log('[Login] Sign-in not complete. Status:', result.status);
       }
@@ -76,7 +78,7 @@ export const LoginPage: React.FC = () => {
       await signIn.authenticateWithRedirect({
         strategy: provider,
         redirectUrl: '/sso-callback',        // Clerk processes the OAuth code here
-        redirectUrlComplete: '/dashboard',   // Final destination after auth is done
+        redirectUrlComplete: redirectTo,     // Final destination after auth is done
       });
       // Note: this line won't execute — the browser redirects to the provider
     } catch (err: any) {
@@ -248,3 +250,8 @@ export const LoginPage: React.FC = () => {
     </div>
   );
 };
+
+function getSafeRedirect(value: string | null): string | null {
+  if (!value) return null;
+  return value.startsWith('/') && !value.startsWith('//') ? value : null;
+}

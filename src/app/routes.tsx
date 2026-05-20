@@ -11,6 +11,7 @@ import {
   SignupPage,
   VerifyEmailPage,
   CreateWorkspacePage,
+  InvitePage,
   ForgotPasswordPage,
   ResetPasswordPage,
   SSOCallbackPage,
@@ -87,6 +88,7 @@ export const AppRoutes: React.FC = () => {
        */}
       <Route path="/email-verification" element={<VerifyEmailPage />} />
       <Route path="/org-creation" element={<CreateWorkspacePage />} />
+      <Route path="/invite" element={<InvitePage />} />
 
       {/*
        * Authenticated routes — only accessible when signed in.
@@ -112,7 +114,7 @@ export const AppRoutes: React.FC = () => {
           <Route path="/roadmap" element={<RoadmapPage />} />
           <Route path="/cycles" element={<CyclesPage />} />
           <Route path="/activity" element={<ActivityPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/settings" element={isAdmin ? <SettingsPage /> : <Navigate to="/dashboard" />} />
 
           {/* Role-guarded routes (inline checks — will use RoleGuard component in Phase 3) */}
           <Route path="/analytics" element={isLead ? <ReportsPage /> : <Navigate to="/" />} />

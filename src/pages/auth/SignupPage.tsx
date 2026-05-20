@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { Mail, Lock, Chrome, Github, User, CheckCircle2, Zap, Shield, Globe } from 'lucide-react';
 import { useSignUp } from '@clerk/clerk-react';
@@ -15,7 +15,9 @@ import { Logo, FormInput, SocialButton, Divider, SubmitButton, AuthFooter, Terms
  */
 export const SignupPage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const showToast = useToastStore((s) => s.showToast);
+  const redirectTo = getSafeRedirect(searchParams.get('redirect')) || '/org-creation';
 
   // Clerk's headless sign-up hook
   const { signUp, isLoaded } = useSignUp();
@@ -56,7 +58,7 @@ export const SignupPage: React.FC = () => {
 
       // Step 3: Redirect to OTP verification page
       console.log('[Signup] Step 3: Redirecting to /email-verification');
-      navigate('/email-verification');
+      navigate(`/email-verification?redirect=${encodeURIComponent(redirectTo)}`);
     } catch (err: any) {
       // Extract Clerk error for display
       const clerkError = err.errors?.[0];
@@ -71,7 +73,7 @@ export const SignupPage: React.FC = () => {
   /**
    * Handle OAuth sign-up (Google or GitHub).
    * Uses signUp (not signIn) so Clerk knows this is a new user flow.
-   * After OAuth completes, Clerk redirects to /sso-callback → / (dashboard).
+   * After OAuth completes, Clerk redirects to /sso-callback → onboarding or the preserved invite link.
    */
   const handleOAuth = async (provider: 'oauth_google' | 'oauth_github') => {
     if (!isLoaded || !signUp) return;
@@ -81,7 +83,7 @@ export const SignupPage: React.FC = () => {
       await signUp.authenticateWithRedirect({
         strategy: provider,
         redirectUrl: '/sso-callback',
-        redirectUrlComplete: '/dashboard',
+        redirectUrlComplete: redirectTo,
       });
       // Note: browser redirects — this line won't execute
     } catch (err: any) {
@@ -196,7 +198,7 @@ export const SignupPage: React.FC = () => {
             {/* Link to login */}
             <p className="mt-8 text-center text-sm text-gray-500 dark:text-gray-400">
               Already have an account?{' '}
-              <button onClick={() => navigate('/login')} className="text-primary font-semibold hover:underline">Log in</button>
+              <button onClick={() => navigate(`/login?redirect=${encodeURIComponent(redirectTo)}`)} className="text-primary font-semibold hover:underline">Log in</button>
             </p>
             <TermsText />
           </motion.div>
@@ -207,3 +209,8 @@ export const SignupPage: React.FC = () => {
     </div>
   );
 };
+
+function getSafeRedirect(value: string | null): string | null {
+  if (!value) return null;
+  return value.startsWith('/') && !value.startsWith('//') ? value : null;
+}

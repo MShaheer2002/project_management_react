@@ -18,9 +18,10 @@ import { useAuthStore } from '@/app/stores/useAuthStore';
 export const GuestGuard: React.FC = () => {
   const { isSignedIn, isLoaded } = useUser();
   const workspace = useAuthStore((s) => s.workspace);
+  const authSyncStatus = useAuthStore((s) => s.authSyncStatus);
 
-  // Clerk still loading — show loading state to prevent flash
-  if (!isLoaded) {
+  // Clerk or backend workspace sync still loading — show loading state to prevent redirect flash
+  if (!isLoaded || (isSignedIn && authSyncStatus !== 'ready')) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-white dark:bg-bg-dark">
         <div className="flex flex-col items-center gap-3">

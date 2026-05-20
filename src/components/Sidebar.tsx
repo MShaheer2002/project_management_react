@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -32,17 +32,11 @@ import {
 import { useAuth } from '@clerk/clerk-react';
 import { useAuthStore } from '@/app/stores/useAuthStore';
 import { useApp } from '../AppContext';
-// TEAMS removed — teams will come from backend API (GET /workspaces/:id/teams or similar)
-// import { TEAMS } from '../constants';
-
-/**
- * TODO: Replace with real API call via TanStack Query:
- *   const { data: teams = [] } = useTeams();
- * For now: empty array — sidebar teams section shows empty state.
- */
-const TEAMS: { id: string; name: string; leadId: string; memberIds: string[]; projectIds: string[]; departmentId?: string }[] = [];
+import { useSidebarData, type SidebarPermissions, type SidebarTeam } from '@features/sidebar';
 
 const focusMinimal = 'outline-none focus:outline-none focus-visible:outline-none focus-visible:ring-0';
+
+const normalizeRole = (role?: string) => role?.toLowerCase() as 'owner' | 'admin' | 'member' | 'guest' | undefined;
 
 function useNavActive() {
   const location = useLocation();
@@ -130,6 +124,35 @@ export const Sidebar: React.FC = () => {
     setActiveModal,
     showToast,
   } = useApp();
+  const {
+    data: sidebarData,
+    isLoading: isSidebarLoading,
+    error: sidebarError,
+    refetch: refetchSidebar,
+  } = useSidebarData();
+  const isInitialSidebarLoading = isSidebarLoading && !sidebarData;
+
+  const activeWorkspace = sidebarData?.activeWorkspace;
+  const displayOrganization = activeWorkspace
+    ? {
+        id: activeWorkspace.id,
+        name: activeWorkspace.name,
+        slug: activeWorkspace.slug,
+        logo: activeWorkspace.logo ?? undefined,
+      }
+    : organization;
+  const displayUser = sidebarData?.user
+    ? {
+        id: sidebarData.user.id,
+        name: sidebarData.user.name,
+        email: sidebarData.user.email,
+        avatar: sidebarData.user.avatar ?? undefined,
+        role: normalizeRole(sidebarData.user.role) ?? 'member',
+      }
+    : currentUser;
+  const sidebarTeams = useMemo(() => sidebarData?.teams ?? [], [sidebarData?.teams]);
+  const badges = sidebarData?.badges;
+  const permissions = sidebarData?.permissions;
 
   // Clerk auth — for real sign-out
   const { signOut } = useAuth();
@@ -143,8 +166,8 @@ export const Sidebar: React.FC = () => {
     await signOut({ redirectUrl: '/login' }); // Clerk sign-out + redirect
   };
 
-  const isAdmin = currentUser?.role === 'owner' || currentUser?.role === 'admin';
-  const isLead = isAdmin || currentUser?.role === 'member';
+  const isAdmin = displayUser?.role === 'owner' || displayUser?.role === 'admin';
+  const isLead = isAdmin || displayUser?.role === 'member';
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -154,12 +177,16 @@ export const Sidebar: React.FC = () => {
   const [teamsOpen, setTeamsOpen] = useState(true);
   const [orgOpen, setOrgOpen] = useState(false);
   const [expandedTeamIds, setExpandedTeamIds] = useState<Set<string>>(
-    () => new Set(TEAMS.map(t => t.id))
+    () => new Set()
   );
   const [teamsFlyoutOpen, setTeamsFlyoutOpen] = useState(false);
   const [orgFlyoutOpen, setOrgFlyoutOpen] = useState(false);
   const teamsFlyoutButtonRef = useRef<HTMLButtonElement>(null);
   const orgFlyoutButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    setExpandedTeamIds(new Set(sidebarTeams.map((team) => team.id)));
+  }, [sidebarTeams]);
 
   const toggleTeamExpanded = (id: string) => {
     setExpandedTeamIds(prev => {
@@ -192,6 +219,16 @@ export const Sidebar: React.FC = () => {
     variant?: 'danger';
     type?: 'divider';
   }> = [
+    ...(sidebarError
+      ? [{
+          label: 'Retry sidebar data',
+          icon: <RotateCcw size={14} />,
+          onClick: () => {
+            refetchSidebar();
+            setIsWorkspaceMenuOpen(false);
+          },
+        }]
+      : []),
     {
       label: 'Settings',
       icon: <Settings size={14} />,
@@ -227,7 +264,17 @@ export const Sidebar: React.FC = () => {
     },
   ];
 
-  const orgItems: { path: string; label: string; icon: React.ReactNode; adminOnly?: boolean; leadOnly?: boolean }[] =
+  const canUsePermission = (permission: keyof SidebarPermissions | undefined) => {
+    if (!permission) return true;
+    if (permissions) return permissions[permission];
+    if (permission === 'canManageSettings') return isAdmin;
+    if (permission === 'canManageBilling') return isAdmin;
+    if (permission === 'canManageApiKeys') return isAdmin;
+    if (permission === 'canManageTemplates') return isAdmin;
+    return true;
+  };
+
+  const orgItems: { path: string; label: string; icon: React.ReactNode; adminOnly?: boolean; leadOnly?: boolean; permission?: keyof SidebarPermissions }[] =
     [
       { path: '/departments', label: 'Departments', icon: <Building2 size={16} /> },
       { path: '/teams', label: 'Team directory', icon: <Users size={16} /> },
@@ -235,10 +282,10 @@ export const Sidebar: React.FC = () => {
       { path: '/activity', label: 'Activity', icon: <History size={16} /> },
       { path: '/analytics', label: 'Analytics', icon: <BarChart3 size={16} />, leadOnly: true },
       { path: '/integrations', label: 'Integrations', icon: <Globe size={16} />, leadOnly: true },
-      { path: '/templates', label: 'Templates', icon: <FileText size={16} />, adminOnly: true },
-      { path: '/api-keys', label: 'API Keys', icon: <Key size={16} />, adminOnly: true },
-      { path: '/billing', label: 'Billing', icon: <CreditCard size={16} />, adminOnly: true },
-      { path: '/settings', label: 'Settings', icon: <Settings size={16} /> },
+      { path: '/templates', label: 'Templates', icon: <FileText size={16} />, permission: 'canManageTemplates' },
+      { path: '/api-keys', label: 'API Keys', icon: <Key size={16} />, permission: 'canManageApiKeys' },
+      { path: '/billing', label: 'Billing', icon: <CreditCard size={16} />, permission: 'canManageBilling' },
+      { path: '/settings', label: 'Settings', icon: <Settings size={16} />, permission: 'canManageSettings' },
     ];
 
   const widthClass = isSidebarCollapsed ? 'w-14' : 'w-60';
@@ -263,12 +310,20 @@ export const Sidebar: React.FC = () => {
               }`}
             >
               <div className="w-8 h-8 rounded-md bg-primary flex items-center justify-center text-white text-xs font-semibold shrink-0">
-                {organization?.name.charAt(0)}
+                {isInitialSidebarLoading && !displayOrganization ? (
+                  <span className="w-3.5 h-3.5 rounded bg-white/35 animate-pulse" />
+                ) : (
+                  displayOrganization?.name.charAt(0)
+                )}
               </div>
               <div className="flex-1 text-left min-w-0">
-                <div className="text-xs font-medium text-gray-500 dark:text-gray-400 truncate">
-                  {organization?.name}
-                </div>
+                {isInitialSidebarLoading && !activeWorkspace ? (
+                  <ShimmerLine className="h-3 w-28" />
+                ) : (
+                  <div className="text-xs font-medium text-gray-500 dark:text-gray-400 truncate">
+                    {displayOrganization?.name}
+                  </div>
+                )}
               </div>
               <ChevronDown
                 size={14}
@@ -327,9 +382,9 @@ export const Sidebar: React.FC = () => {
             type="button"
             onClick={() => setIsWorkspaceMenuOpen(!isWorkspaceMenuOpen)}
             className={`w-10 h-10 mx-auto flex items-center justify-center rounded-lg bg-primary text-white text-xs font-semibold transition-transform duration-150 active:scale-[0.96] ${focusMinimal}`}
-            title={organization?.name ?? 'Workspace'}
+            title={displayOrganization?.name ?? 'Workspace'}
           >
-            {organization?.name.charAt(0)}
+            {displayOrganization?.name.charAt(0)}
           </button>
         )}
       </div>
@@ -377,7 +432,7 @@ export const Sidebar: React.FC = () => {
             label="Inbox"
             active={isNavActive('/inbox')}
             collapsed={isSidebarCollapsed}
-            badge={3}
+            badge={badges?.inbox}
           />
           <SidebarNavLink
             to="/issues/my"
@@ -385,7 +440,14 @@ export const Sidebar: React.FC = () => {
             label="My issues"
             active={isNavActive('/issues/my')}
             collapsed={isSidebarCollapsed}
+            badge={badges?.myIssues}
           />
+          {isInitialSidebarLoading && !isSidebarCollapsed && (
+            <div className="px-2 pt-1 space-y-2">
+              <ShimmerLine className="h-3 w-20" />
+              <ShimmerLine className="h-3 w-24" />
+            </div>
+          )}
         </motion.div>
 
         <motion.div
@@ -441,7 +503,9 @@ export const Sidebar: React.FC = () => {
                     transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
                     className="overflow-hidden flex flex-col gap-0.5"
                   >
-                    {TEAMS.map(team => {
+                    {isInitialSidebarLoading && sidebarTeams.length === 0 ? (
+                      <SidebarTeamsShimmer />
+                    ) : sidebarTeams.map(team => {
                       const expanded = expandedTeamIds.has(team.id);
 
                       return (
@@ -566,6 +630,7 @@ export const Sidebar: React.FC = () => {
               onClose={() => setTeamsFlyoutOpen(false)}
               isNavActive={isNavActive}
               locationPathname={location.pathname}
+              teams={sidebarTeams}
             />
           )}
         </AnimatePresence>
@@ -600,6 +665,7 @@ export const Sidebar: React.FC = () => {
                   className="overflow-hidden flex flex-col gap-0.5"
                 >
                   {orgItems.map(item => {
+                    if (!canUsePermission(item.permission)) return null;
                     if (item.adminOnly && !isAdmin) return null;
                     if (item.leadOnly && !isLead) return null;
                     return (
@@ -647,6 +713,7 @@ export const Sidebar: React.FC = () => {
             orgItems={orgItems}
             isAdmin={isAdmin}
             isLead={isLead}
+            permissions={permissions}
           />
         )}
       </AnimatePresence>
@@ -687,19 +754,28 @@ export const Sidebar: React.FC = () => {
           }`}
         >
           <img
-            src={currentUser?.avatar}
-            alt={currentUser?.name}
-            className="w-8 h-8 rounded-full object-cover shrink-0"
+            src={displayUser?.avatar}
+            alt={displayUser?.name}
+            className="w-8 h-8 rounded-full object-cover shrink-0 bg-gray-200 dark:bg-white/10"
             referrerPolicy="no-referrer"
           />
           {!isSidebarCollapsed && (
             <div className="flex flex-col items-start overflow-hidden min-w-0">
-              <span className="text-[13px] font-medium truncate w-full text-gray-900 dark:text-gray-100">
-                {currentUser?.name}
-              </span>
-              <span className="text-[10px] text-gray-500 dark:text-gray-400 font-medium capitalize">
-                {currentUser?.role}
-              </span>
+              {isInitialSidebarLoading && !displayUser ? (
+                <>
+                  <ShimmerLine className="h-3 w-24 mb-1.5" />
+                  <ShimmerLine className="h-2.5 w-12" />
+                </>
+              ) : (
+                <>
+                  <span className="text-[13px] font-medium truncate w-full text-gray-900 dark:text-gray-100">
+                    {displayUser?.name}
+                  </span>
+                  <span className="text-[10px] text-gray-500 dark:text-gray-400 font-medium capitalize">
+                    {displayUser?.role}
+                  </span>
+                </>
+              )}
             </div>
           )}
         </Link>
@@ -708,15 +784,34 @@ export const Sidebar: React.FC = () => {
   );
 };
 
+const ShimmerLine: React.FC<{ className?: string }> = ({ className = '' }) => (
+  <div className={`rounded bg-gray-200/80 dark:bg-white/10 animate-pulse ${className}`} />
+);
+
+const SidebarTeamsShimmer: React.FC = () => (
+  <div className="space-y-3 px-2 py-1">
+    {[0, 1].map((item) => (
+      <div key={item} className="space-y-2">
+        <ShimmerLine className="h-3.5 w-28" />
+        <div className="pl-5 space-y-2">
+          <ShimmerLine className="h-3 w-20" />
+          <ShimmerLine className="h-3 w-24" />
+        </div>
+      </div>
+    ))}
+  </div>
+);
+
 /** Collapsed rail: flyout for Organization items */
 const OrgFlyoutPanel: React.FC<{
   anchorRef: React.RefObject<HTMLButtonElement | null>;
   onClose: () => void;
   isNavActive: (to: string) => boolean;
-  orgItems: { path: string; label: string; icon: React.ReactNode; adminOnly?: boolean; leadOnly?: boolean }[];
+  orgItems: { path: string; label: string; icon: React.ReactNode; adminOnly?: boolean; leadOnly?: boolean; permission?: keyof SidebarPermissions }[];
   isAdmin: boolean;
   isLead: boolean;
-}> = ({ anchorRef, onClose, isNavActive, orgItems, isAdmin, isLead }) => {
+  permissions?: SidebarPermissions;
+}> = ({ anchorRef, onClose, isNavActive, orgItems, isAdmin, isLead, permissions }) => {
   const panelRef = useRef<HTMLDivElement>(null);
   const [style, setStyle] = useState<React.CSSProperties>({});
 
@@ -778,6 +873,8 @@ const OrgFlyoutPanel: React.FC<{
     >
       <div className="px-3 py-1.5 text-[11px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Organization</div>
       {orgItems.map(item => {
+        if (item.permission && permissions && !permissions[item.permission]) return null;
+        if (item.permission && !permissions && !isAdmin) return null;
         if (item.adminOnly && !isAdmin) return null;
         if (item.leadOnly && !isLead) return null;
         const active = isNavActive(item.path);
@@ -809,7 +906,8 @@ const TeamsFlyoutPanel: React.FC<{
   onClose: () => void;
   isNavActive: (to: string) => boolean;
   locationPathname: string;
-}> = ({ anchorRef, onClose, isNavActive, locationPathname }) => {
+  teams: SidebarTeam[];
+}> = ({ anchorRef, onClose, isNavActive, locationPathname, teams }) => {
   const panelRef = useRef<HTMLDivElement>(null);
   const [style, setStyle] = useState<React.CSSProperties>({});
 
@@ -870,7 +968,7 @@ const TeamsFlyoutPanel: React.FC<{
       className="overflow-y-auto rounded-lg bg-white dark:bg-card-dark shadow-2xl py-2"
     >
         <div className="px-3 py-1.5 text-[11px] font-medium text-gray-500 dark:text-gray-400">Teams</div>
-        {TEAMS.map(team => {
+        {teams.map(team => {
           return (
             <div key={team.id} className="px-2 pb-3 last:pb-1">
               <Link
