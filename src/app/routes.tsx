@@ -1,4 +1,5 @@
 import React from 'react';
+import { useUser } from '@clerk/clerk-react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from '@/app/stores/useAuthStore';
 import { MainLayout } from '@/app/layouts/MainLayout';
@@ -21,7 +22,7 @@ import {
 import { DashboardPage } from '@/pages/DashboardPage';
 import { IssuesPage } from '@/features/issues/components/IssuesPage';
 import { ProjectsPage } from '@/features/projects/components/ProjectsPage';
-import { TeamsPage } from '@/pages/TeamsPage';
+import { TeamsPage, TeamDetailPage } from '@features/team';
 import { RoadmapPage } from '@/pages/RoadmapPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { MembersPage } from '@/pages/MembersPage';
@@ -35,12 +36,39 @@ import { CyclesPage } from '@/pages/CyclesPage';
 import { BillingPage } from '@/pages/BillingPage';
 import { ApiKeysPage } from '@/pages/ApiKeysPage';
 import { ProjectDetailPage } from '@/pages/ProjectDetailPage';
-import { TeamDetailPage } from '@/pages/TeamDetailPage';
-import { DepartmentsPage } from '@/pages/DepartmentsPage';
-import { DepartmentDetailPage } from '@/pages/DepartmentDetailPage';
+import { DepartmentsPage, DepartmentDetailPage } from '@features/department';
 import { CreateIssuePage } from '@/pages/CreateIssuePage';
 import { TemplatesPage } from '@/pages/TemplatesPage';
 import { IssueDetailPage } from '@/pages/IssueDetailPage';
+
+const RootPage: React.FC = () => {
+  const { isSignedIn, isLoaded } = useUser();
+  const workspace = useAuthStore((s) => s.workspace);
+  const authSyncStatus = useAuthStore((s) => s.authSyncStatus);
+
+  if (!isLoaded || (isSignedIn && authSyncStatus !== 'ready')) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-white dark:bg-bg-dark">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-white font-bold animate-pulse">
+            L
+          </div>
+          <p className="text-sm text-gray-400">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isSignedIn) {
+    return <MarketingPage />;
+  }
+
+  if (workspace) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return <Navigate to="/org-creation" replace />;
+};
 
 export const AppRoutes: React.FC = () => {
   // Read workspace role for inline role checks (will be replaced by RoleGuard in Phase 3)
@@ -60,11 +88,11 @@ export const AppRoutes: React.FC = () => {
       <Route path="/sso-callback" element={<SSOCallbackPage />} />
 
       {/*
-       * Marketing / landing page — always accessible.
-       * This is the first page every visitor sees at /.
-       * Signed-in users visiting / get redirected to /dashboard below.
+       * Root entrypoint.
+       * Guests see marketing; signed-in users get routed to dashboard or onboarding.
+       * This fixes OAuth flows that complete on `/` instead of the final app route.
        */}
-      <Route path="/" element={<MarketingPage />} />
+      <Route path="/" element={<RootPage />} />
       <Route path="/marketing" element={<MarketingPage />} />
 
       {/*

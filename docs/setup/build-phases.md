@@ -487,6 +487,9 @@ modules/workspace/
 
 **Dependency:** Phase 2 (workspace + membership must work)
 
+**Frontend/backend contract:** See [phase3-backend-contract.md](./phase3-backend-contract.md)
+**Frontend test guide:** See [phase3-frontend-test-guide.md](./phase3-frontend-test-guide.md)
+
 ### 3.1 Models
 
 ```

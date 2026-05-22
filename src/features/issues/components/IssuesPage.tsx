@@ -39,11 +39,26 @@ const StatusIcon: React.FC<{ status: Status }> = ({ status }) => {
 
 import { KanbanBoard } from '@/components/board/KanbanBoard';
 
-export const IssuesPage: React.FC<{ projectId?: string; initialViewMode?: 'list' | 'kanban' | 'calendar' }> = ({ projectId, initialViewMode = 'list' }) => {
+type IssuesPageProps = {
+  projectId?: string;
+  teamId?: string;
+  initialViewMode?: 'list' | 'kanban' | 'calendar';
+  title?: string;
+  showTeamScopeBadge?: boolean;
+};
+
+export const IssuesPage: React.FC<IssuesPageProps> = ({
+  projectId,
+  teamId,
+  initialViewMode = 'list',
+  title,
+  showTeamScopeBadge = true,
+}) => {
   const { setSelectedIssueId, showToast } = useApp();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const teamIdFromQuery = searchParams.get('team') || undefined;
+  const activeTeamId = teamId ?? teamIdFromQuery;
     
   const [viewMode, setViewMode] = useState<'list' | 'kanban' | 'calendar'>(initialViewMode);
   const [searchQuery, setSearchQuery] = useState('');
@@ -65,7 +80,8 @@ export const IssuesPage: React.FC<{ projectId?: string; initialViewMode?: 'list'
     return () => window.removeEventListener('storage', onStorage);
   }, []);
 
-  const teamLabel = useMemo(() => MOCK_TEAMS.find(t => t.id === teamIdFromQuery)?.name, [teamIdFromQuery]);
+  const teamLabel = useMemo(() => MOCK_TEAMS.find(t => t.id === activeTeamId)?.name, [activeTeamId]);
+  const pageTitle = title ?? (teamLabel ? `${teamLabel} — Issues` : 'All Issues');
 
   const allIssues = useMemo(() => {
     return [...MOCK_ISSUES, ...storedIssues];
@@ -75,7 +91,7 @@ export const IssuesPage: React.FC<{ projectId?: string; initialViewMode?: 'list'
     const matchesSearch = issue.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          issue.id.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesProject = !projectId || issue.projectId === projectId;
-    const matchesTeam = !teamIdFromQuery || issue.teamId === teamIdFromQuery;
+    const matchesTeam = !activeTeamId || issue.teamId === activeTeamId;
     const matchesType = typeFilter === 'all' || issue.type === typeFilter;
     
     const matchesDepartment = departmentFilter === 'all' || 
@@ -218,9 +234,9 @@ export const IssuesPage: React.FC<{ projectId?: string; initialViewMode?: 'list'
         <div className="flex flex-wrap items-center gap-4 sm:gap-6">
           <div className="flex items-center gap-3">
             <h1 className="text-lg font-semibold truncate max-w-[200px] sm:max-w-none">
-              {teamLabel ? `${teamLabel} — Issues` : 'All Issues'}
+              {pageTitle}
             </h1>
-            {teamLabel && (
+            {showTeamScopeBadge && teamLabel && (
               <span className="hidden sm:inline-block text-xs font-medium px-2 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20 shrink-0">
                 Team scope
               </span>

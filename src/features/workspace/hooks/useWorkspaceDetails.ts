@@ -7,6 +7,14 @@ export const workspaceQueryKeys = {
   list: () => [...workspaceQueryKeys.all, 'list'] as const,
   detail: (workspaceId: string | undefined) => [...workspaceQueryKeys.all, 'detail', workspaceId] as const,
   members: (workspaceId: string | undefined) => [...workspaceQueryKeys.all, 'members', workspaceId] as const,
+  memberDirectory: (
+    workspaceId: string | undefined,
+    params: object
+  ) => [...workspaceQueryKeys.members(workspaceId), 'directory', params] as const,
+  memberOptions: (
+    workspaceId: string | undefined,
+    params: object
+  ) => [...workspaceQueryKeys.members(workspaceId), 'options', params] as const,
   invitations: (workspaceId: string | undefined) => [...workspaceQueryKeys.all, 'invitations', workspaceId] as const,
 };
 

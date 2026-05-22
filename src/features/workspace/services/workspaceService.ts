@@ -1,6 +1,6 @@
 import { privateApi } from '@shared/services/privateApi';
 import { publicApi } from '@shared/services/publicApi';
-import type { ApiResponse } from '@shared/services/types';
+import type { ApiListMeta, ApiPaginatedResponse, ApiResponse } from '@shared/services/types';
 import type { AxiosRequestConfig } from 'axios';
 
 /**
@@ -77,6 +77,30 @@ export interface WorkspaceMemberResponse {
   teams?: WorkspaceMemberTeam[];
   department?: WorkspaceMemberDepartment | null;
   departments?: WorkspaceMemberDepartment[];
+}
+
+export interface WorkspaceMemberOption {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+}
+
+export type WorkspaceMemberSort = 'name:asc' | 'name:desc' | 'joinedAt:asc' | 'joinedAt:desc';
+export type WorkspaceMemberFilterRole = 'OWNER' | 'ADMIN' | 'MEMBER' | 'GUEST';
+export type WorkspaceMemberView = 'compact' | 'full';
+
+export interface ListWorkspaceMembersInput {
+  q?: string;
+  cursor?: string;
+  limit?: number;
+  sort?: WorkspaceMemberSort;
+  role?: WorkspaceMemberFilterRole;
+}
+
+export interface WorkspaceMemberListResult<T> {
+  items: T[];
+  meta: ApiListMeta;
 }
 
 export interface WorkspaceMemberDepartment {
@@ -241,10 +265,49 @@ export const workspaceService = {
   },
 
   getMembers: async (workspaceId: string): Promise<WorkspaceMemberResponse[]> => {
-    const { data } = await privateApi.get<ApiResponse<WorkspaceMemberResponse[]>>(
-      `/workspaces/${workspaceId}/members`
+    const result = await workspaceService.listMemberDirectory(workspaceId, {
+      limit: 100,
+      sort: 'name:asc',
+    });
+    return result.items;
+  },
+
+  listMemberDirectory: async (
+    workspaceId: string,
+    params: ListWorkspaceMembersInput = {}
+  ): Promise<WorkspaceMemberListResult<WorkspaceMemberResponse>> => {
+    const { data } = await privateApi.get<ApiPaginatedResponse<WorkspaceMemberResponse>>(
+      `/workspaces/${workspaceId}/members`,
+      {
+        params: {
+          ...params,
+          view: 'full',
+        },
+      }
     );
-    return data.data;
+    return {
+      items: data.data,
+      meta: data.meta,
+    };
+  },
+
+  listMemberOptions: async (
+    workspaceId: string,
+    params: ListWorkspaceMembersInput = {}
+  ): Promise<WorkspaceMemberListResult<WorkspaceMemberOption>> => {
+    const { data } = await privateApi.get<ApiPaginatedResponse<WorkspaceMemberOption>>(
+      `/workspaces/${workspaceId}/members`,
+      {
+        params: {
+          ...params,
+          view: 'compact',
+        },
+      }
+    );
+    return {
+      items: data.data,
+      meta: data.meta,
+    };
   },
 
   updateMemberRole: async (input: UpdateMemberRoleInput): Promise<WorkspaceMemberResponse> => {

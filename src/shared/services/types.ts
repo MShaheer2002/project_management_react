@@ -6,6 +6,20 @@ export interface ApiResponse<T = unknown> {
   data: T;
 }
 
+/** Standard backend pagination metadata */
+export interface ApiListMeta {
+  total: number;
+  cursor: string | null;
+  hasMore: boolean;
+}
+
+/** Standard backend paginated response */
+export interface ApiPaginatedResponse<T = unknown> {
+  success: true;
+  data: T[];
+  meta: ApiListMeta;
+}
+
 /** Standard backend error response */
 export interface ApiError {
   success: false;

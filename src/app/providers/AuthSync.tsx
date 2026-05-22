@@ -39,6 +39,20 @@ const ONBOARDING_EXEMPT_PATHS = [
   '/org-creation',  // Already on onboarding — don't redirect in a loop
 ];
 
+const setDevJwt = (token: string | null) => {
+  if (!import.meta.env.DEV) return;
+  const devWindow = window as Window & { __LINEARIS_JWT__?: string | null };
+  devWindow.__LINEARIS_JWT__ = token;
+  console.log('[AuthSync] JWT for Postman:', token);
+};
+
+const setDevWorkspaceId = (workspaceId: string | null) => {
+  if (!import.meta.env.DEV) return;
+  const devWindow = window as Window & { __LINEARIS_WORKSPACE_ID__?: string | null };
+  devWindow.__LINEARIS_WORKSPACE_ID__ = workspaceId;
+  console.log('[AuthSync] Workspace ID for Postman:', workspaceId);
+};
+
 export const AuthSync: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, isLoaded, isSignedIn } = useUser();
   const { getToken } = useAuth();
@@ -56,6 +70,8 @@ export const AuthSync: React.FC<{ children: React.ReactNode }> = ({ children }) 
     // Not signed in → clear store, done
     if (!isSignedIn || !user) {
       console.log('[AuthSync] No signed-in user. Clearing auth store.');
+      setDevJwt(null);
+      setDevWorkspaceId(null);
       clear();
       return;
     }
@@ -79,9 +95,12 @@ export const AuthSync: React.FC<{ children: React.ReactNode }> = ({ children }) 
     const syncUser = async () => {
       const token = await getToken();
       if (!token) {
+        setDevJwt(null);
+        setDevWorkspaceId(null);
         if (!cancelled) clear();
         return;
       }
+      setDevJwt(token);
 
       // ── Step 1: Sync user profile from backend /me ──
       const fallbackUser = {
@@ -165,10 +184,12 @@ export const AuthSync: React.FC<{ children: React.ReactNode }> = ({ children }) 
             : null;
           const active = match || backendWorkspaces[0];
           console.log('[AuthSync] Active workspace:', active.name, '| Role:', active.role);
+          setDevWorkspaceId(active.id);
           if (!cancelled) setAuth(backendUser, active);
         } else {
           // ❌ User has ZERO workspaces — MUST create one before using the app
           console.log('[AuthSync] User has no workspaces (confirmed by backend)');
+          setDevWorkspaceId(null);
           if (!cancelled) setAuth(backendUser, null);
           if (!isExemptPage) {
             console.log('[AuthSync] REDIRECTING to /org-creation (no workspace)');
@@ -179,10 +200,12 @@ export const AuthSync: React.FC<{ children: React.ReactNode }> = ({ children }) 
         // Backend unreachable — check persisted workspace
         if (persistedWorkspace) {
           console.log('[AuthSync] Using persisted workspace:', persistedWorkspace.name);
+          setDevWorkspaceId(persistedWorkspace.id);
           if (!cancelled) setAuth(backendUser, persistedWorkspace);
         } else {
           // No backend, no persisted workspace — onboarding required
           console.log('[AuthSync] No workspace found anywhere (backend down, nothing persisted)');
+          setDevWorkspaceId(null);
           if (!cancelled) setAuth(backendUser, null);
           if (!isExemptPage) {
             console.log('[AuthSync] REDIRECTING to /org-creation (no workspace, offline)');

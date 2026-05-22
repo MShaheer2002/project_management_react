@@ -28,16 +28,20 @@ import {
 import { MOCK_PROJECTS, MOCK_ISSUES, MOCK_USERS, STATUS_LABELS, PRIORITY_COLORS } from '../constants';
 import { Issue } from '../types';
 import { getStoredIssues } from '../lib/issue-storage';
+import { MemberPerformancePanel } from '@/components/analytics/MemberPerformancePanel';
 import { IssuesPage } from '@/features/issues/components/IssuesPage';
 import { RoadmapPage } from './RoadmapPage';
 import { ActivityPage } from './ActivityPage';
 import { MembersPage } from './MembersPage';
 import { useApp } from '../AppContext';
 import { AnimatePresence, motion } from 'motion/react';
+import { MOCK_TEAMS } from '@/constants';
+import { buildMemberPerformanceRows, mergeIssuesById } from '@shared/analytics/memberPerformance';
+import { setInviteMemberDraft } from '@shared/utils/inviteMemberDraft';
 
 export const ProjectDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const { showToast, setSelectedIssueId } = useApp();
+  const { showToast, setSelectedIssueId, setActiveModal } = useApp();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'overview' | 'issues' | 'board' | 'roadmap' | 'members' | 'activity' | 'settings'>('overview');
   const [storedIssues, setStoredIssues] = useState<Issue[]>([]);
@@ -61,9 +65,47 @@ export const ProjectDetailPage: React.FC = () => {
   }, []);
 
   const projectIssues = useMemo(() => {
-    const all = [...MOCK_ISSUES, ...storedIssues];
+    const all = mergeIssuesById(MOCK_ISSUES, storedIssues);
     return all.filter(i => i.projectId === project.id);
   }, [storedIssues, project.id]);
+
+  const projectMembers = useMemo(() => {
+    const projectTeam = MOCK_TEAMS.find((team) => team.id === project.teamId);
+    const memberIds = new Set<string>(projectTeam?.memberIds ?? []);
+
+    projectIssues.forEach((issue) => {
+      if (issue.assigneeId) {
+        memberIds.add(issue.assigneeId);
+      }
+      memberIds.add(issue.creatorId);
+    });
+
+    return Array.from(memberIds)
+      .map((memberId) => MOCK_USERS.find((user) => user.id === memberId))
+      .filter((member): member is NonNullable<typeof member> => Boolean(member));
+  }, [project.teamId, projectIssues]);
+
+  const projectAnalyticsRows = useMemo(() => {
+    const projectTeam = MOCK_TEAMS.find((team) => team.id === project.teamId);
+
+    return buildMemberPerformanceRows(
+      projectMembers.map((member) => ({
+        id: member.id,
+        name: member.name,
+        email: member.email,
+        avatar: member.avatar ?? null,
+        roleLabel: member.id === projectTeam?.leadId ? 'Lead' : member.role,
+        assigneeIds: [member.id],
+      })),
+      projectIssues
+    );
+  }, [project.teamId, projectIssues, projectMembers]);
+
+  const projectUnassignedCount = projectIssues.filter((issue) => !issue.assigneeId).length;
+  const projectTeam = useMemo(
+    () => MOCK_TEAMS.find((team) => team.id === project.teamId) ?? null,
+    [project.teamId]
+  );
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: <LayoutDashboard size={14} /> },
@@ -75,13 +117,26 @@ export const ProjectDetailPage: React.FC = () => {
     { id: 'settings', label: 'Settings', icon: <Settings size={14} /> },
   ];
 
+  const handleInviteToProjectTeam = () => {
+    if (!projectTeam) {
+      showToast('No team is linked to this project yet.', 'info');
+      return;
+    }
+
+    setInviteMemberDraft({
+      teamId: projectTeam.id,
+      departmentId: project.departmentId,
+    });
+    setActiveModal('invite-member');
+  };
+
   const renderTabContent = () => {
     switch (activeTab) {
       case 'overview':
         return (
-          <div className="p-8 space-y-8 max-w-6xl">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              <div className="lg:col-span-2 space-y-8">
+          <div className="p-6 space-y-6 max-w-6xl">
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+              <div className="space-y-6 lg:col-span-2">
                 <div className="bg-white dark:bg-card-dark border border-gray-200 dark:border-border-dark rounded-2xl p-6 shadow-sm">
                   <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400 mb-4">Description</h3>
                   <p className="text-gray-600 dark:text-gray-400 leading-relaxed">{project.description}</p>
@@ -108,7 +163,7 @@ export const ProjectDetailPage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="space-y-8">
+              <div className="space-y-6">
                 <div className="bg-white dark:bg-card-dark border border-gray-200 dark:border-border-dark rounded-2xl p-6 shadow-sm">
                   <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400 mb-4">Progress</h3>
                   <div className="space-y-4">
@@ -123,18 +178,37 @@ export const ProjectDetailPage: React.FC = () => {
                 </div>
 
                 <div className="bg-white dark:bg-card-dark border border-gray-200 dark:border-border-dark rounded-2xl p-6 shadow-sm">
-                  <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400 mb-4">Team</h3>
-                  <div className="flex -space-x-2">
-                    {MOCK_USERS.map(user => (
-                      <img key={user.id} src={user.avatar} className="w-8 h-8 rounded-full border-2 border-white dark:border-card-dark" alt={user.name} />
-                    ))}
-                    <button className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-800 border-2 border-white dark:border-card-dark flex items-center justify-center text-gray-400 hover:text-primary transition-colors">
+                  <div className="mb-4 flex items-center justify-between">
+                    <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400">Team</h3>
+                    <button
+                      onClick={handleInviteToProjectTeam}
+                      className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 text-gray-400 transition-colors hover:border-primary/40 hover:text-primary dark:border-border-dark dark:hover:bg-white/5"
+                    >
                       <Plus size={14} />
                     </button>
+                  </div>
+                  <div className="space-y-4">
+                    <div className="flex -space-x-2">
+                      {projectMembers.map(user => (
+                        <img key={user.id} src={user.avatar} className="w-8 h-8 rounded-full border-2 border-white dark:border-card-dark" alt={user.name} />
+                      ))}
+                    </div>
+                    <p className="text-xs text-gray-400">
+                      {projectTeam ? `${projectTeam.name} team` : 'No team linked'} · {projectMembers.length} members
+                    </p>
                   </div>
                 </div>
               </div>
             </div>
+
+            <MemberPerformancePanel
+              title="Member Performance"
+              subtitle="Task completion for members assigned within this project."
+              rows={projectAnalyticsRows}
+              emptyTitle="No member performance yet"
+              emptyDescription="Assign project issues to members to see individual completion and workload."
+              unassignedCount={projectUnassignedCount}
+            />
           </div>
         );
       case 'issues': return <IssuesPage projectId={project.id} />;
@@ -167,7 +241,10 @@ export const ProjectDetailPage: React.FC = () => {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <button className="p-2 rounded-lg border border-gray-200 dark:border-border-dark hover:bg-gray-50 dark:hover:bg-white/5 transition-colors">
+            <button
+              onClick={handleInviteToProjectTeam}
+              className="p-2 rounded-lg border border-gray-200 dark:border-border-dark hover:bg-gray-50 dark:hover:bg-white/5 transition-colors"
+            >
               <Plus size={18} />
             </button>
             <button 

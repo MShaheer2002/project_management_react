@@ -8,7 +8,12 @@ export {
   useUpdateMemberRole,
   useUpdateWorkspace,
 } from './hooks/useWorkspaceMutations';
-export { useWorkspaceInvitations, useWorkspaceMembers } from './hooks/useWorkspaceMembers';
+export {
+  useWorkspaceInvitations,
+  useWorkspaceMemberDirectory,
+  useWorkspaceMemberOptions,
+  useWorkspaceMembers,
+} from './hooks/useWorkspaceMembers';
 export type {
   CreateWorkspaceInput,
   InvitationResponse,
@@ -20,6 +25,11 @@ export type {
   UpdateMemberRoleInput,
   UpdateWorkspaceInput,
   WorkspaceInvitationResponse,
+  WorkspaceMemberFilterRole,
+  WorkspaceMemberListResult,
+  WorkspaceMemberOption,
   WorkspaceMemberResponse,
+  WorkspaceMemberSort,
+  WorkspaceMemberView,
   WorkspaceResponse,
 } from './services/workspaceService';

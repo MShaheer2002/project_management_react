@@ -1,0 +1,23 @@
+import type { UserRole } from '@/types';
+
+type WorkspaceRoleInput = UserRole | null | undefined;
+
+export const canCreateTeam = (role: WorkspaceRoleInput): boolean =>
+  role === 'owner' || role === 'admin' || role === 'member';
+
+export const canCreateDepartment = (role: WorkspaceRoleInput): boolean =>
+  role === 'owner' || role === 'admin';
+
+export const canManageTeam = (
+  role: WorkspaceRoleInput,
+  currentUserId: string | null | undefined,
+  leadId: string | null | undefined
+): boolean =>
+  canCreateDepartment(role) || (Boolean(currentUserId) && currentUserId === leadId);
+
+export const canManageDepartment = (
+  role: WorkspaceRoleInput,
+  currentUserId: string | null | undefined,
+  headId: string | null | undefined
+): boolean =>
+  canCreateDepartment(role) || (Boolean(currentUserId) && currentUserId === headId);

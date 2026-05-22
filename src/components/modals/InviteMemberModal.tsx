@@ -4,6 +4,7 @@ import { useApp } from '../../AppContext';
 import { useSidebarData } from '@features/sidebar';
 import { useSendInvitation, type InvitationRole } from '@features/workspace';
 import type { ApiAxiosError } from '@shared/services/types';
+import { consumeInviteMemberDraft } from '@shared/utils/inviteMemberDraft';
 import { ChevronDown, Loader2, Mail, Shield, Users, Building2 } from 'lucide-react';
 
 export const InviteMemberModal: React.FC = () => {
@@ -23,6 +24,21 @@ export const InviteMemberModal: React.FC = () => {
       setTeamId(teams[0].id);
     }
   }, [teamId, teams]);
+
+  useEffect(() => {
+    if (activeModal !== 'invite-member') return;
+
+    const draft = consumeInviteMemberDraft();
+    if (draft?.teamId) {
+      setTeamId(draft.teamId);
+    } else if (teams.length > 0) {
+      setTeamId((current) => current || teams[0].id);
+    }
+
+    if (draft?.departmentId) {
+      setDepartmentId(draft.departmentId);
+    }
+  }, [activeModal, teams]);
 
   const resetForm = () => {
     setEmail('');
