@@ -1,0 +1,83 @@
+export type UploadKind = 'workspace-logo' | 'avatar' | 'attachment' | 'video';
+
+export type UploadStatus = 'idle' | 'preparing' | 'uploading' | 'uploaded' | 'failed';
+
+export const uploadKindAccept: Record<UploadKind, string> = {
+  'workspace-logo': 'image/*',
+  avatar: 'image/*',
+  attachment: 'image/*,video/*',
+  video: 'video/*',
+};
+
+export interface UploadProgress {
+  loaded: number;
+  total: number;
+  percent: number | null;
+}
+
+export interface UploadProgressUpdate extends UploadProgress {
+  clientId: string;
+}
+
+export interface UploadFileSelection {
+  file: File;
+  kind: UploadKind;
+  clientId?: string;
+}
+
+export interface PresignFileRequest {
+  fileName: string;
+  contentType: string;
+  size: number;
+  kind: UploadKind;
+}
+
+export interface PresignFilesRequest {
+  files: Array<PresignFileRequest & { clientId: string }>;
+}
+
+export interface PresignedUploadInstruction {
+  clientId?: string;
+  uploadUrl: string;
+  method: string;
+  headers: Record<string, string>;
+  key: string;
+  expiresIn: number;
+  assetUrl: string | null;
+}
+
+export interface PreparedUpload {
+  clientId: string;
+  file: File;
+  kind: UploadKind;
+  request: PresignFileRequest;
+  instruction: PresignedUploadInstruction;
+}
+
+export interface UploadPreparedFileInput {
+  preparedUpload: PreparedUpload;
+  signal?: AbortSignal;
+  onProgress?: (progress: UploadProgress) => void;
+}
+
+export interface UploadFileInput extends UploadFileSelection {
+  signal?: AbortSignal;
+  onProgress?: (progress: UploadProgress) => void;
+}
+
+export interface UploadFilesInput {
+  files: UploadFileSelection[];
+  signal?: AbortSignal;
+  onFileProgress?: (progress: UploadProgressUpdate) => void;
+}
+
+export interface UploadedFileReference {
+  clientId: string;
+  fileName: string;
+  contentType: string;
+  size: number;
+  kind: UploadKind;
+  key: string;
+  assetUrl: string | null;
+  reference: string;
+}
