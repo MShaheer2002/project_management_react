@@ -31,3 +31,40 @@ export const useUploadFiles = () =>
   useMutation({
     mutationFn: (input: UploadFilesInput) => uploadService.uploadFiles(input),
   });
+
+export const useViewUploadUrl = () =>
+  useMutation({
+    mutationFn: (key: string) => uploadService.getViewUrl(key),
+  });
+
+export const useOpenViewUploadUrl = () => {
+  const viewUploadUrl = useViewUploadUrl();
+
+  return async (key: string) => {
+    const popup = window.open('about:blank', '_blank');
+
+    if (popup) {
+      popup.opener = null;
+    }
+
+    try {
+      const result = await viewUploadUrl.mutateAsync(key);
+      const targetUrl = result.url;
+
+      if (popup) {
+        popup.location.href = targetUrl;
+        popup.focus();
+      } else {
+        window.open(targetUrl, '_blank', 'noopener,noreferrer');
+      }
+
+      return targetUrl;
+    } catch (error) {
+      if (popup) {
+        popup.close();
+      }
+
+      throw error;
+    }
+  };
+};

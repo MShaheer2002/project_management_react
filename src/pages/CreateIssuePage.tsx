@@ -9,31 +9,47 @@ import {
   Layers, 
   RotateCcw, 
   Hash,
-  Paperclip,
   CheckSquare,
-  Link as LinkIcon,
   ChevronDown,
   Trash2,
   Building2,
   Clock,
   Settings,
   MoreVertical,
-  ChevronRight,
   Search,
   Check,
-  AlertCircle,
   Bug,
   FileText,
   Zap
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useApp } from '../AppContext';
-import { MOCK_USERS, STATUS_LABELS, MOCK_DEPARTMENTS, MOCK_TEAMS, ISSUE_TYPE_CONFIG } from '../constants';
-import { Issue, IssueType, Priority, Status, Severity, IssueSubtask } from '../types';
+import { STATUS_LABELS, ISSUE_TYPE_CONFIG } from '../constants';
+import {
+  IssueAttachment,
+  IssueDependency,
+  IssueIntegrationRef,
+  IssueType,
+  Priority,
+  Status,
+  Severity,
+  IssueSubtask,
+} from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { RichTextEditor } from '../components/RichTextEditor';
-import { generateNextIssueId, saveCreatedIssue } from '../lib/issue-storage';
+import { getApiFieldErrors, getApiErrorMessage } from '@shared/services';
+import { useDepartmentOptions } from '@features/department';
 import { useProjectOptions } from '@features/projects';
+import { useWorkspaceMemberOptions } from '@features/workspace';
+import {
+  IssueAttachmentsField,
+  IssueSystemParametersPanel,
+  useAddIssueDependencyAny,
+  useAddIssueWatchersAny,
+  useCreateIssue,
+  useUpdateAnyIssue,
+  useUpdateIssueIntegrationRefsAny,
+} from '@features/issues';
 
 interface Subtask extends IssueSubtask {
   isEditing?: boolean;
@@ -54,8 +70,9 @@ const AVAILABLE_LABELS: Label[] = [
 ];
 
 export const CreateIssuePage: React.FC = () => {
-  const { showToast, currentUser } = useApp();
+  const { showToast } = useApp();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   
   // Form State
   const [title, setTitle] = useState('');
@@ -82,13 +99,17 @@ export const CreateIssuePage: React.FC = () => {
   const [acceptanceCriteria, setAcceptanceCriteria] = useState('');
   const [relatedIssues, setRelatedIssues] = useState('');
   const [notes, setNotes] = useState('');
+  const [parentIssueId, setParentIssueId] = useState('');
+  const [dependencies, setDependencies] = useState<IssueDependency[]>([]);
+  const [watcherIds, setWatcherIds] = useState<string[]>([]);
+  const [integrationRefs, setIntegrationRefs] = useState<IssueIntegrationRef[]>([]);
+  const [attachments, setAttachments] = useState<IssueAttachment[]>([]);
   
   // UI State
   const [errors, setErrors] = useState<{ project?: string }>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
-  const [showAdvanced, setShowAdvanced] = useState(false);
   const [showLabelDropdown, setShowLabelDropdown] = useState(false);
   const [newSubtask, setNewSubtask] = useState('');
   const labelRef = useRef<HTMLDivElement>(null);
@@ -96,9 +117,28 @@ export const CreateIssuePage: React.FC = () => {
     sort: 'name:asc',
     limit: 100,
   });
+  const departmentOptionsQuery = useDepartmentOptions(
+    {
+      sort: 'name:asc',
+      limit: 100,
+    },
+    { enabled: true }
+  );
+  const assigneeOptionsQuery = useWorkspaceMemberOptions(
+    {
+      sort: 'name:asc',
+      limit: 100,
+    },
+    { enabled: true }
+  );
+  const createIssue = useCreateIssue();
+  const updateAnyIssue = useUpdateAnyIssue();
+  const addIssueDependencyAny = useAddIssueDependencyAny();
+  const addIssueWatchersAny = useAddIssueWatchersAny();
+  const updateIssueIntegrationRefsAny = useUpdateIssueIntegrationRefsAny();
   const projectOptions = projectOptionsQuery.data?.pages.flatMap((page) => page.items) ?? [];
-
-  const project = projectOptions.find((item) => item.id === projectId);
+  const departmentOptions = departmentOptionsQuery.data?.pages.flatMap((page) => page.items) ?? [];
+  const assigneeOptions = assigneeOptionsQuery.data?.pages.flatMap((page) => page.items) ?? [];
 
   // Click outside for label dropdown
   useEffect(() => {
@@ -123,6 +163,19 @@ export const CreateIssuePage: React.FC = () => {
     });
   }, [projectOptions]);
 
+  useEffect(() => {
+    const statusParam = searchParams.get('status');
+    const projectParam = searchParams.get('projectId');
+
+    if (statusParam && Object.prototype.hasOwnProperty.call(STATUS_LABELS, statusParam)) {
+      setStatus(statusParam as Status);
+    }
+
+    if (projectParam) {
+      setProjectId(projectParam);
+    }
+  }, [searchParams]);
+
   // Validation
   const validate = () => {
     const newErrors: { project?: string } = {};
@@ -136,64 +189,108 @@ export const CreateIssuePage: React.FC = () => {
     return title.trim().length > 0 && Object.keys(newErrors).length === 0;
   };
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (!validate()) return;
     setIsSubmitting(true);
-    setTimeout(() => {
-      const now = new Date().toISOString();
-      const dueDateTime = dueDate
-        ? `${dueDate}T${dueTime || '00:00'}:00`
-        : undefined;
+    try {
       const cleanSubtasks = subtasks
-        .map(subtask => ({ ...subtask, title: subtask.title.trim(), isEditing: false }))
-        .filter(subtask => subtask.title.length > 0)
+        .map((subtask) => ({ ...subtask, title: subtask.title.trim(), isEditing: false }))
+        .filter((subtask) => subtask.title.length > 0)
         .map(({ isEditing, ...rest }) => rest);
       const selectedLabelNames = selectedLabels
-        .map(labelId => AVAILABLE_LABELS.find(label => label.id === labelId)?.name.toLowerCase())
+        .map((labelId) => AVAILABLE_LABELS.find((label) => label.id === labelId)?.name.toLowerCase())
         .filter((label): label is string => Boolean(label));
+      const cleanIntegrationRefs = integrationRefs.filter((ref) => ref.label || ref.externalId || ref.url);
 
-      const createdIssue: Issue = {
-        id: generateNextIssueId(),
+      const createdIssue = await createIssue.mutateAsync({
         title: title.trim(),
         description,
         type,
         status,
         priority,
-        assigneeId: assigneeId || undefined,
-        creatorId: currentUser?.id || MOCK_USERS[0].id,
+        assigneeId: assigneeId || null,
         projectId,
-        teamId: project?.teamId || currentUser?.teamId || MOCK_TEAMS[0].id,
         labels: selectedLabelNames,
-        dueDate: dueDateTime,
-        createdAt: now,
-        updatedAt: now,
-        subtasks: cleanSubtasks,
-        estimate: estimate ? Number(estimate) : undefined,
-        departmentId: departmentId || project?.departmentId,
-        dueTime: dueTime || undefined,
-        
-        // Bug specific
+        dueDate: dueDate || null,
+        dueTime: dueTime || null,
+        estimate: estimate ? Number(estimate) : null,
+        subtasks: cleanSubtasks.map((subtask) => ({
+          title: subtask.title,
+          order: subtask.order,
+        })),
+        attachments: attachments.map((attachment) => ({
+          fileName: attachment.fileName,
+          contentType: attachment.contentType,
+          size: attachment.size,
+          kind: attachment.kind,
+          key: attachment.key,
+          assetUrl: attachment.assetUrl ?? null,
+          reference: attachment.reference,
+        })),
         stepsToReproduce: type === 'bug' ? stepsToReproduce : undefined,
         expectedBehavior: type === 'bug' ? expectedBehavior : undefined,
         actualBehavior: type === 'bug' ? actualBehavior : undefined,
         severity: type === 'bug' ? severity : undefined,
-        
-        // Issue specific
         acceptanceCriteria: type === 'issue' ? acceptanceCriteria : undefined,
-        relatedIssues: type === 'issue' ? relatedIssues.split(',').map(s => s.trim()).filter(Boolean) : undefined,
+        relatedIssueKeys:
+          type === 'issue'
+            ? relatedIssues.split(',').map((value) => value.trim()).filter(Boolean)
+            : undefined,
         notes: type === 'issue' ? notes : undefined,
-      };
+        departmentId: departmentId || null,
+      });
+      const createdIssueResourceId = createdIssue.entityId ?? createdIssue.id;
 
-      saveCreatedIssue(createdIssue);
+      if (parentIssueId) {
+        await updateAnyIssue.mutateAsync({
+          issueId: createdIssueResourceId,
+          input: { parentIssueId },
+        });
+      }
+
+      if (dependencies.length > 0) {
+        await Promise.all(
+          dependencies.map((dependency) =>
+            addIssueDependencyAny.mutateAsync({
+              issueId: createdIssueResourceId,
+              input: {
+                relatedId: dependency.issueId,
+                relation: dependency.relation,
+              },
+            })
+          )
+        );
+      }
+
+      if (watcherIds.length > 0) {
+        await addIssueWatchersAny.mutateAsync({
+          issueId: createdIssueResourceId,
+          input: { userIds: watcherIds },
+        });
+      }
+
+      if (cleanIntegrationRefs.length > 0) {
+        await updateIssueIntegrationRefsAny.mutateAsync({
+          issueId: createdIssueResourceId,
+          input: { integrationRefs: cleanIntegrationRefs },
+        });
+      }
+
       setIsSubmitting(false);
       showToast(
         cleanSubtasks.length > 0
           ? `Issue created with ${cleanSubtasks.length} subtask${cleanSubtasks.length > 1 ? 's' : ''}`
           : 'Issue created successfully'
       );
-      localStorage.removeItem('issue_draft'); 
-      navigate('/issues');
-    }, 1200);
+      localStorage.removeItem('issue_draft');
+      navigate(`/issues/${createdIssueResourceId}`);
+    } catch (error) {
+      setIsSubmitting(false);
+      const apiFieldErrors = getApiFieldErrors(error);
+      const projectErrors = apiFieldErrors.projectId?.[0] || apiFieldErrors.project?.[0];
+      setErrors(projectErrors ? { project: projectErrors } : {});
+      showToast(getApiErrorMessage(error) || 'Failed to create issue.', 'error');
+    }
   };
 
   // Subtask Management
@@ -254,6 +351,11 @@ export const CreateIssuePage: React.FC = () => {
         setAcceptanceCriteria(draft.acceptanceCriteria || '');
         setRelatedIssues(draft.relatedIssues || '');
         setNotes(draft.notes || '');
+        setParentIssueId(draft.parentIssueId || '');
+        setDependencies(draft.dependencies || []);
+        setWatcherIds(draft.watcherIds || []);
+        setIntegrationRefs(draft.integrationRefs || []);
+        setAttachments(draft.attachments || []);
       } catch (e) {
         console.error('Failed to load draft');
       }
@@ -282,14 +384,19 @@ export const CreateIssuePage: React.FC = () => {
       severity,
       acceptanceCriteria,
       relatedIssues,
-      notes
+      notes,
+      parentIssueId,
+      dependencies,
+      watcherIds,
+      integrationRefs,
+      attachments,
     };
     localStorage.setItem('issue_draft', JSON.stringify(draft));
     setTimeout(() => {
       setIsSaving(false);
       setLastSaved(new Date());
     }, 800);
-  }, [title, description, type, projectId, priority, status, assigneeId, departmentId, dueDate, dueTime, estimate, selectedLabels, subtasks, stepsToReproduce, expectedBehavior, actualBehavior, severity, acceptanceCriteria, relatedIssues, notes]);
+  }, [title, description, type, projectId, priority, status, assigneeId, departmentId, dueDate, dueTime, estimate, selectedLabels, subtasks, stepsToReproduce, expectedBehavior, actualBehavior, severity, acceptanceCriteria, relatedIssues, notes, parentIssueId, dependencies, watcherIds, integrationRefs, attachments]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -593,23 +700,7 @@ export const CreateIssuePage: React.FC = () => {
               </div>
             </div>
 
-            {/* Attachments Section */}
-            <div className="space-y-6 pt-12 border-t border-gray-100 dark:border-border-dark">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-orange-500/10 text-orange-500 flex items-center justify-center">
-                  <Paperclip size={16} />
-                </div>
-                <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400 dark:text-gray-400">Attachments</h3>
-              </div>
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <button className="aspect-video rounded-2xl border border-dashed border-gray-200 dark:border-border-dark flex flex-col items-center justify-center gap-3 text-gray-300 hover:border-primary hover:bg-primary/5 hover:text-primary transition-all group cursor-pointer p-4 text-center">
-                  <div className="w-10 h-10 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-border-dark flex items-center justify-center group-hover:scale-110 group-hover:bg-primary/10 transition-all duration-500 shadow-sm">
-                    <Plus size={20} />
-                  </div>
-                  <span className="text-[10px] font-bold uppercase tracking-wide">Upload</span>
-                </button>
-              </div>
-            </div>
+            <IssueAttachmentsField value={attachments} onChange={setAttachments} />
           </div>
         </div>
 
@@ -705,7 +796,7 @@ export const CreateIssuePage: React.FC = () => {
                         className="w-full bg-gray-50 dark:bg-white/5 border border-transparent px-5 py-4 text-sm font-medium rounded-2xl shadow-sm outline-none appearance-none focus:ring-2 focus:ring-primary/20 transition-all group-hover:bg-gray-100 dark:group-hover:bg-white/10"
                       >
                         <option value="">Unassigned</option>
-                        {MOCK_USERS.map(user => (
+                        {assigneeOptions.map((user) => (
                           <option key={user.id} value={user.id}>{user.name}</option>
                         ))}
                       </select>
@@ -835,8 +926,8 @@ export const CreateIssuePage: React.FC = () => {
                         className="w-full bg-gray-50 dark:bg-white/5 border border-transparent px-5 py-4 text-sm font-medium rounded-2xl shadow-sm outline-none appearance-none focus:ring-2 focus:ring-primary/20 transition-all hover:bg-gray-100 dark:hover:bg-white/10"
                       >
                         <option value="">None</option>
-                        {MOCK_DEPARTMENTS.map(d => (
-                          <option key={d.id} value={d.id}>{d.name}</option>
+                        {departmentOptions.map((department) => (
+                          <option key={department.id} value={department.id}>{department.name}</option>
                         ))}
                       </select>
                       <ChevronDown size={14} className="absolute right-5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
@@ -847,49 +938,17 @@ export const CreateIssuePage: React.FC = () => {
 
               <div className="h-px bg-gray-100 dark:bg-border-dark mx-1" />
 
-              {/* Advanced Parameters */}
-              <div className="px-1">
-                <button 
-                  onClick={() => setShowAdvanced(!showAdvanced)}
-                  className="w-full flex items-center justify-between py-3 px-4 rounded-xl hover:bg-gray-50 dark:hover:bg-white/5 text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400 dark:text-gray-500 hover:text-primary transition-all group"
-                >
-                  <div className="flex items-center gap-3">
-                    <Settings size={15} className="group-hover:rotate-180 transition-transform duration-700 text-primary/50" />
-                    <span>System Parameters</span>
-                  </div>
-                  <motion.div
-                    animate={{ rotate: showAdvanced ? 90 : 0 }}
-                  >
-                    <ChevronRight size={15} />
-                  </motion.div>
-                </button>
-                
-                <AnimatePresence>
-                  {showAdvanced && (
-                    <motion.div 
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: 'auto', opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      className="overflow-hidden space-y-3 mt-4"
-                    >
-                      {[
-                        { label: 'Parent Linkage', icon: <ChevronRight size={14} /> },
-                        { label: 'Sub-Dependencies', icon: <AlertCircle size={14} /> },
-                        { label: 'Watchers (Group)', icon: <Users size={14} /> },
-                        { label: 'Integration Ref', icon: <LinkIcon size={14} /> }
-                      ].map(opt => (
-                        <div key={opt.label} className="group flex items-center justify-between p-4 rounded-2xl bg-gray-50/50 dark:bg-white/5 text-[10px] font-bold uppercase tracking-wide text-gray-500 cursor-pointer border border-transparent hover:border-primary/20 hover:bg-primary/5 transition-all shadow-sm">
-                          <div className="flex items-center gap-3">
-                            <span className="text-primary/40">{opt.icon}</span>
-                            <span>{opt.label}</span>
-                          </div>
-                          <Plus size={14} className="text-gray-300 group-hover:text-primary transition-all group-hover:rotate-90 duration-300" />
-                        </div>
-                      ))}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
+              <IssueSystemParametersPanel
+                projectId={projectId}
+                parentIssueId={parentIssueId}
+                dependencies={dependencies}
+                watcherIds={watcherIds}
+                integrationRefs={integrationRefs}
+                onParentIssueIdChange={setParentIssueId}
+                onDependenciesChange={setDependencies}
+                onWatcherIdsChange={setWatcherIds}
+                onIntegrationRefsChange={setIntegrationRefs}
+              />
 
             </div>
           </div>

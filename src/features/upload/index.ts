@@ -1,7 +1,10 @@
 export { uploadService } from './services/uploadService';
+export { AttachmentMediaPreview } from './components/AttachmentMediaPreview';
 export {
   usePresignUploadFile,
   usePresignUploadFiles,
+  useOpenViewUploadUrl,
+  useViewUploadUrl,
   useUploadFile,
   useUploadFiles,
   useUploadPreparedFile,
@@ -20,5 +23,6 @@ export type {
   UploadProgress,
   UploadProgressUpdate,
   UploadStatus,
+  ViewUploadUrlResponse,
   UploadedFileReference,
 } from './types';

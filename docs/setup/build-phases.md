@@ -750,6 +750,10 @@ X-Workspace-Id: <workspaceId>
 
 **Dependency:** Phase 4 (projects must exist to contain issues)
 
+Frontend/backend contract reference:
+
+- [phase5-backend-contract.md](./phase5-backend-contract.md)
+
 ### 5.1 Routes
 
 ```

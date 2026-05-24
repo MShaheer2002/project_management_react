@@ -1,14 +1,18 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Controller, useForm } from 'react-hook-form';
 import { Modal } from '@/components/modals/Modal';
 import { useApp } from '@/AppContext';
-import { MOCK_PROJECTS, MOCK_USERS, ISSUE_TYPE_CONFIG } from '@/constants';
-import { Priority, IssueType, Severity, Issue } from '@/types';
-import { Tag, Paperclip, ChevronDown, Loader2, CheckSquare, Bug, Zap } from 'lucide-react';
+import { ISSUE_TYPE_CONFIG } from '@/constants';
+import { Priority, IssueType, Severity, IssueAttachment } from '@/types';
+import { Tag, ChevronDown, Loader2, CheckSquare, Bug, Zap } from 'lucide-react';
+import { getApiErrorMessage } from '@shared/services';
+import { useProjectOptions } from '@features/projects';
+import { useWorkspaceMemberOptions } from '@features/workspace';
 import { RichTextEditor } from '@/components/RichTextEditor';
-import { generateNextIssueId, saveCreatedIssue } from '@/lib/issue-storage';
+import { IssueAttachmentsField } from './IssueAttachmentsField';
+import { useCreateIssue } from '../hooks/useIssueData';
 
 const issueSchema = z.object({
   title: z.string().min(1, 'Title is required').max(100, 'Title is too long'),
@@ -25,6 +29,21 @@ type IssueFormData = z.infer<typeof issueSchema>;
 
 export const CreateIssueModal: React.FC = () => {
   const { activeModal, setActiveModal, showToast } = useApp();
+  const [attachments, setAttachments] = useState<IssueAttachment[]>([]);
+  const projectOptionsQuery = useProjectOptions({
+    sort: 'name:asc',
+    limit: 100,
+  });
+  const assigneeOptionsQuery = useWorkspaceMemberOptions(
+    {
+      sort: 'name:asc',
+      limit: 100,
+    },
+    { enabled: activeModal === 'create-issue' }
+  );
+  const createIssue = useCreateIssue();
+  const projectOptions = projectOptionsQuery.data?.pages.flatMap((page) => page.items) ?? [];
+  const assigneeOptions = assigneeOptionsQuery.data?.pages.flatMap((page) => page.items) ?? [];
   
   const {
     register,
@@ -37,7 +56,7 @@ export const CreateIssueModal: React.FC = () => {
   } = useForm<IssueFormData>({
     resolver: zodResolver(issueSchema),
     defaultValues: {
-      projectId: MOCK_PROJECTS[0].id,
+      projectId: '',
       priority: 'medium',
       assigneeId: '',
       title: '',
@@ -50,40 +69,51 @@ export const CreateIssueModal: React.FC = () => {
 
   const selectedType = watch('type');
 
-  const onSubmit = async (data: IssueFormData) => {
-    // Simulate API call
-    console.log('Submitting issue:', data);
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    const now = new Date().toISOString();
-    const newIssue: Issue = {
-      id: generateNextIssueId(),
-      title: data.title,
-      description: data.description || '',
-      type: data.type,
-      status: 'todo',
-      priority: data.priority,
-      assigneeId: data.assigneeId || undefined,
-      creatorId: MOCK_USERS[0].id,
-      projectId: data.projectId,
-      teamId: MOCK_PROJECTS.find(p => p.id === data.projectId)?.teamId || '',
-      labels: [],
-      createdAt: now,
-      updatedAt: now,
-      subtasks: [],
-      severity: data.severity,
-    };
+  React.useEffect(() => {
+    if (projectOptions.length === 0) return;
+    if (watch('projectId')) return;
+    setValue('projectId', projectOptions[0].id, { shouldValidate: true });
+  }, [projectOptions, setValue, watch]);
 
-    saveCreatedIssue(newIssue);
-    showToast('Issue added successfully');
-    setActiveModal(null);
-    reset();
+  const onSubmit = async (data: IssueFormData) => {
+    try {
+      await createIssue.mutateAsync({
+        title: data.title,
+        description: data.description || '',
+        type: data.type,
+        status: 'todo',
+        priority: data.priority,
+        assigneeId: data.assigneeId || null,
+        projectId: data.projectId,
+        severity: data.type === 'bug' ? data.severity : undefined,
+        dueDate: data.dueDate || null,
+        attachments: attachments.map((attachment) => ({
+          fileName: attachment.fileName,
+          contentType: attachment.contentType,
+          size: attachment.size,
+          kind: attachment.kind,
+          key: attachment.key,
+          assetUrl: attachment.assetUrl ?? null,
+          reference: attachment.reference,
+        })),
+      });
+
+      showToast('Issue added successfully');
+      setActiveModal(null);
+      reset();
+      setAttachments([]);
+    } catch (error) {
+      showToast(getApiErrorMessage(error) || 'Failed to create issue.', 'error');
+    }
   };
 
   return (
     <Modal
       isOpen={activeModal === 'create-issue'}
-      onClose={() => setActiveModal(null)}
+      onClose={() => {
+        setActiveModal(null);
+        setAttachments([]);
+      }}
       title="Create new issue"
       maxWidth="max-w-xl"
     >
@@ -170,8 +200,10 @@ export const CreateIssueModal: React.FC = () => {
                 {...register('projectId')}
                 className="w-full pl-3 pr-10 py-2 bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-border-dark rounded-lg outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm appearance-none"
               >
-                {MOCK_PROJECTS.map(p => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
+                {projectOptions.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                  </option>
                 ))}
               </select>
               <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
@@ -212,8 +244,10 @@ export const CreateIssueModal: React.FC = () => {
                 className="w-full pl-3 pr-10 py-2 bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-border-dark rounded-lg outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm appearance-none"
               >
                 <option value="">Unassigned</option>
-                {MOCK_USERS.map(u => (
-                  <option key={u.id} value={u.id}>{u.name}</option>
+                {assigneeOptions.map((member) => (
+                  <option key={member.id} value={member.id}>
+                    {member.name}
+                  </option>
                 ))}
               </select>
               <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
@@ -221,12 +255,11 @@ export const CreateIssueModal: React.FC = () => {
           </div>
         </div>
 
+        <IssueAttachmentsField value={attachments} onChange={setAttachments} />
+
         <div className="flex items-center gap-3 pt-4 border-t border-gray-100 dark:border-border-dark">
           <button type="button" className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-white/5 text-gray-400 hover:text-primary transition-colors">
             <Tag size={18} />
-          </button>
-          <button type="button" className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-white/5 text-gray-400 hover:text-primary transition-colors">
-            <Paperclip size={18} />
           </button>
           
           <div className="flex-1" />

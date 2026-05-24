@@ -3,6 +3,7 @@ export type Status = 'backlog' | 'todo' | 'in-progress' | 'review' | 'done';
 export type UserRole = 'owner' | 'admin' | 'member' | 'guest';
 export type IssueType = 'task' | 'bug' | 'issue';
 export type Severity = 'low' | 'medium' | 'high';
+export type IssueDependencyRelation = 'blocks' | 'blocked-by' | 'related';
 
 export interface User {
   id: string;
@@ -28,8 +29,71 @@ export interface IssueSubtask {
   order: number;
 }
 
+export interface IssueDependency {
+  issueId: string;
+  relation: IssueDependencyRelation;
+}
+
+export interface IssueIntegrationRef {
+  id: string;
+  provider: 'github' | 'jira' | 'slack' | 'notion' | 'custom';
+  label?: string;
+  externalId?: string;
+  url?: string;
+}
+
+export interface IssueAttachment {
+  id: string;
+  fileName: string;
+  contentType: string;
+  size: number;
+  kind: 'attachment' | 'video';
+  key: string;
+  assetUrl?: string | null;
+  reference: string;
+}
+
+export interface IssueUserSummary {
+  id: string;
+  name: string;
+  email: string;
+  avatar?: string | null;
+}
+
+export interface IssueEntitySummary {
+  id: string;
+  name: string;
+}
+
+export interface IssueDepartmentSummary {
+  id: string;
+  name: string;
+  color?: string | null;
+}
+
+export interface IssueParentSummary {
+  id: string;
+  title: string;
+  status: Status;
+  projectId: string;
+}
+
+export interface IssueSubtaskStats {
+  total: number;
+  completed: number;
+}
+
+export interface IssueWatcher {
+  id: string;
+  name: string;
+  email: string;
+  avatar?: string | null;
+  role: 'OWNER' | 'ADMIN' | 'MEMBER' | 'GUEST';
+}
+
 export interface Issue {
   id: string;
+  entityId?: string;
   title: string;
   description: string;
   status: Status;
@@ -58,6 +122,22 @@ export interface Issue {
   acceptanceCriteria?: string;
   relatedIssues?: string[];
   notes?: string;
+
+  // Future system parameters
+  parentIssueId?: string;
+  parent?: IssueParentSummary | null;
+  dependencies?: IssueDependency[];
+  watcherIds?: string[];
+  watchers?: IssueWatcher[];
+  integrationRefs?: IssueIntegrationRef[];
+  attachments?: IssueAttachment[];
+  attachmentCount?: number;
+  subtaskStats?: IssueSubtaskStats;
+  creator?: IssueUserSummary;
+  assignee?: IssueUserSummary | null;
+  project?: IssueEntitySummary;
+  team?: IssueEntitySummary;
+  department?: IssueDepartmentSummary | null;
 }
 
 export interface Project {

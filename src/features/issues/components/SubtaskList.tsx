@@ -26,8 +26,13 @@ import {
   CheckSquare
 } from 'lucide-react';
 import { IssueSubtask, Issue } from '../../../types';
-import { updateStoredIssue } from '../../../lib/issue-storage';
 import { useApp } from '../../../AppContext';
+import {
+  useCreateIssueSubtask,
+  useDeleteIssueSubtask,
+  useReorderIssueSubtasks,
+  useUpdateIssueSubtask,
+} from '../hooks/useIssueData';
 
 interface SubtaskItemProps {
   subtask: IssueSubtask;
@@ -142,64 +147,78 @@ export const SubtaskList: React.FC<SubtaskListProps> = ({ issue }) => {
   const { showToast } = useApp();
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
   const [isAdding, setIsAdding] = useState(false);
+  const issueResourceId = issue.entityId ?? issue.id;
+  const createSubtask = useCreateIssueSubtask(issueResourceId);
+  const updateSubtask = useUpdateIssueSubtask(issueResourceId);
+  const deleteSubtask = useDeleteIssueSubtask(issueResourceId);
+  const reorderSubtasks = useReorderIssueSubtasks(issueResourceId);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
-  const handleToggle = (id: string) => {
-    const updatedSubtasks = issue.subtasks.map(s => 
-      s.id === id ? { ...s, completed: !s.completed } : s
-    );
-    
-    const updatedIssue = { ...issue, subtasks: updatedSubtasks, updatedAt: new Date().toISOString() };
-    updateStoredIssue(updatedIssue);
+  const handleToggle = async (id: string) => {
+    const target = issue.subtasks.find((subtask) => subtask.id === id);
+    if (!target) return;
 
-    const isAllCompleted = updatedSubtasks.every(s => s.completed);
-    if (isAllCompleted && issue.status !== 'done') {
-      showToast('All subtasks completed! Suggest marking issue as Done.', 'info');
+    try {
+      await updateSubtask.mutateAsync({
+        subtaskId: id,
+        input: { completed: !target.completed },
+      });
+
+      const updatedSubtasks = issue.subtasks.map((subtask) =>
+        subtask.id === id ? { ...subtask, completed: !target.completed } : subtask
+      );
+
+      const isAllCompleted = updatedSubtasks.every((subtask) => subtask.completed);
+      if (isAllCompleted && issue.status !== 'done') {
+        showToast('All subtasks completed! Suggest marking issue as Done.', 'info');
+      }
+    } catch {
+      showToast('Failed to update subtask.', 'error');
     }
   };
 
-  const handleDelete = (id: string) => {
-    const updatedSubtasks = issue.subtasks.filter(s => s.id !== id);
-    const updatedIssue = { ...issue, subtasks: updatedSubtasks, updatedAt: new Date().toISOString() };
-    updateStoredIssue(updatedIssue);
+  const handleDelete = async (id: string) => {
+    try {
+      await deleteSubtask.mutateAsync(id);
+    } catch {
+      showToast('Failed to delete subtask.', 'error');
+    }
   };
 
-  const handleUpdate = (id: string, title: string) => {
-    const updatedSubtasks = issue.subtasks.map(s => 
-      s.id === id ? { ...s, title } : s
-    );
-    const updatedIssue = { ...issue, subtasks: updatedSubtasks, updatedAt: new Date().toISOString() };
-    updateStoredIssue(updatedIssue);
+  const handleUpdate = async (id: string, title: string) => {
+    try {
+      await updateSubtask.mutateAsync({
+        subtaskId: id,
+        input: { title },
+      });
+    } catch {
+      showToast('Failed to update subtask.', 'error');
+    }
   };
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     if (!newSubtaskTitle.trim()) {
       setIsAdding(false);
       return;
     }
 
-    const newSubtask: IssueSubtask = {
-      id: `st-${Math.random().toString(36).substr(2, 9)}`,
-      title: newSubtaskTitle.trim(),
-      completed: false,
-      order: issue.subtasks.length
-    };
-
-    const updatedIssue = { 
-      ...issue, 
-      subtasks: [...issue.subtasks, newSubtask],
-      updatedAt: new Date().toISOString()
-    };
-    updateStoredIssue(updatedIssue);
-    setNewSubtaskTitle('');
-    setIsAdding(false);
+    try {
+      await createSubtask.mutateAsync({
+        title: newSubtaskTitle.trim(),
+        order: issue.subtasks.length,
+      });
+      setNewSubtaskTitle('');
+      setIsAdding(false);
+    } catch {
+      showToast('Failed to add subtask.', 'error');
+    }
   };
 
-  const handleDragEnd = (event: DragEndEvent) => {
+  const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
     if (over && active.id !== over.id) {
       const oldIndex = issue.subtasks.findIndex(s => s.id === active.id);
@@ -210,8 +229,16 @@ export const SubtaskList: React.FC<SubtaskListProps> = ({ issue }) => {
         order: i
       }));
 
-      const updatedIssue = { ...issue, subtasks: movedSubtasks, updatedAt: new Date().toISOString() };
-      updateStoredIssue(updatedIssue);
+      try {
+        await reorderSubtasks.mutateAsync({
+          items: movedSubtasks.map((subtask) => ({
+            id: subtask.id,
+            order: subtask.order,
+          })),
+        });
+      } catch {
+        showToast('Failed to reorder subtasks.', 'error');
+      }
     }
   };
 

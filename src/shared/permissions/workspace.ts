@@ -31,3 +31,6 @@ export const canManageProject = (
   leadId: string | null | undefined
 ): boolean =>
   canCreateDepartment(role) || (Boolean(currentUserId) && currentUserId === leadId);
+
+export const canDeleteIssues = (role: WorkspaceRoleInput): boolean =>
+  role === 'owner' || role === 'admin';

@@ -263,6 +263,15 @@ Frontend handling guidance:
 - do not reuse an expired `uploadUrl`
 - if the browser reports a CORS failure, treat it as an infrastructure issue rather than a user validation issue
 
+Required bucket CORS behavior for browser uploads:
+
+- allow the frontend origin, for example `http://192.168.1.13:3001`
+- allow `OPTIONS` and `PUT`
+- allow request headers used by presigned uploads, including `Content-Type` and `x-amz-*`
+- expose `ETag` if the upload confirmation flow needs it later
+
+If the browser preflight fails with `No 'Access-Control-Allow-Origin' header`, the frontend is correct and the S3 bucket CORS policy must be fixed.
+
 ---
 
 ## 9. `assetUrl` vs `key`
@@ -299,6 +308,18 @@ So for `workspace-logo`, the frontend can only complete the full logo-save flow 
 
 - `assetUrl` is returned, or
 - the backend is later changed to store a key instead of a URL
+
+### Viewing attachments
+
+For issue attachments and other private uploads, the frontend should treat `key` as the source of truth and resolve a signed read URL only when the user wants to open the file.
+
+Recommended flow:
+
+1. store the upload `key` in the issue attachment record
+2. when the user clicks the attachment, call `GET /uploads/view-url?key=<storedKey>`
+3. open the returned short-lived `url` in a new tab
+
+`assetUrl` may still be present for legacy public objects or fallback previews, but it should not be required for the open action.
 
 ---
 

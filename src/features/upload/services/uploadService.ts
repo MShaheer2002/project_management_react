@@ -11,8 +11,18 @@ import type {
   UploadFilesInput,
   UploadPreparedFileInput,
   UploadProgress,
+  ViewUploadUrlResponse,
   UploadedFileReference,
 } from '../types';
+
+const logUploadDebug = (message: string, payload?: unknown) => {
+  if (typeof payload === 'undefined') {
+    console.log(`[UploadService] ${message}`);
+    return;
+  }
+
+  console.log(`[UploadService] ${message}`, payload);
+};
 
 const directUploadClient = axios.create({
   timeout: 120000,
@@ -76,29 +86,78 @@ const toUploadedFileReference = (preparedUpload: PreparedUpload): UploadedFileRe
 const uploadPreparedFile = async (input: UploadPreparedFileInput): Promise<UploadedFileReference> => {
   const { preparedUpload, signal, onProgress } = input;
 
-  await directUploadClient.request({
-    url: preparedUpload.instruction.uploadUrl,
+  logUploadDebug('Starting direct upload', {
+    clientId: preparedUpload.clientId,
+    fileName: preparedUpload.request.fileName,
+    kind: preparedUpload.kind,
     method: preparedUpload.instruction.method || 'PUT',
-    data: preparedUpload.file,
-    headers: buildUploadHeaders(preparedUpload.file, preparedUpload.instruction.headers),
-    signal,
-    onUploadProgress: (event) => {
-      onProgress?.(buildProgress(preparedUpload.file, event));
-    },
+    uploadUrl: preparedUpload.instruction.uploadUrl,
+    key: preparedUpload.instruction.key,
+    assetUrl: preparedUpload.instruction.assetUrl,
   });
 
-  return toUploadedFileReference(preparedUpload);
+  try {
+    await directUploadClient.request({
+      url: preparedUpload.instruction.uploadUrl,
+      method: preparedUpload.instruction.method || 'PUT',
+      data: preparedUpload.file,
+      headers: buildUploadHeaders(preparedUpload.file, preparedUpload.instruction.headers),
+      signal,
+      onUploadProgress: (event) => {
+        onProgress?.(buildProgress(preparedUpload.file, event));
+      },
+    });
+  } catch (error) {
+    console.error('[UploadService] Direct upload failed', {
+      clientId: preparedUpload.clientId,
+      fileName: preparedUpload.request.fileName,
+      key: preparedUpload.instruction.key,
+      error,
+    });
+    throw error;
+  }
+
+  const uploadedReference = toUploadedFileReference(preparedUpload);
+
+  logUploadDebug('Direct upload completed', uploadedReference);
+
+  return uploadedReference;
+};
+
+const getViewUrl = async (key: string): Promise<ViewUploadUrlResponse> => {
+  const trimmedKey = key.trim();
+
+  if (!trimmedKey) {
+    throw new Error('Attachment key is required.');
+  }
+
+  logUploadDebug('Requesting view URL', { key: trimmedKey });
+
+  const { data } = await privateApi.get<ApiResponse<ViewUploadUrlResponse>>('/uploads/view-url', {
+    params: { key: trimmedKey },
+  });
+
+  logUploadDebug('Received view URL', {
+    key: data.data.key,
+    expiresIn: data.data.expiresIn,
+  });
+
+  return data.data;
 };
 
 const presignFile = async (input: UploadFileSelection): Promise<PreparedUpload> => {
   const clientId = buildClientId(input.clientId);
   const request = buildPresignRequest(input);
+  logUploadDebug('Requesting presigned upload URL', {
+    clientId,
+    request,
+  });
   const { data } = await privateApi.post<ApiResponse<PresignedUploadInstruction>>(
     '/uploads/presigned-url',
     request
   );
 
-  return {
+  const preparedUpload = {
     clientId,
     file: input.file,
     kind: input.kind,
@@ -108,6 +167,16 @@ const presignFile = async (input: UploadFileSelection): Promise<PreparedUpload> 
       clientId,
     },
   };
+
+  logUploadDebug('Received presigned upload URL', {
+    clientId,
+    uploadUrl: preparedUpload.instruction.uploadUrl,
+    method: preparedUpload.instruction.method,
+    key: preparedUpload.instruction.key,
+    assetUrl: preparedUpload.instruction.assetUrl,
+  });
+
+  return preparedUpload;
 };
 
 const presignFiles = async (files: UploadFileSelection[]): Promise<PreparedUpload[]> => {
@@ -125,6 +194,8 @@ const presignFiles = async (files: UploadFileSelection[]): Promise<PreparedUploa
     })),
   };
 
+  logUploadDebug('Requesting batch presigned upload URLs', request);
+
   const { data } = await privateApi.post<ApiResponse<PresignedUploadInstruction[]>>(
     '/uploads/presigned-urls',
     request
@@ -134,7 +205,7 @@ const presignFiles = async (files: UploadFileSelection[]): Promise<PreparedUploa
     data.data.map((instruction) => [instruction.clientId, instruction] as const)
   );
 
-  return selections.map((selection) => {
+  const preparedUploads = selections.map((selection) => {
     const instruction = instructionByClientId.get(selection.clientId);
 
     if (!instruction) {
@@ -149,6 +220,19 @@ const presignFiles = async (files: UploadFileSelection[]): Promise<PreparedUploa
       instruction,
     };
   });
+
+  logUploadDebug(
+    'Received batch presigned upload URLs',
+    preparedUploads.map((upload) => ({
+      clientId: upload.clientId,
+      uploadUrl: upload.instruction.uploadUrl,
+      method: upload.instruction.method,
+      key: upload.instruction.key,
+      assetUrl: upload.instruction.assetUrl,
+    }))
+  );
+
+  return preparedUploads;
 };
 
 const uploadFile = async (input: UploadFileInput): Promise<UploadedFileReference> => {
@@ -184,6 +268,7 @@ const uploadFiles = async (input: UploadFilesInput): Promise<UploadedFileReferen
 export const uploadService = {
   presignFile,
   presignFiles,
+  getViewUrl,
   uploadPreparedFile,
   uploadFile,
   uploadFiles,

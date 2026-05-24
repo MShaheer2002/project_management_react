@@ -26,7 +26,7 @@ import { useApp } from '../../AppContext';
 
 interface KanbanBoardProps {
   issues: Issue[];
-  onIssueUpdate: (issueId: string, newStatus: Status) => void;
+  onIssueUpdate: (issueId: string, newStatus: Status) => Promise<boolean> | boolean;
   onNewIssue: (status: Status) => void;
   hideNewIssueButton?: boolean;
 }
@@ -42,6 +42,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   const { setSelectedIssueId } = useApp();
   const [activeIssue, setActiveIssue] = useState<Issue | null>(null);
   const [localIssues, setLocalIssues] = useState<Issue[]>(issues);
+  const dragSnapshotRef = useRef<Issue[] | null>(null);
 
   // Sync local issues when props change
   useEffect(() => {
@@ -62,6 +63,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   const handleDragStart = useCallback((event: DragStartEvent) => {
     const { active } = event;
     const issue = localIssues.find((i) => i.id === active.id);
+    dragSnapshotRef.current = localIssues;
     if (issue) setActiveIssue(issue);
   }, [localIssues]);
 
@@ -139,13 +141,19 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
     }
   }, [localIssues]);
 
-  const handleDragEnd = useCallback((event: DragEndEvent) => {
+  const handleDragEnd = useCallback(async (event: DragEndEvent) => {
     const { active, over } = event;
     setActiveIssue(null);
     lastMouseX.current = null;
     setMouseDeltaX(0);
 
-    if (!over) return;
+    if (!over) {
+      if (dragSnapshotRef.current) {
+        setLocalIssues(dragSnapshotRef.current);
+      }
+      dragSnapshotRef.current = null;
+      return;
+    }
 
     const activeId = active.id;
     const overId = over.id;
@@ -153,7 +161,14 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
     const activeIndex = localIssues.findIndex((i) => i.id === activeId);
     const overIndex = localIssues.findIndex((i) => i.id === overId);
 
+    const snapshot = dragSnapshotRef.current ?? localIssues;
+    const activeIssueSnapshot = snapshot.find((issue) => issue.id === activeId);
     const activeIssue = localIssues[activeIndex];
+    if (!activeIssueSnapshot || !activeIssue) {
+      dragSnapshotRef.current = null;
+      return;
+    }
+
     let newStatus = activeIssue.status;
 
     if (over.data.current?.type === 'Column') {
@@ -162,12 +177,27 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
       newStatus = over.data.current.issue.status;
     }
 
-    // Notify parent of the update
-    onIssueUpdate(activeId as string, newStatus);
-
-    if (activeIndex !== overIndex) {
-      setLocalIssues((prev) => arrayMove(prev, activeIndex, overIndex));
+    if (activeIssueSnapshot.status === newStatus) {
+      if (over.data.current?.type === 'Issue' && activeIndex !== overIndex) {
+        setLocalIssues((prev) => arrayMove(prev, activeIndex, overIndex));
+      } else if (dragSnapshotRef.current) {
+        setLocalIssues(dragSnapshotRef.current);
+      }
+      dragSnapshotRef.current = null;
+      return;
     }
+
+    try {
+      const didUpdate = await onIssueUpdate(activeIssueSnapshot.entityId ?? activeIssueSnapshot.id, newStatus);
+      if (didUpdate === false && dragSnapshotRef.current) {
+        setLocalIssues(dragSnapshotRef.current);
+      }
+    } catch {
+      if (dragSnapshotRef.current) {
+        setLocalIssues(dragSnapshotRef.current);
+      }
+    }
+    dragSnapshotRef.current = null;
   }, [localIssues, onIssueUpdate]);
 
   const dropAnimation = {

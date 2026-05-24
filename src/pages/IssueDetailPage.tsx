@@ -1,39 +1,49 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { 
-  ChevronLeft, 
-  MoreHorizontal, 
-  User, 
-  Calendar, 
-  Tag, 
-  CheckCircle2, 
-  Clock, 
-  AlertCircle, 
-  Trash2, 
-  ExternalLink, 
-  ChevronDown, 
-  Send, 
-  Plus, 
-  CheckSquare, 
-  Bug, 
-  Zap,
-  MessageSquare,
-  History,
+import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import {
+  AlertCircle,
+  Bug,
+  Calendar,
+  CheckCircle2,
+  CheckSquare,
+  ChevronDown,
+  ChevronLeft,
+  Copy,
+  ExternalLink,
+  Loader2,
+  MoreHorizontal,
   Paperclip,
+  Plus,
   Share2,
-  Copy
+  Trash2,
+  User,
+  Zap,
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
-import { useApp } from '../AppContext';
-import { MOCK_ISSUES, MOCK_USERS, MOCK_PROJECTS, PRIORITY_COLORS, STATUS_LABELS, ISSUE_TYPE_CONFIG } from '../constants';
-import { Status, Priority, IssueType, Issue } from '../types';
-import { getStoredIssues, updateStoredIssue } from '../lib/issue-storage';
-import { SubtaskList } from '../features/issues/components/SubtaskList';
+import { AnimatePresence, motion } from 'motion/react';
+import { useAuthStore } from '@/app/stores/useAuthStore';
+import { useApp } from '@/AppContext';
+import { PRIORITY_COLORS, STATUS_LABELS, ISSUE_TYPE_CONFIG } from '@/constants';
+import { canDeleteIssues } from '@shared/permissions';
+import { getApiErrorCode, getApiErrorMessage } from '@shared/services';
+import { useOpenViewUploadUrl } from '@features/upload';
+import { AttachmentMediaPreview } from '@features/upload';
+import { useWorkspaceMemberOptions } from '@features/workspace';
+import {
+  IssueAttachmentsField,
+  SubtaskList,
+  useAddIssueAttachments,
+  useDeleteIssue,
+  useIssueDetail,
+  useRemoveIssueAttachment,
+  useUpdateIssue,
+  useUpdateIssueStatus,
+} from '@features/issues';
+import type { IssueAttachment, IssueType, Priority, Status } from '@/types';
 
 const TypeBadge: React.FC<{ type: IssueType }> = ({ type }) => {
   const config = ISSUE_TYPE_CONFIG[type];
   return (
-    <span className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${config.color}`}>
+    <span className={`flex items-center gap-1.5 rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${config.color}`}>
       {type === 'task' && <CheckSquare size={12} />}
       {type === 'bug' && <Bug size={12} />}
       {type === 'issue' && <Zap size={12} />}
@@ -42,39 +52,259 @@ const TypeBadge: React.FC<{ type: IssueType }> = ({ type }) => {
   );
 };
 
+const FieldLabel: React.FC<{ icon: React.ReactNode; children: React.ReactNode }> = ({ icon, children }) => (
+  <div className="flex items-center gap-2 text-gray-400">
+    {icon}
+    {children}
+  </div>
+);
+
+const AvatarFallback: React.FC<{ name: string; className?: string }> = ({ name, className = '' }) => (
+  <div className={`flex items-center justify-center rounded-full bg-primary/10 text-primary ${className}`}>
+    <span className="text-xs font-bold">{name.charAt(0).toUpperCase()}</span>
+  </div>
+);
+
+const PrioritySelect: React.FC<{
+  value: Priority;
+  disabled?: boolean;
+  onChange: (value: Priority) => void;
+}> = ({ value, disabled, onChange }) => (
+  <div className="relative group">
+    <select
+      disabled={disabled}
+      value={value}
+      onChange={(event) => onChange(event.target.value as Priority)}
+      className={`w-full cursor-pointer appearance-none rounded-lg border border-transparent bg-transparent px-2 py-1 text-xs font-medium outline-none transition-all hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60 dark:hover:bg-white/5 ${PRIORITY_COLORS[value]}`}
+    >
+      <option value="low">Low</option>
+      <option value="medium">Medium</option>
+      <option value="high">High</option>
+      <option value="urgent">Urgent</option>
+    </select>
+    <ChevronDown size={12} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 opacity-0 transition-opacity group-hover:opacity-100" />
+  </div>
+);
+
+const StatusSelect: React.FC<{
+  value: Status;
+  disabled?: boolean;
+  onChange: (value: Status) => void;
+}> = ({ value, disabled, onChange }) => (
+  <div className="relative group">
+    <select
+      disabled={disabled}
+      value={value}
+      onChange={(event) => onChange(event.target.value as Status)}
+      className="w-full cursor-pointer appearance-none rounded-lg border border-transparent bg-transparent px-2 py-1 text-xs font-medium outline-none transition-all hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60 dark:hover:bg-white/5"
+    >
+      {Object.entries(STATUS_LABELS).map(([status, label]) => (
+        <option key={status} value={status}>
+          {label}
+        </option>
+      ))}
+    </select>
+    <ChevronDown size={12} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 opacity-0 transition-opacity group-hover:opacity-100" />
+  </div>
+);
+
+const renderRichText = (value: string | undefined, fallback: string) => {
+  if (!value?.trim()) {
+    return <p className="text-base leading-relaxed text-gray-500 dark:text-gray-400">{fallback}</p>;
+  }
+
+  return (
+    <div
+      className="text-base leading-relaxed text-gray-700 dark:text-gray-300 [&_a]:text-primary [&_code]:rounded [&_code]:bg-gray-100 [&_code]:px-1 [&_code]:py-0.5 dark:[&_code]:bg-white/10"
+      dangerouslySetInnerHTML={{ __html: value }}
+    />
+  );
+};
+
 export const IssueDetailPage: React.FC = () => {
   const { issueId } = useParams<{ issueId: string }>();
   const navigate = useNavigate();
   const { showToast, setSelectedIssueId } = useApp();
-  const [activeTab, setActiveTab] = useState<'comments' | 'activity'>('comments');
-  const [comment, setComment] = useState('');
+  const currentUser = useAuthStore((state) => state.currentUser);
+  const role = useAuthStore((state) => state.workspace?.role);
 
-  // Close side panel when entering full page
+  const [activeTab, setActiveTab] = useState<'comments' | 'activity'>('comments');
+  const [isAttachmentComposerOpen, setIsAttachmentComposerOpen] = useState(false);
+  const [newAttachments, setNewAttachments] = useState<IssueAttachment[]>([]);
+
+  const issueQuery = useIssueDetail(issueId);
+  const issue = issueQuery.data;
+  const errorCode = getApiErrorCode(issueQuery.error);
+  const issueResourceId = issue?.entityId ?? issueId;
+  const assigneeOptionsQuery = useWorkspaceMemberOptions(
+    {
+      sort: 'name:asc',
+      limit: 100,
+    },
+    { enabled: Boolean(issueId) }
+  );
+  const updateIssue = useUpdateIssue(issueResourceId);
+  const updateIssueStatus = useUpdateIssueStatus(issueResourceId);
+  const deleteIssue = useDeleteIssue(issueResourceId);
+  const addIssueAttachments = useAddIssueAttachments(issueResourceId);
+  const removeIssueAttachment = useRemoveIssueAttachment(issueResourceId);
+  const openViewUploadUrl = useOpenViewUploadUrl();
+
   useEffect(() => {
     setSelectedIssueId(null);
   }, [setSelectedIssueId]);
 
-  const issue = useMemo(() => {
-    const all = [...MOCK_ISSUES, ...getStoredIssues()];
-    return all.find(i => i.id === issueId);
-  }, [issueId]);
+  useEffect(() => {
+    setNewAttachments([]);
+    setIsAttachmentComposerOpen(false);
+  }, [issue?.id]);
 
-  const project = useMemo(() => 
-    MOCK_PROJECTS.find(p => p.id === issue?.projectId), 
-  [issue?.projectId]);
+  const displayIssueId = issue?.id || issueId || '';
+  const canDelete = canDeleteIssues(role);
+  const assigneeOptions = useMemo(() => {
+    const items = assigneeOptionsQuery.data?.pages.flatMap((page) => page.items) ?? [];
+    if (!issue?.assignee) return items;
+    if (items.some((item) => item.id === issue.assignee?.id)) return items;
 
-  const assignee = useMemo(() => 
-    MOCK_USERS.find(u => u.id === issue?.assigneeId), 
-  [issue?.assigneeId]);
+    return [
+      {
+        id: issue.assignee.id,
+        name: issue.assignee.name,
+        email: issue.assignee.email,
+        role: 'MEMBER',
+      },
+      ...items,
+    ];
+  }, [assigneeOptionsQuery.data, issue?.assignee]);
 
-  if (!issue) {
+  const handleCopyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      showToast('Issue link copied.', 'success');
+    } catch {
+      showToast('Could not copy the issue link.', 'error');
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!canDelete) return;
+    const confirmed = window.confirm('Delete this issue permanently?');
+    if (!confirmed) return;
+
+    try {
+      await deleteIssue.mutateAsync();
+      showToast('Issue deleted.', 'success');
+      navigate('/issues');
+    } catch (error) {
+      showToast(getApiErrorMessage(error) || 'Failed to delete issue.', 'error');
+    }
+  };
+
+  const handleStatusChange = async (nextStatus: Status) => {
+    try {
+      await updateIssueStatus.mutateAsync(nextStatus);
+      showToast(`Status updated to ${STATUS_LABELS[nextStatus]}.`, 'success');
+    } catch (error) {
+      showToast(getApiErrorMessage(error) || 'Failed to update status.', 'error');
+    }
+  };
+
+  const handlePriorityChange = async (nextPriority: Priority) => {
+    try {
+      await updateIssue.mutateAsync({ priority: nextPriority });
+      showToast('Priority updated.', 'success');
+    } catch (error) {
+      showToast(getApiErrorMessage(error) || 'Failed to update priority.', 'error');
+    }
+  };
+
+  const handleAssigneeChange = async (nextAssigneeId: string) => {
+    try {
+      await updateIssue.mutateAsync({ assigneeId: nextAssigneeId || null });
+      showToast(nextAssigneeId ? 'Assignee updated.' : 'Issue unassigned.', 'success');
+    } catch (error) {
+      showToast(getApiErrorMessage(error) || 'Failed to update assignee.', 'error');
+    }
+  };
+
+  const handleDueDateChange = async (nextDueDate: string) => {
+    try {
+      await updateIssue.mutateAsync({ dueDate: nextDueDate || null });
+      showToast(nextDueDate ? 'Due date updated.' : 'Due date cleared.', 'success');
+    } catch (error) {
+      showToast(getApiErrorMessage(error) || 'Failed to update due date.', 'error');
+    }
+  };
+
+  const handleAddAttachments = async () => {
+    if (!issue || newAttachments.length === 0) {
+      setIsAttachmentComposerOpen(false);
+      return;
+    }
+
+    try {
+      await addIssueAttachments.mutateAsync({
+        attachments: newAttachments.map((attachment) => ({
+          fileName: attachment.fileName,
+          contentType: attachment.contentType,
+          size: attachment.size,
+          kind: attachment.kind,
+          key: attachment.key,
+          assetUrl: attachment.assetUrl ?? null,
+          reference: attachment.reference,
+        })),
+      });
+      setNewAttachments([]);
+      setIsAttachmentComposerOpen(false);
+      showToast('Attachments added.', 'success');
+    } catch (error) {
+      showToast(getApiErrorMessage(error) || 'Failed to add attachments.', 'error');
+    }
+  };
+
+  const handleRemoveAttachment = async (attachmentId: string) => {
+    try {
+      await removeIssueAttachment.mutateAsync(attachmentId);
+      showToast('Attachment removed.', 'success');
+    } catch (error) {
+      showToast(getApiErrorMessage(error) || 'Failed to remove attachment.', 'error');
+    }
+  };
+
+  const handleOpenAttachment = async (attachment: IssueAttachment) => {
+    const key = attachment.key.trim();
+
+    if (!key) {
+      if (attachment.assetUrl) {
+        window.open(attachment.assetUrl, '_blank', 'noopener,noreferrer');
+        return;
+      }
+
+      showToast('This attachment cannot be opened yet.', 'error');
+      return;
+    }
+
+    try {
+      await openViewUploadUrl(key);
+    } catch (error) {
+      showToast(getApiErrorMessage(error) || 'Failed to open attachment.', 'error');
+    }
+  };
+
+  if (issueQuery.isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-center p-8">
+      <div className="flex h-full items-center justify-center text-sm text-gray-400">
+        <Loader2 size={18} className="mr-2 animate-spin" />
+        Loading issue...
+      </div>
+    );
+  }
+
+  if (!issue || errorCode === 'ISSUE_NOT_FOUND') {
+    return (
+      <div className="flex h-full flex-col items-center justify-center px-8 text-center">
         <h1 className="text-xl font-bold">Issue not found</h1>
-        <button 
-          onClick={() => navigate(-1)}
-          className="mt-4 text-primary font-medium hover:underline flex items-center gap-2"
-        >
+        <button onClick={() => navigate(-1)} className="mt-4 flex items-center gap-2 font-medium text-primary hover:underline">
           <ChevronLeft size={16} />
           Go back
         </button>
@@ -82,117 +312,141 @@ export const IssueDetailPage: React.FC = () => {
     );
   }
 
-  const handleDelete = () => {
-    if (window.confirm('Are you sure you want to delete this issue?')) {
-      showToast('Issue deleted successfully');
-      navigate(-1);
-    }
-  };
-
-  const handleCommentSubmit = () => {
-    if (!comment.trim()) return;
-    showToast('Comment added');
-    setComment('');
-  };
+  if (issueQuery.isError) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-3 px-8 text-center">
+        <AlertCircle size={26} className="text-red-500" />
+        <div className="space-y-1">
+          <h1 className="text-lg font-bold">Failed to load issue</h1>
+          <p className="text-sm text-gray-400">The issue detail request did not complete.</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => issueQuery.refetch()}
+          className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
 
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="flex flex-col h-full bg-white dark:bg-bg-dark overflow-hidden"
+      className="flex h-full flex-col overflow-hidden bg-white dark:bg-bg-dark"
     >
-      {/* Top Navigation Bar */}
-      <header className="h-14 border-b border-gray-200 dark:border-border-dark flex items-center justify-between px-6 shrink-0 bg-white/80 dark:bg-bg-dark/80 backdrop-blur-md z-10">
-        <div className="flex items-center gap-4 min-w-0">
-          <button 
+      <header className="z-10 flex h-14 shrink-0 items-center justify-between border-b border-gray-200 bg-white/80 px-6 backdrop-blur-md dark:border-border-dark dark:bg-bg-dark/80">
+        <div className="flex min-w-0 items-center gap-4">
+          <button
             onClick={() => navigate(-1)}
-            className="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-white/5 text-gray-400 transition-colors"
+            className="rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-100 dark:hover:bg-white/5"
           >
             <ChevronLeft size={20} />
           </button>
-          <div className="flex items-center gap-2 text-xs font-medium text-gray-400 truncate">
-            <span className="hover:text-primary cursor-pointer transition-colors truncate">{project?.name || 'No Project'}</span>
+          <div className="flex min-w-0 items-center gap-2 truncate text-xs font-medium text-gray-400">
+            <span className="truncate">{issue.project?.name || 'No Project'}</span>
             <span className="shrink-0">/</span>
-            <span className="font-mono shrink-0">{issue.id}</span>
+            <span className="shrink-0 font-mono">{displayIssueId}</span>
           </div>
         </div>
+
         <div className="flex items-center gap-2">
-          <button className="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-white/5 text-gray-400 transition-colors">
+          <button
+            type="button"
+            onClick={handleCopyLink}
+            className="rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-100 dark:hover:bg-white/5"
+            title="Copy issue link"
+          >
+            <Copy size={18} />
+          </button>
+          <button
+            type="button"
+            onClick={handleCopyLink}
+            className="rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-100 dark:hover:bg-white/5"
+            title="Share issue"
+          >
             <Share2 size={18} />
           </button>
-          <div className="relative group">
-            <button className="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-white/5 text-gray-400 transition-colors">
+          {canDelete && (
+            <button
+              type="button"
+              onClick={handleDelete}
+              className="rounded-md p-1.5 text-gray-400 transition-colors hover:bg-red-500/10 hover:text-red-500"
+              title="Delete issue"
+            >
+              {deleteIssue.isPending ? <Loader2 size={18} className="animate-spin" /> : <Trash2 size={18} />}
+            </button>
+          )}
+          {!canDelete && (
+            <button
+              type="button"
+              className="rounded-md p-1.5 text-gray-300 dark:text-gray-600"
+              title="Delete is restricted to admins and owners"
+              disabled
+            >
               <MoreHorizontal size={18} />
             </button>
-            <div className="absolute right-0 top-full mt-1 w-48 bg-white dark:bg-card-dark border border-gray-200 dark:border-border-dark rounded-xl shadow-xl py-1 z-50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
-              <button 
-                onClick={handleDelete}
-                className="w-full flex items-center gap-2.5 px-3 py-2 text-sm font-medium text-red-500 hover:bg-red-500/10 transition-colors"
-              >
-                <Trash2 size={16} />
-                Delete Issue
-              </button>
-            </div>
-          </div>
+          )}
         </div>
       </header>
 
-      <div className="flex-1 flex overflow-hidden">
-        {/* Main Content Area (Left) */}
+      <div className="flex flex-1 overflow-hidden">
         <div className="flex-1 overflow-y-auto p-8 lg:p-12 scrollbar-hide">
-          <div className="max-w-3xl mx-auto space-y-10">
-            {/* Title & Type */}
+          <div className="mx-auto max-w-3xl space-y-10">
             <div className="space-y-6">
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
                 <TypeBadge type={issue.type || 'task'} />
-                <div className="flex items-center gap-2 text-xs text-gray-400 font-medium">
+                <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-gray-400">
                   <span>Created by</span>
                   <div className="flex items-center gap-1.5 text-gray-900 dark:text-gray-100">
-                    <img src={MOCK_USERS.find(u => u.id === issue.creatorId)?.avatar} className="w-4 h-4 rounded-full" alt="" />
-                    <span>{MOCK_USERS.find(u => u.id === issue.creatorId)?.name}</span>
+                    {issue.creator?.avatar ? (
+                      <img src={issue.creator.avatar} className="h-4 w-4 rounded-full" alt={issue.creator.name} />
+                    ) : issue.creator?.name ? (
+                      <AvatarFallback name={issue.creator.name} className="h-4 w-4" />
+                    ) : null}
+                    <span>{issue.creator?.name || 'Unknown'}</span>
                   </div>
                   <span>•</span>
                   <span>{new Date(issue.createdAt).toLocaleDateString()}</span>
                 </div>
               </div>
-              <h1 className="text-3xl font-bold tracking-tight text-gray-900 dark:text-gray-100 leading-tight">
-                {issue.title}
-              </h1>
+
+              <h1 className="text-3xl font-bold tracking-tight text-gray-900 dark:text-gray-100">{issue.title}</h1>
             </div>
 
-            {/* Description */}
             <div className="space-y-4">
               <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400">Description</h3>
-              <div className="text-base text-gray-700 dark:text-gray-300 leading-relaxed min-h-[100px] p-4 -mx-4 rounded-xl hover:bg-gray-50 dark:hover:bg-white/5 transition-colors cursor-text">
-                {issue.description || 'No description provided.'}
+              <div className="rounded-xl p-4 -mx-4 transition-colors hover:bg-gray-50 dark:hover:bg-white/5">
+                {renderRichText(issue.description, 'No description provided.')}
               </div>
             </div>
 
-            {/* Dynamic Fields based on Type */}
             {issue.type === 'bug' && (
-              <div className="space-y-8 pt-8 border-t border-gray-100 dark:border-border-dark">
+              <div className="space-y-8 border-t border-gray-100 pt-8 dark:border-border-dark">
                 {issue.stepsToReproduce && (
                   <div className="space-y-3">
                     <h4 className="text-sm font-bold uppercase tracking-wider text-gray-400">Steps to Reproduce</h4>
-                    <div className="bg-gray-50 dark:bg-white/5 p-4 rounded-xl text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap leading-relaxed">
-                      {issue.stepsToReproduce}
+                    <div className="rounded-xl bg-gray-50 p-4 text-sm leading-relaxed text-gray-600 dark:bg-white/5 dark:text-gray-400">
+                      <p className="whitespace-pre-wrap">{issue.stepsToReproduce}</p>
                     </div>
                   </div>
                 )}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
                   {issue.expectedBehavior && (
                     <div className="space-y-3">
                       <h4 className="text-sm font-bold uppercase tracking-wider text-gray-400">Expected Behavior</h4>
-                      <div className="bg-emerald-500/5 border border-emerald-500/10 p-4 rounded-xl text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
-                        {issue.expectedBehavior}
+                      <div className="rounded-xl border border-emerald-500/10 bg-emerald-500/5 p-4 text-sm leading-relaxed text-gray-600 dark:text-gray-400">
+                        <p className="whitespace-pre-wrap">{issue.expectedBehavior}</p>
                       </div>
                     </div>
                   )}
                   {issue.actualBehavior && (
                     <div className="space-y-3">
                       <h4 className="text-sm font-bold uppercase tracking-wider text-gray-400">Actual Behavior</h4>
-                      <div className="bg-red-500/5 border border-red-500/10 p-4 rounded-xl text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
-                        {issue.actualBehavior}
+                      <div className="rounded-xl border border-red-500/10 bg-red-500/5 p-4 text-sm leading-relaxed text-gray-600 dark:text-gray-400">
+                        <p className="whitespace-pre-wrap">{issue.actualBehavior}</p>
                       </div>
                     </div>
                   )}
@@ -201,32 +455,138 @@ export const IssueDetailPage: React.FC = () => {
             )}
 
             {issue.type === 'issue' && issue.acceptanceCriteria && (
-              <div className="space-y-4 pt-8 border-t border-gray-100 dark:border-border-dark">
+              <div className="space-y-4 border-t border-gray-100 pt-8 dark:border-border-dark">
                 <h4 className="text-sm font-bold uppercase tracking-wider text-gray-400">Acceptance Criteria</h4>
-                <div className="bg-purple-500/5 border border-purple-500/10 p-4 rounded-xl text-sm text-gray-600 dark:text-gray-400 whitespace-pre-wrap leading-relaxed">
-                  {issue.acceptanceCriteria}
+                <div className="rounded-xl border border-primary/10 bg-primary/[0.04] p-4 text-sm leading-relaxed text-gray-600 dark:text-gray-400">
+                  <p className="whitespace-pre-wrap">{issue.acceptanceCriteria}</p>
                 </div>
               </div>
             )}
 
-            {/* Subtasks */}
-            <div className="pt-8 border-t border-gray-100 dark:border-border-dark">
+            <div className="space-y-4 border-t border-gray-100 pt-8 dark:border-border-dark">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-2.5">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-100 text-gray-500 dark:bg-white/[0.04] dark:text-gray-400">
+                    <Paperclip size={16} />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400">Attachments</h3>
+                    <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                      {issue.attachments.length > 0 ? `${issue.attachments.length} attached` : 'No files attached'}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setIsAttachmentComposerOpen((current) => !current)}
+                  className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-600 transition-all hover:border-gray-300 hover:bg-gray-50 dark:border-border-dark dark:bg-white/[0.03] dark:text-gray-300 dark:hover:border-white/10 dark:hover:bg-white/[0.05]"
+                >
+                  <Plus size={14} />
+                  Add files
+                </button>
+              </div>
+
+              {isAttachmentComposerOpen && (
+                <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-border-dark dark:bg-card-dark">
+                  <IssueAttachmentsField value={newAttachments} onChange={setNewAttachments} />
+                  <div className="mt-4 flex justify-end gap-3 border-t border-gray-100 pt-4 dark:border-border-dark">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNewAttachments([]);
+                        setIsAttachmentComposerOpen(false);
+                      }}
+                      className="px-3 py-2 text-sm font-medium text-gray-500"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleAddAttachments}
+                      disabled={addIssueAttachments.isPending || newAttachments.length === 0}
+                      className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
+                    >
+                      {addIssueAttachments.isPending && <Loader2 size={15} className="animate-spin" />}
+                      Save attachments
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {issue.attachments.length > 0 && (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {issue.attachments.map((attachment) => {
+                    return (
+                      <div
+                        key={attachment.id}
+                        className="rounded-xl border border-gray-200 bg-white p-3 dark:border-border-dark dark:bg-white/[0.02]"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gray-100 dark:bg-white/[0.06]">
+                            <AttachmentMediaPreview
+                              contentType={attachment.contentType}
+                              fileName={attachment.fileName}
+                              attachmentKey={attachment.key}
+                              assetUrl={attachment.assetUrl}
+                              className="h-full w-full object-cover"
+                            />
+                          </div>
+
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-semibold text-gray-800 dark:text-gray-100">
+                              {attachment.fileName}
+                            </p>
+                            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-400">
+                              <span>{(attachment.size / (1024 * 1024)).toFixed(attachment.size >= 1024 * 1024 ? 1 : 2)} MB</span>
+                              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-gray-500 dark:bg-white/[0.06]">
+                                {attachment.contentType.startsWith('video/') ? 'Video' : 'Image'}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => void handleOpenAttachment(attachment)}
+                              className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-white/[0.06] dark:hover:text-gray-200"
+                              title="Open attachment"
+                            >
+                              <ExternalLink size={16} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveAttachment(attachment.id)}
+                              disabled={removeIssueAttachment.isPending}
+                              className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-red-500/10 hover:text-red-500 disabled:opacity-50"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div className="border-t border-gray-100 pt-8 dark:border-border-dark">
               <SubtaskList issue={issue} />
             </div>
 
-            {/* Discussion & Activity Section */}
-            <div className="pt-10 space-y-8">
+            <div className="space-y-6 pt-10">
               <div className="flex gap-8 border-b border-gray-100 dark:border-border-dark">
-                <button 
+                <button
                   onClick={() => setActiveTab('comments')}
-                  className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'comments' ? 'text-primary' : 'text-gray-400 hover:text-gray-600'}`}
+                  className={`relative pb-4 text-sm font-bold transition-all ${activeTab === 'comments' ? 'text-primary' : 'text-gray-400 hover:text-gray-600'}`}
                 >
                   Discussion
                   {activeTab === 'comments' && <motion.div layoutId="activeTabDetail" className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />}
                 </button>
-                <button 
+                <button
                   onClick={() => setActiveTab('activity')}
-                  className={`pb-4 text-sm font-bold transition-all relative ${activeTab === 'activity' ? 'text-primary' : 'text-gray-400 hover:text-gray-600'}`}
+                  className={`relative pb-4 text-sm font-bold transition-all ${activeTab === 'activity' ? 'text-primary' : 'text-gray-400 hover:text-gray-600'}`}
                 >
                   Activity
                   {activeTab === 'activity' && <motion.div layoutId="activeTabDetail" className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />}
@@ -234,201 +594,92 @@ export const IssueDetailPage: React.FC = () => {
               </div>
 
               <AnimatePresence mode="wait">
-                {activeTab === 'comments' ? (
-                  <motion.div
-                    key="comments"
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    className="space-y-8"
-                  >
-                    {/* Comment Input */}
-                    <div className="flex gap-4">
-                      <img src={MOCK_USERS[0].avatar} className="w-8 h-8 rounded-full shrink-0" alt="" />
-                      <div className="flex-1 space-y-3">
-                        <textarea
-                          placeholder="Add a comment..."
-                          value={comment}
-                          onChange={(e) => setComment(e.target.value)}
-                          className="w-full bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-border-dark rounded-xl p-4 text-sm min-h-[120px] focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all resize-none"
-                        />
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <button className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-white/5 text-gray-400 transition-colors">
-                              <Paperclip size={18} />
-                            </button>
-                            <button className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-white/5 text-gray-400 transition-colors">
-                              <Plus size={18} />
-                            </button>
-                          </div>
-                          <button 
-                            onClick={handleCommentSubmit}
-                            disabled={!comment.trim()}
-                            className="flex items-center gap-2 px-6 py-2 bg-primary text-white text-sm font-bold rounded-xl hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 disabled:opacity-50 disabled:shadow-none"
-                          >
-                            <Send size={16} />
-                            Comment
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Mock Comments */}
-                    <div className="space-y-8">
-                      <div className="flex gap-4">
-                        <img src={MOCK_USERS[1].avatar} className="w-8 h-8 rounded-full shrink-0" alt="" />
-                        <div className="flex-1 space-y-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm font-bold">Sarah Chen</span>
-                            <span className="text-xs text-gray-400">2 hours ago</span>
-                          </div>
-                          <div className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
-                            I've reviewed the requirements and started the initial implementation. The core logic should be ready by tomorrow.
-                          </div>
-                          <div className="flex items-center gap-4 pt-1">
-                            <button className="text-xs font-bold text-gray-400 hover:text-primary transition-colors">Reply</button>
-                            <button className="text-xs font-bold text-gray-400 hover:text-primary transition-colors">React</button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </motion.div>
-                ) : (
-                  <motion.div
-                    key="activity"
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    className="space-y-0 relative"
-                  >
-                    {/* Vertical Line - More subtle and aesthetic */}
-                    <div className="absolute left-[7px] top-3 bottom-3 w-[1.5px] bg-gray-100 dark:bg-white/[0.06] rounded-full" />
-
-                    {[
-                      { user: 'Sarah Chen', action: 'changed status to', value: 'In Progress', time: '2h ago' },
-                      { user: 'Alex Rivera', action: 'assigned to', value: 'Sarah Chen', time: '5h ago' },
-                      { user: 'Alex Rivera', action: 'created issue', value: '', time: '1d ago' },
-                    ].map((item, i) => (
-                      <div key={i} className="flex items-start gap-6 relative pb-8 last:pb-0">
-                        {/* Timeline Node */}
-                        <div className="mt-2 w-3.5 h-3.5 rounded-full bg-white dark:bg-bg-dark border-2 border-gray-200 dark:border-white/10 shrink-0 relative z-10 flex items-center justify-center">
-                          <div className="w-1 h-1 rounded-full bg-gray-300 dark:bg-gray-600" />
-                        </div>
-                        
-                        <div className="flex-1 flex items-center justify-between pt-1">
-                          <div className="text-sm">
-                            <span className="font-bold text-gray-900 dark:text-gray-100">{item.user}</span>
-                            <span className="text-gray-400 mx-2">{item.action}</span>
-                            {item.value && <span className="font-bold text-primary">{item.value}</span>}
-                          </div>
-                          <span className="text-xs text-gray-400">{item.time}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </motion.div>
-                )}
+                <motion.div
+                  key={activeTab}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="rounded-2xl border border-dashed border-gray-200 bg-gray-50/70 p-6 text-sm text-gray-500 dark:border-border-dark dark:bg-white/[0.03] dark:text-gray-400"
+                >
+                  {activeTab === 'comments'
+                    ? 'Comments and threaded discussion are not part of Phase 5 yet.'
+                    : 'Issue activity history arrives in the next phase of backend integration.'}
+                </motion.div>
               </AnimatePresence>
             </div>
           </div>
         </div>
 
-        {/* Metadata Panel (Right) */}
-        <aside className="w-[320px] border-l border-gray-200 dark:border-border-dark bg-gray-50/30 dark:bg-black/10 overflow-y-auto hidden xl:block">
-          <div className="p-8 space-y-8">
-            <div className="space-y-6">
-              <h3 className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Properties</h3>
-              
-              <div className="space-y-6">
-                <div className="grid grid-cols-[100px_1fr] items-center gap-4">
-                  <span className="text-xs text-gray-400 flex items-center gap-2">
-                    <CheckCircle2 size={14} />
-                    Status
-                  </span>
-                  <div className="relative group">
-                    <select 
-                      value={issue.status}
-                      onChange={(e) => showToast(`Status updated to ${STATUS_LABELS[e.target.value as Status]}`)}
-                      className="w-full bg-transparent hover:bg-gray-100 dark:hover:bg-white/5 border-none rounded-lg px-2 py-1.5 text-xs font-bold outline-none appearance-none cursor-pointer transition-all"
-                    >
-                      {Object.entries(STATUS_LABELS).map(([key, label]) => (
-                        <option key={key} value={key}>{label}</option>
-                      ))}
-                    </select>
-                    <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none opacity-0 group-hover:opacity-100" />
-                  </div>
-                </div>
+        <aside className="hidden w-[320px] shrink-0 border-l border-gray-200 bg-gray-50/70 p-6 dark:border-border-dark dark:bg-black/20 xl:block">
+          <div className="space-y-6">
+            <div className="grid grid-cols-[110px_1fr] gap-y-5 text-sm">
+              <FieldLabel icon={<CheckCircle2 size={14} />}>Status</FieldLabel>
+              <StatusSelect
+                value={issue.status}
+                disabled={updateIssueStatus.isPending}
+                onChange={handleStatusChange}
+              />
 
-                <div className="grid grid-cols-[100px_1fr] items-center gap-4">
-                  <span className="text-xs text-gray-400 flex items-center gap-2">
-                    <AlertCircle size={14} />
-                    Priority
-                  </span>
-                  <div className="relative group">
-                    <select 
-                      value={issue.priority}
-                      onChange={(e) => showToast(`Priority updated to ${e.target.value}`)}
-                      className={`w-full bg-transparent hover:bg-gray-100 dark:hover:bg-white/5 border-none rounded-lg px-2 py-1.5 text-xs font-bold outline-none appearance-none cursor-pointer transition-all ${PRIORITY_COLORS[issue.priority]}`}
-                    >
-                      <option value="low">Low</option>
-                      <option value="medium">Medium</option>
-                      <option value="high">High</option>
-                      <option value="urgent">Urgent</option>
-                    </select>
-                    <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none opacity-0 group-hover:opacity-100" />
-                  </div>
-                </div>
+              <FieldLabel icon={<AlertCircle size={14} />}>Priority</FieldLabel>
+              <PrioritySelect
+                value={issue.priority}
+                disabled={updateIssue.isPending}
+                onChange={handlePriorityChange}
+              />
 
-                <div className="grid grid-cols-[100px_1fr] items-center gap-4">
-                  <span className="text-xs text-gray-400 flex items-center gap-2">
-                    <User size={14} />
-                    Assignee
-                  </span>
-                  <div className="relative group">
-                    <select 
-                      value={issue.assigneeId || ''}
-                      onChange={() => showToast(`Assignee updated`)}
-                      className="w-full bg-transparent hover:bg-gray-100 dark:hover:bg-white/5 border-none rounded-lg px-2 py-1.5 text-xs font-bold outline-none appearance-none cursor-pointer transition-all"
-                    >
-                      <option value="">Unassigned</option>
-                      {MOCK_USERS.map(u => (
-                        <option key={u.id} value={u.id}>{u.name}</option>
-                      ))}
-                    </select>
-                    <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none opacity-0 group-hover:opacity-100" />
-                  </div>
-                </div>
+              <FieldLabel icon={<User size={14} />}>Assignee</FieldLabel>
+              <div className="relative group">
+                <select
+                  disabled={updateIssue.isPending}
+                  value={issue.assigneeId || ''}
+                  onChange={(event) => handleAssigneeChange(event.target.value)}
+                  className="w-full cursor-pointer appearance-none rounded-lg border border-transparent bg-transparent px-2 py-1 text-xs font-medium outline-none transition-all hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60 dark:hover:bg-white/5"
+                >
+                  <option value="">Unassigned</option>
+                  {assigneeOptions.map((member) => (
+                    <option key={member.id} value={member.id}>
+                      {member.name}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown size={12} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 opacity-0 transition-opacity group-hover:opacity-100" />
+              </div>
 
-                <div className="grid grid-cols-[100px_1fr] items-center gap-4">
-                  <span className="text-xs text-gray-400 flex items-center gap-2">
-                    <Calendar size={14} />
-                    Due Date
-                  </span>
-                  <input 
-                    type="date"
-                    value={issue.dueDate || ''}
-                    onChange={(e) => showToast(`Due date updated`)}
-                    className="w-full bg-transparent hover:bg-gray-100 dark:hover:bg-white/5 border-none rounded-lg px-2 py-1.5 text-xs font-bold outline-none cursor-pointer transition-all"
-                  />
-                </div>
+              <FieldLabel icon={<Calendar size={14} />}>Due Date</FieldLabel>
+              <input
+                type="date"
+                value={issue.dueDate || ''}
+                onChange={(event) => handleDueDateChange(event.target.value)}
+                className="rounded-lg border border-transparent bg-transparent px-2 py-1 text-xs font-medium outline-none transition-all hover:bg-gray-100 focus:bg-white focus:ring-2 focus:ring-primary/20 dark:hover:bg-white/5 dark:focus:bg-white/5"
+              />
 
-                <div className="grid grid-cols-[100px_1fr] items-start gap-4">
-                  <span className="text-xs text-gray-400 flex items-center gap-2 mt-1.5">
-                    <Tag size={14} />
-                    Labels
-                  </span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {issue.labels.map(label => (
-                      <span key={label} className="px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-[10px] font-bold text-gray-500 hover:bg-primary/10 hover:text-primary transition-colors cursor-pointer">
-                        {label}
-                      </span>
-                    ))}
-                    <button className="p-1 rounded bg-gray-100 dark:bg-gray-800 text-gray-400 hover:text-primary transition-colors">
-                      <Plus size={10} />
-                    </button>
-                  </div>
-                </div>
+              <FieldLabel icon={<Paperclip size={14} />}>Files</FieldLabel>
+              <div className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                {issue.attachments.length} attached
               </div>
             </div>
+
+            <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-border-dark dark:bg-card-dark">
+              <h3 className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-400">Project scope</h3>
+              <div className="mt-3 space-y-2 text-sm text-gray-600 dark:text-gray-400">
+                <p>{issue.project?.name || 'No project'}</p>
+                <p>{issue.team?.name || 'No team'}</p>
+                <p>{issue.department?.name || 'No department'}</p>
+              </div>
+            </div>
+
+            {issue.labels.length > 0 && (
+              <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-border-dark dark:bg-card-dark">
+                <h3 className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-400">Labels</h3>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {issue.labels.map((label) => (
+                    <span key={label} className="rounded-full bg-gray-100 px-2 py-1 text-[10px] font-semibold text-gray-500 dark:bg-white/[0.06] dark:text-gray-300">
+                      {label}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </aside>
       </div>

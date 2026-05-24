@@ -19,11 +19,11 @@ import { useApp } from '@/AppContext';
 import { MemberPerformancePanel } from '@/components/analytics/MemberPerformancePanel';
 import { MOCK_ACTIVITIES, MOCK_ISSUES, MOCK_PROJECTS, MOCK_TEAMS, MOCK_USERS } from '@/constants';
 import { IssuesPage } from '@/features/issues/components/IssuesPage';
-import { getStoredIssues } from '@/lib/issue-storage';
 import { ActivityPage } from '@/pages/ActivityPage';
-import { buildMemberPerformanceRows, mergeIssuesById } from '@shared/analytics/memberPerformance';
+import { buildMemberPerformanceRows } from '@shared/analytics/memberPerformance';
 import { canManageTeam } from '@shared/permissions';
 import { getApiErrorCode, getApiErrorMessage, getApiFieldErrors } from '@shared/services';
+import { useIssuesDirectory } from '@features/issues';
 import { useProjectsDirectory } from '@features/projects';
 import { useWorkspaceMemberOptions } from '@features/workspace';
 import {
@@ -70,7 +70,6 @@ export const TeamDetailPage: React.FC = () => {
   const [visibility, setVisibility] = useState<'PUBLIC' | 'PRIVATE'>('PUBLIC');
   const [leadId, setLeadId] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
-  const [storedIssues, setStoredIssues] = useState<Issue[]>([]);
 
   const memberPickerRef = useRef<HTMLDivElement | null>(null);
   const leadPickerRef = useRef<HTMLDivElement | null>(null);
@@ -87,6 +86,14 @@ export const TeamDetailPage: React.FC = () => {
       teamId: id,
       sort: 'updatedAt:desc',
       limit: 24,
+    },
+    { enabled: Boolean(id) }
+  );
+  const issuesQuery = useIssuesDirectory(
+    {
+      teamId: id,
+      sort: 'updatedAt:desc',
+      limit: 100,
     },
     { enabled: Boolean(id) }
   );
@@ -133,17 +140,15 @@ export const TeamDetailPage: React.FC = () => {
     return MOCK_PROJECTS.filter((project) => project.teamId === matchedMockTeam.id);
   }, [matchedMockTeam]);
 
-  const mockIssues = useMemo(() => {
-    if (!team) return [];
-    const issues = mergeIssuesById(MOCK_ISSUES, storedIssues);
-
-    return issues.filter((issue) => {
-      if (matchedMockTeam && issue.teamId === matchedMockTeam.id) {
-        return true;
-      }
-      return issue.teamId === team.id;
+  const teamIssues = useMemo(() => {
+    const issuesById = new Map<string, Issue>();
+    issuesQuery.data?.pages.forEach((page) => {
+      page.items.forEach((issue) => {
+        issuesById.set(issue.id, issue);
+      });
     });
-  }, [matchedMockTeam, storedIssues, team]);
+    return Array.from(issuesById.values());
+  }, [issuesQuery.data]);
 
   const mockActivities = useMemo(() => {
     if (!matchedMockTeam) return [];
@@ -151,9 +156,9 @@ export const TeamDetailPage: React.FC = () => {
       (activity) =>
         activity.targetId === matchedMockTeam.id ||
         matchedMockTeam.memberIds.includes(activity.actorId) ||
-        mockIssues.some((issue) => issue.id === activity.targetId)
+        teamIssues.some((issue) => issue.id === activity.targetId)
     );
-  }, [matchedMockTeam, mockIssues]);
+  }, [matchedMockTeam, teamIssues]);
 
   useEffect(() => {
     if (!team) return;
@@ -163,21 +168,6 @@ export const TeamDetailPage: React.FC = () => {
     setLeadId(team.lead?.id ?? '');
     setFieldErrors({});
   }, [team]);
-
-  useEffect(() => {
-    setStoredIssues(getStoredIssues());
-  }, []);
-
-  useEffect(() => {
-    const onStorage = (event: StorageEvent) => {
-      if (event.key === 'created_issues') {
-        setStoredIssues(getStoredIssues());
-      }
-    };
-
-    window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
-  }, []);
 
   useEffect(() => {
     const handlePointerDown = (event: MouseEvent) => {
@@ -219,11 +209,6 @@ export const TeamDetailPage: React.FC = () => {
   );
   const teamAnalyticsRows = useMemo(() => {
     const liveSubjects = members.map((member) => {
-      const matchedMockUser =
-        MOCK_USERS.find((user) => user.email.toLowerCase() === member.email.toLowerCase()) ??
-        MOCK_USERS.find((user) => user.name.toLowerCase() === member.name.toLowerCase()) ??
-        null;
-
       return {
         id: member.id,
         name: member.name,
@@ -231,38 +216,13 @@ export const TeamDetailPage: React.FC = () => {
         avatar: member.avatar ?? null,
         roleLabel:
           member.id === team?.lead?.id ? 'Lead' : member.role.toLowerCase().replace('-', ' '),
-        assigneeIds: Array.from(
-          new Set([member.id, matchedMockUser?.id].filter((value): value is string => Boolean(value)))
-        ),
+        assigneeIds: [member.id],
       };
     });
 
-    const liveRows = buildMemberPerformanceRows(liveSubjects, mockIssues);
-    const hasCoveredAssignments = liveRows.some((row) => row.totalAssigned > 0);
-
-    if (liveRows.length > 0 && (hasCoveredAssignments || mockIssues.length === 0)) {
-      return liveRows;
-    }
-
-    const fallbackSubjects = (matchedMockTeam?.memberIds ?? [])
-      .map((memberId) => {
-        const member = MOCK_USERS.find((user) => user.id === memberId);
-        if (!member) return null;
-
-        return {
-          id: member.id,
-          name: member.name,
-          email: member.email,
-          avatar: member.avatar ?? null,
-          roleLabel: member.id === matchedMockTeam?.leadId ? 'Lead' : member.role,
-          assigneeIds: [member.id],
-        };
-      })
-      .filter((member): member is NonNullable<typeof member> => Boolean(member));
-
-    return buildMemberPerformanceRows(fallbackSubjects, mockIssues);
-  }, [matchedMockTeam, members, mockIssues, team?.lead?.id]);
-  const teamUnassignedCount = mockIssues.filter((issue) => !issue.assigneeId).length;
+    return buildMemberPerformanceRows(liveSubjects, teamIssues);
+  }, [members, team?.lead?.id, teamIssues]);
+  const teamUnassignedCount = teamIssues.filter((issue) => !issue.assigneeId).length;
 
   if (teamQuery.isLoading) {
     return (
@@ -418,7 +378,7 @@ export const TeamDetailPage: React.FC = () => {
                     </span>
                   </td>
                   <td className="px-6 py-4 text-xs font-medium text-gray-400">
-                    {new Date(member.joinedAt).toLocaleDateString()}
+                    {member.joinedAt ? new Date(member.joinedAt).toLocaleDateString() : 'Recently'}
                   </td>
                   <td className="px-6 py-4 text-right">
                     {canManage && member.id !== team.lead?.id ? (
@@ -535,7 +495,7 @@ export const TeamDetailPage: React.FC = () => {
 
   const renderIssues = () => (
     <IssuesPage
-      teamId={matchedMockTeam?.id}
+      teamId={team.id}
       title="All Issues"
       showTeamScopeBadge={false}
     />

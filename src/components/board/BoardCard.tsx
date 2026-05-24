@@ -54,15 +54,16 @@ export const BoardCard: React.FC<BoardCardProps> = ({ issue, onClick }) => {
     opacity: isDragging ? 0 : 1,
   };
 
-  const assignee = MOCK_USERS.find(u => u.id === issue.assigneeId);
-
+  const assignee = issue.assignee ?? MOCK_USERS.find(u => u.id === issue.assigneeId);
+  const subtaskTotal = issue.subtaskStats?.total ?? issue.subtasks?.length ?? 0;
+  const subtaskCompleted = issue.subtaskStats?.completed ?? issue.subtasks?.filter((s) => s.completed).length ?? 0;
   return (
     <div
       ref={setNodeRef}
       style={style}
       {...attributes}
       {...listeners}
-      onClick={() => onClick(issue.id)}
+      onClick={() => onClick(issue.entityId ?? issue.id)}
       className={`bg-white dark:bg-card-dark border border-gray-200 dark:border-border-dark rounded-xl p-4 shadow-sm hover:border-primary/30 transition-all cursor-grab active:cursor-grabbing group select-none ${
         isDragging ? 'z-50 shadow-xl scale-[1.02]' : ''
       }`}
@@ -91,10 +92,10 @@ export const BoardCard: React.FC<BoardCardProps> = ({ issue, onClick }) => {
           )}
         </div>
         <div className="flex items-center gap-2">
-          {issue.subtasks && issue.subtasks.length > 0 && (
+          {subtaskTotal > 0 && (
             <div className="flex items-center gap-1 text-[10px] text-gray-400 mr-1">
               <CheckSquare size={10} />
-              <span>{issue.subtasks.filter(s => s.completed).length}/{issue.subtasks.length}</span>
+              <span>{subtaskCompleted}/{subtaskTotal}</span>
             </div>
           )}
           {assignee ? (

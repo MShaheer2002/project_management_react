@@ -46,6 +46,12 @@ export interface PresignedUploadInstruction {
   assetUrl: string | null;
 }
 
+export interface ViewUploadUrlResponse {
+  key: string;
+  url: string;
+  expiresIn: number;
+}
+
 export interface PreparedUpload {
   clientId: string;
   file: File;

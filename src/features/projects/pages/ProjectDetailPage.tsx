@@ -22,11 +22,11 @@ import { MemberPerformancePanel } from '@/components/analytics/MemberPerformance
 import { ActivityPage } from '@/pages/ActivityPage';
 import { RoadmapPage } from '@/pages/RoadmapPage';
 import { IssuesPage } from '@/features/issues/components/IssuesPage';
-import { MOCK_ACTIVITIES, MOCK_ISSUES, MOCK_PROJECTS, MOCK_USERS } from '@/constants';
-import { getStoredIssues } from '@/lib/issue-storage';
-import { buildMemberPerformanceRows, mergeIssuesById } from '@shared/analytics/memberPerformance';
+import { MOCK_ACTIVITIES, MOCK_PROJECTS } from '@/constants';
+import { buildMemberPerformanceRows } from '@shared/analytics/memberPerformance';
 import { canManageProject } from '@shared/permissions';
 import { getApiErrorCode, getApiErrorMessage, getApiFieldErrors } from '@shared/services';
+import { useIssuesDirectory } from '@features/issues';
 import { useWorkspaceMemberOptions } from '@features/workspace';
 import {
   useAddProjectMembers,
@@ -63,7 +63,6 @@ export const ProjectDetailPage: React.FC = () => {
   const currentUserId = useAuthStore((state) => state.currentUser?.id);
 
   const [activeTab, setActiveTab] = useState<'overview' | 'issues' | 'board' | 'roadmap' | 'members' | 'activity' | 'settings'>('overview');
-  const [storedIssues, setStoredIssues] = useState<Issue[]>([]);
   const [memberSearch, setMemberSearch] = useState('');
   const [leadSearch, setLeadSearch] = useState('');
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
@@ -91,6 +90,14 @@ export const ProjectDetailPage: React.FC = () => {
     sort: 'name:asc',
     limit: 50,
   });
+  const issuesQuery = useIssuesDirectory(
+    {
+      projectId: id,
+      sort: 'updatedAt:desc',
+      limit: 100,
+    },
+    { enabled: Boolean(id) }
+  );
   const addMembers = useAddProjectMembers(id);
   const removeMember = useRemoveProjectMember(id);
   const updateProject = useUpdateProject(id);
@@ -127,15 +134,14 @@ export const ProjectDetailPage: React.FC = () => {
   }, [project]);
 
   const projectIssues = useMemo(() => {
-    if (!project) return [];
-    const allIssues = mergeIssuesById(MOCK_ISSUES, storedIssues);
-
-    return allIssues.filter((issue) => {
-      if (issue.projectId === project.id) return true;
-      if (matchedMockProject && issue.projectId === matchedMockProject.id) return true;
-      return false;
+    const issuesById = new globalThis.Map<string, Issue>();
+    issuesQuery.data?.pages.forEach((page) => {
+      page.items.forEach((issue) => {
+        issuesById.set(issue.id, issue);
+      });
     });
-  }, [matchedMockProject, project, storedIssues]);
+    return Array.from(issuesById.values());
+  }, [issuesQuery.data]);
 
   const projectActivities = useMemo(() => {
     if (!matchedMockProject) return [];
@@ -148,20 +154,13 @@ export const ProjectDetailPage: React.FC = () => {
 
   const projectAnalyticsRows = useMemo(() => {
     const subjects = members.map((member) => {
-      const matchedMockUser =
-        MOCK_USERS.find((user) => user.email.toLowerCase() === member.email.toLowerCase()) ??
-        MOCK_USERS.find((user) => user.name.toLowerCase() === member.name.toLowerCase()) ??
-        null;
-
       return {
         id: member.id,
         name: member.name,
         email: member.email,
         avatar: member.avatar ?? null,
         roleLabel: member.membershipRole === 'LEAD' ? 'Lead' : member.role.toLowerCase(),
-        assigneeIds: Array.from(
-          new Set([member.id, matchedMockUser?.id].filter((value): value is string => Boolean(value)))
-        ),
+        assigneeIds: [member.id],
       };
     });
 
@@ -186,21 +185,6 @@ export const ProjectDetailPage: React.FC = () => {
     setEnableTracking(project.features.issueTracking);
     setFieldErrors({});
   }, [project]);
-
-  useEffect(() => {
-    setStoredIssues(getStoredIssues());
-  }, []);
-
-  useEffect(() => {
-    const onStorage = (event: StorageEvent) => {
-      if (event.key === 'created_issues') {
-        setStoredIssues(getStoredIssues());
-      }
-    };
-
-    window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
-  }, []);
 
   useEffect(() => {
     const handlePointerDown = (event: MouseEvent) => {
