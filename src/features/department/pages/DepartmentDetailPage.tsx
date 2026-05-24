@@ -49,6 +49,7 @@ import {
   MOCK_TEAMS,
   MOCK_USERS,
 } from '@/constants';
+import { useProjectsDirectory } from '@features/projects';
 import { useWorkspaceMemberOptions } from '@features/workspace';
 import { useTeamsDirectory, useUpdateAnyTeam } from '@features/team';
 import { canManageDepartment } from '@shared/permissions';
@@ -154,6 +155,14 @@ export const DepartmentDetailPage: React.FC = () => {
     },
     { enabled: Boolean(id) }
   );
+  const projectsQuery = useProjectsDirectory(
+    {
+      departmentId: id,
+      sort: 'updatedAt:desc',
+      limit: 24,
+    },
+    { enabled: Boolean(id) }
+  );
   const attachableTeamsQuery = useTeamsDirectory(
     {
       q: deferredAttachTeamSearch.trim() || undefined,
@@ -188,6 +197,7 @@ export const DepartmentDetailPage: React.FC = () => {
   const department = departmentQuery.data;
   const members = membersQuery.data?.pages.flatMap((page) => page.items) ?? [];
   const relatedTeams = teamsQuery.data?.pages.flatMap((page) => page.items) ?? [];
+  const relatedProjects = projectsQuery.data?.pages.flatMap((page) => page.items) ?? [];
   const attachableTeams = (attachableTeamsQuery.data?.pages.flatMap((page) => page.items) ?? []).filter((team) => {
     if (team.department?.id === department?.id) {
       return false;
@@ -497,7 +507,7 @@ export const DepartmentDetailPage: React.FC = () => {
         />
         <StatCard
           label="Active Projects"
-          value={department.stats.projectCount || mockProjects.length}
+          value={department.stats.projectCount ?? relatedProjects.length}
           icon={<Briefcase size={20} />}
           color="#ea5fba"
         />
@@ -825,10 +835,28 @@ export const DepartmentDetailPage: React.FC = () => {
 
   const renderProjects = () => (
     <div className="grid grid-cols-1 gap-6 p-8 md:grid-cols-2 lg:grid-cols-3">
-      {mockProjects.length > 0 ? (
-        mockProjects.map((project) => (
-          <div
+      {projectsQuery.isLoading ? (
+        <div className="col-span-full flex items-center justify-center py-20 text-sm text-gray-400">
+          <Loader2 size={18} className="mr-2 animate-spin" />
+          Loading projects...
+        </div>
+      ) : projectsQuery.error ? (
+        <div className="col-span-full rounded-2xl border border-red-200 bg-red-50/80 p-6 text-sm text-red-600 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200">
+          <p>Failed to load department projects.</p>
+          <button
+            type="button"
+            onClick={() => projectsQuery.refetch()}
+            className="mt-3 rounded-lg bg-red-500 px-3 py-2 text-xs font-bold text-white"
+          >
+            Retry
+          </button>
+        </div>
+      ) : relatedProjects.length > 0 ? (
+        relatedProjects.map((project) => (
+          <button
             key={project.id}
+            type="button"
+            onClick={() => navigate(`/projects/${project.id}`)}
             className="group flex flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition-all hover:border-primary/50 dark:border-border-dark dark:bg-card-dark"
           >
             <div className="flex flex-1 flex-col p-6">
@@ -839,7 +867,7 @@ export const DepartmentDetailPage: React.FC = () => {
               </div>
               <h4 className="mb-2 text-lg font-bold transition-colors group-hover:text-primary">{project.name}</h4>
               <p className="mb-6 flex-1 line-clamp-2 text-xs font-medium text-gray-500 dark:text-gray-400">
-                {project.description}
+                {project.description || 'No description provided yet.'}
               </p>
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
@@ -847,7 +875,7 @@ export const DepartmentDetailPage: React.FC = () => {
                     {project.progress}% Done
                   </span>
                   <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-gray-400 dark:bg-gray-800">
-                    {project.issueCount} Issues
+                    {project.stats.issueCount} Issues
                   </span>
                 </div>
                 <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800">
@@ -855,13 +883,10 @@ export const DepartmentDetailPage: React.FC = () => {
                 </div>
               </div>
             </div>
-            <div
-              className="cursor-pointer border-t border-gray-100 bg-gray-50/50 px-6 py-3 text-center transition-all hover:bg-primary/5 dark:border-border-dark dark:bg-black/20"
-              onClick={() => navigate('/projects')}
-            >
+            <div className="border-t border-gray-100 bg-gray-50/50 px-6 py-3 text-center transition-all group-hover:bg-primary/5 dark:border-border-dark dark:bg-black/20">
               <span className="text-[10px] font-bold uppercase tracking-widest text-primary">Go to Project</span>
             </div>
-          </div>
+          </button>
         ))
       ) : (
         <div className="col-span-full flex flex-col items-center justify-center py-20 text-gray-400">

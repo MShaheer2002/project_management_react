@@ -21,8 +21,9 @@ import {
 // ── App pages (still in old locations — will move to features/ in Phase 2) ──
 import { DashboardPage } from '@/pages/DashboardPage';
 import { IssuesPage } from '@/features/issues/components/IssuesPage';
-import { ProjectsPage } from '@/features/projects/components/ProjectsPage';
-import { TeamsPage, TeamDetailPage } from '@features/team';
+import { ProjectsPage } from '@/features/projects/pages/ProjectsPage';
+import { TeamsPage } from '@/features/team/pages/TeamsPage';
+import { TeamDetailPage } from '@/features/team/pages/TeamDetailPage';
 import { RoadmapPage } from '@/pages/RoadmapPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { MembersPage } from '@/pages/MembersPage';
@@ -35,8 +36,9 @@ import { MarketingPage } from '@/pages/MarketingPage';
 import { CyclesPage } from '@/pages/CyclesPage';
 import { BillingPage } from '@/pages/BillingPage';
 import { ApiKeysPage } from '@/pages/ApiKeysPage';
-import { ProjectDetailPage } from '@/pages/ProjectDetailPage';
-import { DepartmentsPage, DepartmentDetailPage } from '@features/department';
+import { ProjectDetailPage } from '@/features/projects/pages/ProjectDetailPage';
+import { DepartmentsPage } from '@/features/department/pages/DepartmentsPage';
+import { DepartmentDetailPage } from '@/features/department/pages/DepartmentDetailPage';
 import { CreateIssuePage } from '@/pages/CreateIssuePage';
 import { TemplatesPage } from '@/pages/TemplatesPage';
 import { IssueDetailPage } from '@/pages/IssueDetailPage';

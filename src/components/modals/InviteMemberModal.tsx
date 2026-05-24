@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Modal } from './Modal';
 import { useApp } from '../../AppContext';
+import { useDepartmentOptions } from '@features/department';
 import { useSidebarData } from '@features/sidebar';
 import { useSendInvitation, type InvitationRole } from '@features/workspace';
 import type { ApiAxiosError } from '@shared/services/types';
@@ -18,6 +19,14 @@ export const InviteMemberModal: React.FC = () => {
 
   const teams = useMemo(() => sidebarData?.teams ?? [], [sidebarData?.teams]);
   const canInviteMembers = sidebarData?.permissions.canInviteMembers ?? false;
+  const departmentOptionsQuery = useDepartmentOptions(
+    {
+      sort: 'name:asc',
+      limit: 100,
+    },
+    { enabled: activeModal === 'invite-member' }
+  );
+  const departments = departmentOptionsQuery.data?.pages.flatMap((page) => page.items) ?? [];
 
   useEffect(() => {
     if (!teamId && teams.length > 0) {
@@ -162,15 +171,23 @@ export const InviteMemberModal: React.FC = () => {
               <select
                 value={departmentId}
                 onChange={(e) => setDepartmentId(e.target.value)}
-                disabled
+                disabled={departmentOptionsQuery.isLoading && departments.length === 0}
                 className="w-full pl-10 pr-10 py-2.5 bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-border-dark rounded-lg outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm appearance-none"
               >
                 <option value="">No Department</option>
+                {departmentOptionsQuery.isLoading && departments.length === 0 && (
+                  <option value="" disabled>Loading department...</option>
+                )}
+                {departments.map((department) => (
+                  <option key={department.id} value={department.id}>
+                    {department.name}
+                  </option>
+                ))}
               </select>
               <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
             </div>
             <p className="text-xs text-gray-400 dark:text-gray-500">
-              Department assignment will be available when the departments API is connected.
+              Optional. Defaults to no department.
             </p>
           </div>
         </div>

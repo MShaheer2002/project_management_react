@@ -5,6 +5,9 @@ type WorkspaceRoleInput = UserRole | null | undefined;
 export const canCreateTeam = (role: WorkspaceRoleInput): boolean =>
   role === 'owner' || role === 'admin' || role === 'member';
 
+export const canCreateProject = (role: WorkspaceRoleInput): boolean =>
+  canCreateTeam(role);
+
 export const canCreateDepartment = (role: WorkspaceRoleInput): boolean =>
   role === 'owner' || role === 'admin';
 
@@ -21,3 +24,10 @@ export const canManageDepartment = (
   headId: string | null | undefined
 ): boolean =>
   canCreateDepartment(role) || (Boolean(currentUserId) && currentUserId === headId);
+
+export const canManageProject = (
+  role: WorkspaceRoleInput,
+  currentUserId: string | null | undefined,
+  leadId: string | null | undefined
+): boolean =>
+  canCreateDepartment(role) || (Boolean(currentUserId) && currentUserId === leadId);

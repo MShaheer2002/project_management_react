@@ -28,11 +28,12 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../AppContext';
-import { MOCK_PROJECTS, MOCK_USERS, STATUS_LABELS, MOCK_DEPARTMENTS, MOCK_TEAMS, ISSUE_TYPE_CONFIG } from '../constants';
+import { MOCK_USERS, STATUS_LABELS, MOCK_DEPARTMENTS, MOCK_TEAMS, ISSUE_TYPE_CONFIG } from '../constants';
 import { Issue, IssueType, Priority, Status, Severity, IssueSubtask } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { RichTextEditor } from '../components/RichTextEditor';
 import { generateNextIssueId, saveCreatedIssue } from '../lib/issue-storage';
+import { useProjectOptions } from '@features/projects';
 
 interface Subtask extends IssueSubtask {
   isEditing?: boolean;
@@ -60,7 +61,7 @@ export const CreateIssuePage: React.FC = () => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [type, setType] = useState<IssueType>('task');
-  const [projectId, setProjectId] = useState(MOCK_PROJECTS[0].id);
+  const [projectId, setProjectId] = useState('');
   const [priority, setPriority] = useState<Priority>('medium');
   const [status, setStatus] = useState<Status>('todo');
   const [assigneeId, setAssigneeId] = useState<string | undefined>(undefined);
@@ -91,8 +92,13 @@ export const CreateIssuePage: React.FC = () => {
   const [showLabelDropdown, setShowLabelDropdown] = useState(false);
   const [newSubtask, setNewSubtask] = useState('');
   const labelRef = useRef<HTMLDivElement>(null);
+  const projectOptionsQuery = useProjectOptions({
+    sort: 'name:asc',
+    limit: 100,
+  });
+  const projectOptions = projectOptionsQuery.data?.pages.flatMap((page) => page.items) ?? [];
 
-  const project = MOCK_PROJECTS.find(p => p.id === projectId);
+  const project = projectOptions.find((item) => item.id === projectId);
 
   // Click outside for label dropdown
   useEffect(() => {
@@ -104,6 +110,18 @@ export const CreateIssuePage: React.FC = () => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    if (projectOptions.length === 0) return;
+
+    setProjectId((current) => {
+      if (current && projectOptions.some((option) => option.id === current)) {
+        return current;
+      }
+
+      return projectOptions[0].id;
+    });
+  }, [projectOptions]);
 
   // Validation
   const validate = () => {
@@ -219,7 +237,7 @@ export const CreateIssuePage: React.FC = () => {
         setTitle(draft.title || '');
         setDescription(draft.description || '');
         setType(draft.type || 'task');
-        setProjectId(draft.projectId || MOCK_PROJECTS[0].id);
+        setProjectId(draft.projectId || '');
         setPriority(draft.priority || 'medium');
         setStatus(draft.status || 'todo');
         setAssigneeId(draft.assigneeId || undefined);
@@ -618,10 +636,19 @@ export const CreateIssuePage: React.FC = () => {
                         className={`w-full bg-gray-50 dark:bg-white/5 border px-5 py-4 text-sm font-medium rounded-2xl outline-none appearance-none transition-all ${
                           errors.project ? 'border-red-500 bg-red-50 dark:bg-red-500/5' : 'border-transparent focus:ring-2 focus:ring-primary/20 shadow-sm group-hover:bg-gray-100 dark:group-hover:bg-white/10'
                         }`}
+                        disabled={projectOptionsQuery.isLoading || projectOptions.length === 0}
                       >
-                        {MOCK_PROJECTS.map(p => (
-                          <option key={p.id} value={p.id}>{p.name}</option>
-                        ))}
+                        {projectOptionsQuery.isLoading ? (
+                          <option value="">Loading projects...</option>
+                        ) : projectOptions.length === 0 ? (
+                          <option value="">No projects available</option>
+                        ) : (
+                          projectOptions.map((projectOption) => (
+                            <option key={projectOption.id} value={projectOption.id}>
+                              {projectOption.name}
+                            </option>
+                          ))
+                        )}
                       </select>
                       <ChevronDown size={14} className="absolute right-5 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-600 pointer-events-none group-hover:text-primary transition-colors" />
                     </div>

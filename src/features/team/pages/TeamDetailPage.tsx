@@ -24,6 +24,7 @@ import { ActivityPage } from '@/pages/ActivityPage';
 import { buildMemberPerformanceRows, mergeIssuesById } from '@shared/analytics/memberPerformance';
 import { canManageTeam } from '@shared/permissions';
 import { getApiErrorCode, getApiErrorMessage, getApiFieldErrors } from '@shared/services';
+import { useProjectsDirectory } from '@features/projects';
 import { useWorkspaceMemberOptions } from '@features/workspace';
 import {
   useAddTeamMembers,
@@ -81,6 +82,14 @@ export const TeamDetailPage: React.FC = () => {
     sort: 'name:asc',
     limit: 50,
   });
+  const projectsQuery = useProjectsDirectory(
+    {
+      teamId: id,
+      sort: 'updatedAt:desc',
+      limit: 24,
+    },
+    { enabled: Boolean(id) }
+  );
   const addMembers = useAddTeamMembers(id);
   const removeMember = useRemoveTeamMember(id);
   const updateTeam = useUpdateTeam(id);
@@ -105,6 +114,7 @@ export const TeamDetailPage: React.FC = () => {
 
   const team = teamQuery.data;
   const members = membersQuery.data?.pages.flatMap((page) => page.items) ?? [];
+  const relatedProjects = projectsQuery.data?.pages.flatMap((page) => page.items) ?? [];
   const memberOptions = memberOptionsQuery.data?.pages.flatMap((page) => page.items) ?? [];
   const leadOptions = leadOptionsQuery.data?.pages.flatMap((page) => page.items) ?? [];
   const errorCode = getApiErrorCode(teamQuery.error);
@@ -462,22 +472,41 @@ export const TeamDetailPage: React.FC = () => {
 
   const renderProjects = () => (
     <div className="grid grid-cols-1 gap-6 p-6 md:grid-cols-2 lg:grid-cols-3">
-      {mockProjects.length > 0 ? (
-        mockProjects.map((project) => (
-          <div
+      {projectsQuery.isLoading ? (
+        <div className="col-span-full flex items-center justify-center py-20 text-sm text-gray-400">
+          <Loader2 size={18} className="mr-2 animate-spin" />
+          Loading projects...
+        </div>
+      ) : projectsQuery.error ? (
+        <div className="col-span-full rounded-2xl border border-red-200 bg-red-50/80 p-6 text-sm text-red-600 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200">
+          <p>Failed to load team projects.</p>
+          <button
+            onClick={() => projectsQuery.refetch()}
+            className="mt-3 rounded-lg bg-red-500 px-3 py-2 text-xs font-bold text-white"
+          >
+            Retry
+          </button>
+        </div>
+      ) : relatedProjects.length > 0 ? (
+        relatedProjects.map((project) => (
+          <button
             key={project.id}
+            type="button"
+            onClick={() => navigate(`/projects/${project.id}`)}
             className="group cursor-pointer rounded-xl border border-gray-200 bg-white p-5 shadow-sm transition-all hover:border-primary/30 dark:border-border-dark dark:bg-card-dark"
           >
             <div className="mb-4 flex items-center justify-between">
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary transition-all group-hover:bg-primary group-hover:text-white">
                 <Layers size={20} />
               </div>
-              <button className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5">
+              <span className="rounded-md p-1.5 text-gray-400">
                 <MoreHorizontal size={16} />
-              </button>
+              </span>
             </div>
             <h3 className="mb-1 font-bold">{project.name}</h3>
-            <p className="mb-4 line-clamp-2 text-xs text-gray-400">{project.description}</p>
+            <p className="mb-4 line-clamp-2 text-xs text-gray-400">
+              {project.description || 'No description provided yet.'}
+            </p>
             <div className="space-y-2">
               <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-gray-400">
                 <span>Progress</span>
@@ -487,14 +516,18 @@ export const TeamDetailPage: React.FC = () => {
                 <div className="h-full bg-primary" style={{ width: `${project.progress}%` }} />
               </div>
             </div>
-          </div>
+            <div className="mt-4 flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-gray-400">
+              <span>{project.stats.memberCount} members</span>
+              <span>{project.stats.issueCount} issues</span>
+            </div>
+          </button>
         ))
       ) : (
         <div className="col-span-full flex flex-col items-center justify-center py-20 text-center text-gray-400">
           <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-50 dark:bg-white/5">
             <Layers size={32} className="opacity-20" />
           </div>
-          <p className="font-medium">No mock projects are attached yet.</p>
+          <p className="font-medium">No projects are attached yet.</p>
         </div>
       )}
     </div>

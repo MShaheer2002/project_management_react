@@ -1,5 +1,3 @@
-export { DepartmentsPage } from './pages/DepartmentsPage';
-export { DepartmentDetailPage } from './pages/DepartmentDetailPage';
 export {
   departmentQueryKeys,
   useAddDepartmentMembers,
