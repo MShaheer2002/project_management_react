@@ -4,18 +4,26 @@ import type { ApiPaginatedResponse, ApiResponse } from '@shared/services/types';
 import type { IssueAttachment, IssueDependency, IssueIntegrationRef, IssueSubtask } from '@/types';
 import type {
   AddIssueAttachmentsInput,
+  AddIssueCommentAttachmentsInput,
   AddIssueDependencyInput,
   AddIssueWatchersInput,
+  CreateIssueCommentInput,
   CreateIssueInput,
   CreateIssueSubtaskInput,
+  IssueActivityItem,
+  IssueCommentAttachment,
+  IssueComment,
   IssueCompactOption,
   IssueDependencyRow,
   IssueDetail,
   IssueListResult,
   IssueSummary,
   IssueWatcherRow,
+  ListIssueActivityInput,
+  ListIssueCommentsInput,
   ListIssuesInput,
   ReorderIssueSubtasksInput,
+  UpdateIssueCommentInput,
   UpdateIssueInput,
   UpdateIssueIntegrationRefsInput,
   UpdateIssueSubtaskInput,
@@ -138,6 +146,37 @@ type RawIssueDetail = RawIssueSummary & {
   integrationRefs?: RawIssueIntegrationRef[];
 };
 
+type RawIssueComment = {
+  id: string;
+  issueId: string;
+  parentId?: string | null;
+  body: string;
+  attachments?: IssueCommentAttachment[];
+  createdAt: string;
+  updatedAt: string;
+  author: {
+    id: string;
+    name?: string | null;
+    email: string;
+    avatar?: string | null;
+  };
+};
+
+type RawIssueActivityItem = {
+  id: string;
+  type: IssueActivityItem['type'];
+  message?: string;
+  description?: string;
+  createdAt: string;
+  issueId: string;
+  commentId?: string;
+  actor?: {
+    id: string;
+    name: string;
+    avatar?: string | null;
+  };
+};
+
 const normalizeSubtask = (subtask: RawIssueSubtask): IssueSubtask => ({
   id: subtask.id,
   title: subtask.title,
@@ -251,6 +290,38 @@ const normalizeIssueDetail = (issue: RawIssueDetail): IssueDetail => ({
     externalId: ref.externalId ?? undefined,
     url: ref.url ?? undefined,
   })),
+});
+
+const normalizeIssueComment = (comment: RawIssueComment): IssueComment => ({
+  id: comment.id,
+  issueId: comment.issueId,
+  parentId: comment.parentId ?? null,
+  body: comment.body,
+  attachments: comment.attachments ?? [],
+  createdAt: comment.createdAt,
+  updatedAt: comment.updatedAt,
+  author: {
+    id: comment.author.id,
+    name: comment.author.name ?? null,
+    email: comment.author.email,
+    avatar: comment.author.avatar ?? null,
+  },
+});
+
+const normalizeIssueActivityItem = (item: RawIssueActivityItem): IssueActivityItem => ({
+  id: item.id,
+  type: item.type,
+  message: item.message ?? item.description ?? '',
+  createdAt: item.createdAt,
+  issueId: item.issueId,
+  commentId: item.commentId,
+  actor: item.actor
+    ? {
+        id: item.actor.id,
+        name: item.actor.name,
+        avatar: item.actor.avatar ?? null,
+      }
+    : undefined,
 });
 
 export const issueService = {
@@ -388,5 +459,73 @@ export const issueService = {
       mutationConfig
     );
     return data.data;
+  },
+
+  listComments: async (
+    issueId: string,
+    params: ListIssueCommentsInput = {}
+  ): Promise<IssueListResult<IssueComment>> => {
+    const { data } = await privateApi.get<ApiPaginatedResponse<RawIssueComment>>(
+      `/issues/${issueId}/comments`,
+      { params }
+    );
+
+    return {
+      items: data.data.map(normalizeIssueComment),
+      meta: data.meta,
+    };
+  },
+
+  createComment: async (issueId: string, input: CreateIssueCommentInput): Promise<IssueComment> => {
+    const { data } = await privateApi.post<ApiResponse<RawIssueComment>>(
+      `/issues/${issueId}/comments`,
+      input,
+      mutationConfig
+    );
+    return normalizeIssueComment(data.data);
+  },
+
+  updateComment: async (commentId: string, input: UpdateIssueCommentInput): Promise<IssueComment> => {
+    const { data } = await privateApi.patch<ApiResponse<RawIssueComment>>(
+      `/comments/${commentId}`,
+      input,
+      mutationConfig
+    );
+    return normalizeIssueComment(data.data);
+  },
+
+  deleteComment: async (commentId: string): Promise<void> => {
+    await privateApi.delete(`/comments/${commentId}`, mutationConfig);
+  },
+
+  addCommentAttachments: async (
+    commentId: string,
+    input: AddIssueCommentAttachmentsInput
+  ): Promise<IssueCommentAttachment[]> => {
+    const { data } = await privateApi.post<ApiResponse<IssueCommentAttachment[]>>(
+      `/comments/${commentId}/attachments`,
+      input,
+      mutationConfig
+    );
+    return data.data;
+  },
+
+  removeCommentAttachment: async (commentId: string, attachmentId: string): Promise<void> => {
+    await privateApi.delete(`/comments/${commentId}/attachments/${attachmentId}`, mutationConfig);
+  },
+
+  listActivity: async (
+    issueId: string,
+    params: ListIssueActivityInput = {}
+  ): Promise<IssueListResult<IssueActivityItem>> => {
+    const { data } = await privateApi.get<ApiPaginatedResponse<RawIssueActivityItem>>(
+      `/issues/${issueId}/activity`,
+      { params }
+    );
+
+    return {
+      items: data.data.map(normalizeIssueActivityItem),
+      meta: data.meta,
+    };
   },
 };

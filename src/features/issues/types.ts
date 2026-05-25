@@ -205,3 +205,80 @@ export interface UpdateIssueInput {
   notes?: string | null;
   parentIssueId?: string | null;
 }
+
+export interface IssueCommentAuthor {
+  id: string;
+  name: string | null;
+  email: string;
+  avatar: string | null;
+}
+
+export interface IssueComment {
+  id: string;
+  issueId: string;
+  parentId: string | null;
+  body: string;
+  attachments?: IssueCommentAttachment[];
+  createdAt: string;
+  updatedAt: string;
+  author: IssueCommentAuthor;
+}
+
+export interface IssueCommentAttachment {
+  id: string;
+  key: string;
+  fileName: string;
+  contentType: string;
+  size: number;
+  kind: 'attachment' | 'video';
+  assetUrl?: string | null;
+  createdAt?: string;
+}
+
+export interface IssueCommentAttachmentInput {
+  key: string;
+  fileName: string;
+  contentType: string;
+  size: number;
+  kind: 'attachment' | 'video';
+  assetUrl?: string | null;
+}
+
+export interface CreateIssueCommentInput {
+  body: string;
+  parentId?: string | null;
+  attachments?: IssueCommentAttachmentInput[];
+}
+
+export interface UpdateIssueCommentInput {
+  body: string;
+  attachments?: IssueCommentAttachmentInput[];
+}
+
+export interface ListIssueCommentsInput {
+  cursor?: string;
+  limit?: number;
+}
+
+export interface IssueActivityItem {
+  id: string;
+  type: 'COMMENT_CREATED' | 'COMMENT_EDITED' | 'COMMENT_DELETED' | 'COMMENT_MENTIONED';
+  message: string;
+  createdAt: string;
+  actor?: {
+    id: string;
+    name: string;
+    avatar?: string | null;
+  };
+  issueId: string;
+  commentId?: string;
+}
+
+export interface ListIssueActivityInput {
+  cursor?: string;
+  limit?: number;
+}
+
+export interface AddIssueCommentAttachmentsInput {
+  attachments: IssueCommentAttachmentInput[];
+}

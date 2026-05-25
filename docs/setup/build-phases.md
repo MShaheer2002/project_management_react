@@ -844,6 +844,8 @@ modules/issue/
 
 **Dependency:** Phase 5 (issues must exist)
 
+Detailed implementation contract: [phase6-backend-contract.md](./phase6-backend-contract.md)
+
 ### 6.1 Routes
 
 ```

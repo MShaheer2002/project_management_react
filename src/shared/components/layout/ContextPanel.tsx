@@ -213,7 +213,7 @@ export const ContextPanel: React.FC = () => {
               type="date"
               value={issue?.dueDate || ''}
               onChange={(e) => showToast(`Due date updated to ${e.target.value}`)}
-              className="w-full bg-transparent hover:bg-gray-100 dark:hover:bg-white/5 border-none rounded-lg px-2 py-1 text-xs font-medium outline-none cursor-pointer transition-all"
+              className="w-full bg-transparent hover:bg-gray-100 dark:hover:bg-white/5 border-none rounded-lg px-2 py-1 text-xs font-medium outline-none cursor-pointer transition-all [color-scheme:light] dark:[color-scheme:dark]"
             />
           </div>
 

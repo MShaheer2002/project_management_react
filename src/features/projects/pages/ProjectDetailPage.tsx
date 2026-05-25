@@ -701,7 +701,7 @@ export const ProjectDetailPage: React.FC = () => {
                 type="date"
                 value={startDate}
                 onChange={(event) => setStartDate(event.target.value)}
-                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/20 dark:border-border-dark dark:bg-white/5"
+                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/20 [color-scheme:light] dark:border-border-dark dark:bg-white/5 dark:[color-scheme:dark]"
               />
             </label>
 
@@ -711,7 +711,7 @@ export const ProjectDetailPage: React.FC = () => {
                 type="date"
                 value={targetDate}
                 onChange={(event) => setTargetDate(event.target.value)}
-                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/20 dark:border-border-dark dark:bg-white/5"
+                className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/20 [color-scheme:light] dark:border-border-dark dark:bg-white/5 dark:[color-scheme:dark]"
               />
             </label>
           </div>

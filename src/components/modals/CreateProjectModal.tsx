@@ -623,7 +623,7 @@ export const CreateProjectModal: React.FC = () => {
               type="date"
               value={startDate}
               onChange={(event) => setStartDate(event.target.value)}
-              className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-border-dark dark:bg-black/20"
+              className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 [color-scheme:light] dark:border-border-dark dark:bg-black/20 dark:[color-scheme:dark]"
             />
           </div>
 
@@ -633,7 +633,7 @@ export const CreateProjectModal: React.FC = () => {
               type="date"
               value={targetDate}
               onChange={(event) => setTargetDate(event.target.value)}
-              className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-border-dark dark:bg-black/20"
+              className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 [color-scheme:light] dark:border-border-dark dark:bg-black/20 dark:[color-scheme:dark]"
             />
           </div>
         </div>

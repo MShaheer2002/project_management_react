@@ -69,6 +69,32 @@ const AVAILABLE_LABELS: Label[] = [
   { id: 'l5', name: 'Frontend', color: '#f59e0b' },
 ];
 
+const normalizeDateForInput = (value: unknown): string => {
+  if (typeof value !== 'string' || !value.trim()) return '';
+  const trimmed = value.trim();
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return trimmed;
+  }
+
+  const parsed = new Date(trimmed);
+  if (Number.isNaN(parsed.getTime())) return '';
+  return parsed.toISOString().slice(0, 10);
+};
+
+const normalizeTimeForInput = (value: unknown): string => {
+  if (typeof value !== 'string' || !value.trim()) return '12:00';
+  const trimmed = value.trim();
+
+  if (/^\d{2}:\d{2}$/.test(trimmed)) {
+    return trimmed;
+  }
+
+  const parsed = new Date(trimmed);
+  if (Number.isNaN(parsed.getTime())) return '12:00';
+  return parsed.toISOString().slice(11, 16);
+};
+
 export const CreateIssuePage: React.FC = () => {
   const { showToast } = useApp();
   const navigate = useNavigate();
@@ -111,6 +137,7 @@ export const CreateIssuePage: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [showLabelDropdown, setShowLabelDropdown] = useState(false);
+  const [showComplexityDialog, setShowComplexityDialog] = useState(false);
   const [newSubtask, setNewSubtask] = useState('');
   const labelRef = useRef<HTMLDivElement>(null);
   const projectOptionsQuery = useProjectOptions({
@@ -181,12 +208,17 @@ export const CreateIssuePage: React.FC = () => {
     const newErrors: { project?: string } = {};
     if (!projectId) newErrors.project = 'Project selection is required';
     setErrors(newErrors);
+    const parsedComplexity = Number.parseInt(estimate, 10);
+    const hasValidComplexity =
+      !Number.isNaN(parsedComplexity) && parsedComplexity >= 1 && parsedComplexity <= 5;
     if (!title.trim()) {
       showToast('Please enter an issue title', 'error');
     } else if (newErrors.project) {
       showToast('Please select a project', 'error');
+    } else if (type === 'task' && !hasValidComplexity) {
+      showToast('Please select a complexity between 1 (lowest) and 5 (highest)', 'error');
     }
-    return title.trim().length > 0 && Object.keys(newErrors).length === 0;
+    return title.trim().length > 0 && Object.keys(newErrors).length === 0 && (type !== 'task' || hasValidComplexity);
   };
 
   const handleCreate = async () => {
@@ -202,6 +234,11 @@ export const CreateIssuePage: React.FC = () => {
         .filter((label): label is string => Boolean(label));
       const cleanIntegrationRefs = integrationRefs.filter((ref) => ref.label || ref.externalId || ref.url);
 
+      const parsedComplexity = Number.parseInt(estimate, 10);
+      const normalizedComplexity = Number.isNaN(parsedComplexity)
+        ? null
+        : Math.min(5, Math.max(1, parsedComplexity));
+
       const createdIssue = await createIssue.mutateAsync({
         title: title.trim(),
         description,
@@ -213,7 +250,7 @@ export const CreateIssuePage: React.FC = () => {
         labels: selectedLabelNames,
         dueDate: dueDate || null,
         dueTime: dueTime || null,
-        estimate: estimate ? Number(estimate) : null,
+        estimate: normalizedComplexity,
         subtasks: cleanSubtasks.map((subtask) => ({
           title: subtask.title,
           order: subtask.order,
@@ -339,8 +376,8 @@ export const CreateIssuePage: React.FC = () => {
         setStatus(draft.status || 'todo');
         setAssigneeId(draft.assigneeId || undefined);
         setDepartmentId(draft.departmentId || '');
-        setDueDate(draft.dueDate || '');
-        setDueTime(draft.dueTime || '12:00');
+        setDueDate(normalizeDateForInput(draft.dueDate));
+        setDueTime(normalizeTimeForInput(draft.dueTime));
         setEstimate(draft.estimate || '');
         setSelectedLabels(draft.selectedLabels || []);
         setSubtasks(draft.subtasks || []);
@@ -404,6 +441,12 @@ export const CreateIssuePage: React.FC = () => {
     }, 5000);
     return () => clearTimeout(timer);
   }, [title, description, subtasks, saveDraft]);
+
+  useEffect(() => {
+    if (type === 'task' && !estimate) {
+      setEstimate('1');
+    }
+  }, [type, estimate]);
 
   // Shortcuts
   useEffect(() => {
@@ -883,7 +926,7 @@ export const CreateIssuePage: React.FC = () => {
                       type="date" 
                       value={dueDate}
                       onChange={(e) => setDueDate(e.target.value)}
-                      className="w-full bg-gray-50 dark:bg-white/5 border border-transparent rounded-2xl px-5 py-4 text-sm font-medium shadow-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all hover:bg-gray-100 dark:hover:bg-white/10"
+                      className="w-full bg-gray-50 dark:bg-white/5 border border-transparent rounded-2xl px-5 py-4 text-sm font-medium shadow-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all hover:bg-gray-100 [color-scheme:light] dark:hover:bg-white/10 dark:[color-scheme:dark]"
                     />
                   </div>
                   <div className="w-32 space-y-3">
@@ -894,7 +937,7 @@ export const CreateIssuePage: React.FC = () => {
                       type="time" 
                       value={dueTime}
                       onChange={(e) => setDueTime(e.target.value)}
-                      className="w-full bg-gray-50 dark:bg-white/5 border border-transparent rounded-2xl px-5 py-4 text-sm font-medium shadow-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all hover:bg-gray-100 dark:hover:bg-white/10"
+                      className="w-full bg-gray-50 dark:bg-white/5 border border-transparent rounded-2xl px-5 py-4 text-sm font-medium shadow-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all hover:bg-gray-100 [color-scheme:light] dark:hover:bg-white/10 dark:[color-scheme:dark]"
                     />
                   </div>
                 </div>
@@ -904,16 +947,16 @@ export const CreateIssuePage: React.FC = () => {
                     <label className="text-[10px] font-bold uppercase tracking-[0.15em] text-gray-400 flex items-center gap-2.5">
                       <Clock size={13} className="text-primary" /> Complexity
                     </label>
-                    <div className="relative group">
-                      <input 
-                        type="number" 
-                        placeholder="0"
-                        value={estimate}
-                        onChange={(e) => setEstimate(e.target.value)}
-                        className="w-full bg-gray-50 dark:bg-white/5 border border-transparent rounded-2xl px-5 py-4 text-sm font-medium shadow-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all hover:bg-gray-100 dark:hover:bg-white/10"
-                      />
-                      <span className="absolute right-5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-gray-400 tracking-tight">Pts</span>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowComplexityDialog(true)}
+                      className="w-full bg-gray-50 dark:bg-white/5 border border-transparent rounded-2xl px-5 py-4 text-sm font-medium shadow-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all hover:bg-gray-100 dark:hover:bg-white/10 text-left"
+                    >
+                      <span className="text-gray-900 dark:text-white">
+                        {estimate || 'Select complexity'}
+                      </span>
+                      <span className="ml-2 text-[10px] font-bold text-gray-400 tracking-tight">Pts</span>
+                    </button>
                   </div>
                   <div className="space-y-3">
                     <label className="text-[10px] font-bold uppercase tracking-[0.15em] text-gray-400 flex items-center gap-2.5">
@@ -954,6 +997,61 @@ export const CreateIssuePage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      <AnimatePresence>
+        {showComplexityDialog && (
+          <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+            <motion.button
+              type="button"
+              aria-label="Close complexity dialog"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowComplexityDialog(false)}
+              className="absolute inset-0 bg-black/45 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, y: 12, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 10, scale: 0.98 }}
+              className="relative w-full max-w-md rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-border-dark dark:bg-card-dark"
+            >
+              <div className="flex items-start justify-between border-b border-gray-100 px-4 py-4 dark:border-border-dark">
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Select complexity</h3>
+                  <p className="mt-1 text-xs text-gray-400">1 is lowest complexity, 5 is highest complexity.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowComplexityDialog(false)}
+                  className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-primary dark:hover:bg-white/10"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+              <div className="grid grid-cols-5 gap-2 p-4">
+                {[1, 2, 3, 4, 5].map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => {
+                      setEstimate(String(value));
+                      setShowComplexityDialog(false);
+                    }}
+                    className={`rounded-lg border px-3 py-3 text-sm font-bold transition-all ${
+                      estimate === String(value)
+                        ? 'border-primary bg-primary/10 text-primary'
+                        : 'border-gray-200 bg-gray-50 text-gray-700 hover:border-primary/40 hover:bg-primary/5 dark:border-border-dark dark:bg-white/5 dark:text-gray-200'
+                    }`}
+                  >
+                    {value}
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 };

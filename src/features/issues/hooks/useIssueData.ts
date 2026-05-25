@@ -8,12 +8,17 @@ import { workspaceQueryKeys } from '@features/workspace';
 import { issueService } from '../services/issueService';
 import type {
   AddIssueAttachmentsInput,
+  AddIssueCommentAttachmentsInput,
   AddIssueDependencyInput,
   AddIssueWatchersInput,
+  CreateIssueCommentInput,
   CreateIssueInput,
   CreateIssueSubtaskInput,
+  ListIssueActivityInput,
+  ListIssueCommentsInput,
   ListIssuesInput,
   ReorderIssueSubtasksInput,
+  UpdateIssueCommentInput,
   UpdateIssueInput,
   UpdateIssueIntegrationRefsInput,
   UpdateIssueSubtaskInput,
@@ -30,6 +35,10 @@ export const issueQueryKeys = {
     [...issueQueryKeys.workspace(workspaceId), 'detail', issueId] as const,
   watchers: (workspaceId: string | undefined, issueId: string | undefined) =>
     [...issueQueryKeys.detail(workspaceId, issueId), 'watchers'] as const,
+  comments: (workspaceId: string | undefined, issueId: string | undefined) =>
+    [...issueQueryKeys.detail(workspaceId, issueId), 'comments'] as const,
+  activity: (workspaceId: string | undefined, issueId: string | undefined) =>
+    [...issueQueryKeys.detail(workspaceId, issueId), 'activity'] as const,
 };
 
 const invalidateIssueRelatedQueries = (
@@ -53,6 +62,8 @@ const invalidateIssueRelatedQueries = (
   if (issueId) {
     queryClient.invalidateQueries({ queryKey: issueQueryKeys.detail(workspaceId, issueId) });
     queryClient.invalidateQueries({ queryKey: issueQueryKeys.watchers(workspaceId, issueId) });
+    queryClient.invalidateQueries({ queryKey: issueQueryKeys.comments(workspaceId, issueId) });
+    queryClient.invalidateQueries({ queryKey: issueQueryKeys.activity(workspaceId, issueId) });
   }
 
   if (related?.projectId) {
@@ -122,6 +133,46 @@ export const useIssueWatchers = (issueId: string | undefined, options?: { enable
   return useQuery({
     queryKey: issueQueryKeys.watchers(workspaceId, issueId),
     queryFn: () => issueService.listWatchers(issueId!),
+    enabled: Boolean(workspaceId && issueId) && (options?.enabled ?? true),
+  });
+};
+
+export const useIssueComments = (
+  issueId: string | undefined,
+  params: ListIssueCommentsInput = {},
+  options?: { enabled?: boolean }
+) => {
+  const workspaceId = useAuthStore((s) => s.workspace?.id);
+
+  return useInfiniteQuery({
+    queryKey: [...issueQueryKeys.comments(workspaceId, issueId), params.limit ?? 50] as const,
+    queryFn: ({ pageParam }) =>
+      issueService.listComments(issueId!, {
+        ...params,
+        cursor: pageParam || undefined,
+      }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.meta.cursor ?? undefined,
+    enabled: Boolean(workspaceId && issueId) && (options?.enabled ?? true),
+  });
+};
+
+export const useIssueActivity = (
+  issueId: string | undefined,
+  params: ListIssueActivityInput = {},
+  options?: { enabled?: boolean }
+) => {
+  const workspaceId = useAuthStore((s) => s.workspace?.id);
+
+  return useInfiniteQuery({
+    queryKey: [...issueQueryKeys.activity(workspaceId, issueId), params.limit ?? 50] as const,
+    queryFn: ({ pageParam }) =>
+      issueService.listActivity(issueId!, {
+        ...params,
+        cursor: pageParam || undefined,
+      }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.meta.cursor ?? undefined,
     enabled: Boolean(workspaceId && issueId) && (options?.enabled ?? true),
   });
 };
@@ -390,6 +441,69 @@ export const useUpdateIssueIntegrationRefsAny = () => {
       issueService.updateIntegrationRefs(issueId, input),
     onSuccess: (_data, variables) => {
       invalidateIssueRelatedQueries(queryClient, workspaceId, variables.issueId);
+    },
+  });
+};
+
+export const useCreateIssueComment = (issueId: string | undefined) => {
+  const queryClient = useQueryClient();
+  const workspaceId = useAuthStore((s) => s.workspace?.id);
+
+  return useMutation({
+    mutationFn: (input: CreateIssueCommentInput) => issueService.createComment(issueId!, input),
+    onSuccess: () => {
+      invalidateIssueRelatedQueries(queryClient, workspaceId, issueId);
+    },
+  });
+};
+
+export const useUpdateIssueComment = (issueId: string | undefined) => {
+  const queryClient = useQueryClient();
+  const workspaceId = useAuthStore((s) => s.workspace?.id);
+
+  return useMutation({
+    mutationFn: ({ commentId, input }: { commentId: string; input: UpdateIssueCommentInput }) =>
+      issueService.updateComment(commentId, input),
+    onSuccess: () => {
+      invalidateIssueRelatedQueries(queryClient, workspaceId, issueId);
+    },
+  });
+};
+
+export const useDeleteIssueComment = (issueId: string | undefined) => {
+  const queryClient = useQueryClient();
+  const workspaceId = useAuthStore((s) => s.workspace?.id);
+
+  return useMutation({
+    mutationFn: (commentId: string) => issueService.deleteComment(commentId),
+    onSuccess: () => {
+      invalidateIssueRelatedQueries(queryClient, workspaceId, issueId);
+    },
+  });
+};
+
+export const useAddIssueCommentAttachments = (issueId: string | undefined) => {
+  const queryClient = useQueryClient();
+  const workspaceId = useAuthStore((s) => s.workspace?.id);
+
+  return useMutation({
+    mutationFn: ({ commentId, input }: { commentId: string; input: AddIssueCommentAttachmentsInput }) =>
+      issueService.addCommentAttachments(commentId, input),
+    onSuccess: () => {
+      invalidateIssueRelatedQueries(queryClient, workspaceId, issueId);
+    },
+  });
+};
+
+export const useRemoveIssueCommentAttachment = (issueId: string | undefined) => {
+  const queryClient = useQueryClient();
+  const workspaceId = useAuthStore((s) => s.workspace?.id);
+
+  return useMutation({
+    mutationFn: ({ commentId, attachmentId }: { commentId: string; attachmentId: string }) =>
+      issueService.removeCommentAttachment(commentId, attachmentId),
+    onSuccess: () => {
+      invalidateIssueRelatedQueries(queryClient, workspaceId, issueId);
     },
   });
 };

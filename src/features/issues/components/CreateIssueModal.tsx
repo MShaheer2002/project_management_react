@@ -231,8 +231,7 @@ export const CreateIssueModal: React.FC = () => {
             <input
               type="date"
               {...register('dueDate')}
-              className="w-full px-3 py-2 bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-border-dark rounded-lg outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm text-[white]"
-              style={{ colorScheme: 'dark' }}
+              className="w-full px-3 py-2 bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-border-dark rounded-lg outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm [color-scheme:light] dark:[color-scheme:dark]"
             />
           </div>
 

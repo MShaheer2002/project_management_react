@@ -4,6 +4,7 @@ import {
   AlertCircle,
   Bug,
   Calendar,
+  Clock3,
   CheckCircle2,
   CheckSquare,
   ChevronDown,
@@ -27,6 +28,8 @@ import { useOpenViewUploadUrl } from '@features/upload';
 import { AttachmentMediaPreview } from '@features/upload';
 import { useWorkspaceMemberOptions } from '@features/workspace';
 import {
+  IssueActivityTimeline,
+  IssueCommentsThread,
   SubtaskList,
   useDeleteIssue,
   useIssueDetail,
@@ -52,6 +55,22 @@ const AvatarFallback: React.FC<{ name: string }> = ({ name }) => (
     <span className="text-xs font-bold">{name.charAt(0).toUpperCase()}</span>
   </div>
 );
+
+const normalizeDateForInput = (value?: string) => {
+  if (!value) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return '';
+  return parsed.toISOString().slice(0, 10);
+};
+
+const normalizeTimeForInput = (value?: string) => {
+  if (!value) return '';
+  if (/^\d{2}:\d{2}$/.test(value)) return value;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return '';
+  return parsed.toISOString().slice(11, 16);
+};
 
 export const ContextPanel: React.FC = () => {
   const { selectedIssueId, setSelectedIssueId, showToast } = useApp();
@@ -162,6 +181,15 @@ export const ContextPanel: React.FC = () => {
       showToast(dueDate ? 'Due date updated.' : 'Due date cleared.', 'success');
     } catch (error) {
       showToast(getApiErrorMessage(error) || 'Failed to update due date.', 'error');
+    }
+  };
+
+  const handleDueTimeChange = async (dueTime: string) => {
+    try {
+      await updateIssue.mutateAsync({ dueTime: dueTime || null });
+      showToast(dueTime ? 'Due time updated.' : 'Due time cleared.', 'success');
+    } catch (error) {
+      showToast(getApiErrorMessage(error) || 'Failed to update due time.', 'error');
     }
   };
 
@@ -342,10 +370,39 @@ export const ContextPanel: React.FC = () => {
               </div>
               <input
                 type="date"
-                value={issue.dueDate || ''}
+                value={normalizeDateForInput(issue.dueDate)}
                 onChange={(event) => handleDueDateChange(event.target.value)}
-                className="rounded-lg border border-transparent bg-transparent px-2 py-1 text-xs font-medium outline-none transition-all hover:bg-gray-100 focus:bg-white focus:ring-2 focus:ring-primary/20 dark:hover:bg-white/5 dark:focus:bg-white/5"
+                className="rounded-lg border border-transparent bg-transparent px-2 py-1 text-xs font-medium outline-none transition-all hover:bg-gray-100 focus:bg-white focus:ring-2 focus:ring-primary/20 [color-scheme:light] dark:hover:bg-white/5 dark:focus:bg-white/5 dark:[color-scheme:dark]"
               />
+
+              <div className="flex items-center gap-2 text-gray-400">
+                <Clock3 size={14} />
+                Due Time
+              </div>
+              <input
+                type="time"
+                value={normalizeTimeForInput(issue.dueTime)}
+                onChange={(event) => handleDueTimeChange(event.target.value)}
+                className="rounded-lg border border-transparent bg-transparent px-2 py-1 text-xs font-medium outline-none transition-all hover:bg-gray-100 focus:bg-white focus:ring-2 focus:ring-primary/20 [color-scheme:light] dark:hover:bg-white/5 dark:focus:bg-white/5 dark:[color-scheme:dark]"
+              />
+            </div>
+
+            <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-border-dark dark:bg-card-dark">
+              <h3 className="mb-3 text-[10px] font-bold uppercase tracking-wider text-gray-400">Project scope</h3>
+              <div className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
+                <p>
+                  <span className="font-semibold text-gray-500 dark:text-gray-300">Project:</span>{' '}
+                  {issue.project?.name || 'No project'}
+                </p>
+                <p>
+                  <span className="font-semibold text-gray-500 dark:text-gray-300">Team:</span>{' '}
+                  {issue.team?.name || 'No team'}
+                </p>
+                <p>
+                  <span className="font-semibold text-gray-500 dark:text-gray-300">Department:</span>{' '}
+                  {issue.department?.name || 'No department'}
+                </p>
+              </div>
             </div>
 
             {issue.assignee && (
@@ -427,11 +484,13 @@ export const ContextPanel: React.FC = () => {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
-                  className="rounded-xl border border-dashed border-gray-200 bg-gray-50/70 p-4 text-xs leading-relaxed text-gray-500 dark:border-border-dark dark:bg-white/[0.03] dark:text-gray-400"
+                  className="space-y-3"
                 >
-                  {activeTab === 'comments'
-                    ? 'Comments will be connected in the next issue phase.'
-                    : 'Activity history is not exposed by the current backend contract yet.'}
+                  {activeTab === 'comments' ? (
+                    <IssueCommentsThread issueId={issueResourceId} compact />
+                  ) : (
+                    <IssueActivityTimeline issueId={issueResourceId} compact />
+                  )}
                 </motion.div>
               </AnimatePresence>
             </div>

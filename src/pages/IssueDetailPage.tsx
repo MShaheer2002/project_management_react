@@ -4,6 +4,7 @@ import {
   AlertCircle,
   Bug,
   Calendar,
+  Clock3,
   CheckCircle2,
   CheckSquare,
   ChevronDown,
@@ -30,6 +31,8 @@ import { AttachmentMediaPreview } from '@features/upload';
 import { useWorkspaceMemberOptions } from '@features/workspace';
 import {
   IssueAttachmentsField,
+  IssueActivityTimeline,
+  IssueCommentsThread,
   SubtaskList,
   useAddIssueAttachments,
   useDeleteIssue,
@@ -119,6 +122,22 @@ const renderRichText = (value: string | undefined, fallback: string) => {
       dangerouslySetInnerHTML={{ __html: value }}
     />
   );
+};
+
+const normalizeDateForInput = (value?: string) => {
+  if (!value) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return '';
+  return parsed.toISOString().slice(0, 10);
+};
+
+const normalizeTimeForInput = (value?: string) => {
+  if (!value) return '';
+  if (/^\d{2}:\d{2}$/.test(value)) return value;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return '';
+  return parsed.toISOString().slice(11, 16);
 };
 
 export const IssueDetailPage: React.FC = () => {
@@ -233,6 +252,15 @@ export const IssueDetailPage: React.FC = () => {
       showToast(nextDueDate ? 'Due date updated.' : 'Due date cleared.', 'success');
     } catch (error) {
       showToast(getApiErrorMessage(error) || 'Failed to update due date.', 'error');
+    }
+  };
+
+  const handleDueTimeChange = async (nextDueTime: string) => {
+    try {
+      await updateIssue.mutateAsync({ dueTime: nextDueTime || null });
+      showToast(nextDueTime ? 'Due time updated.' : 'Due time cleared.', 'success');
+    } catch (error) {
+      showToast(getApiErrorMessage(error) || 'Failed to update due time.', 'error');
     }
   };
 
@@ -599,11 +627,13 @@ export const IssueDetailPage: React.FC = () => {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
-                  className="rounded-2xl border border-dashed border-gray-200 bg-gray-50/70 p-6 text-sm text-gray-500 dark:border-border-dark dark:bg-white/[0.03] dark:text-gray-400"
+                  className="space-y-4"
                 >
-                  {activeTab === 'comments'
-                    ? 'Comments and threaded discussion are not part of Phase 5 yet.'
-                    : 'Issue activity history arrives in the next phase of backend integration.'}
+                  {activeTab === 'comments' ? (
+                    <IssueCommentsThread issueId={issueResourceId} />
+                  ) : (
+                    <IssueActivityTimeline issueId={issueResourceId} />
+                  )}
                 </motion.div>
               </AnimatePresence>
             </div>
@@ -648,9 +678,17 @@ export const IssueDetailPage: React.FC = () => {
               <FieldLabel icon={<Calendar size={14} />}>Due Date</FieldLabel>
               <input
                 type="date"
-                value={issue.dueDate || ''}
+                value={normalizeDateForInput(issue.dueDate)}
                 onChange={(event) => handleDueDateChange(event.target.value)}
-                className="rounded-lg border border-transparent bg-transparent px-2 py-1 text-xs font-medium outline-none transition-all hover:bg-gray-100 focus:bg-white focus:ring-2 focus:ring-primary/20 dark:hover:bg-white/5 dark:focus:bg-white/5"
+                className="rounded-lg border border-transparent bg-transparent px-2 py-1 text-xs font-medium outline-none transition-all hover:bg-gray-100 focus:bg-white focus:ring-2 focus:ring-primary/20 [color-scheme:light] dark:hover:bg-white/5 dark:focus:bg-white/5 dark:[color-scheme:dark]"
+              />
+
+              <FieldLabel icon={<Clock3 size={14} />}>Due Time</FieldLabel>
+              <input
+                type="time"
+                value={normalizeTimeForInput(issue.dueTime)}
+                onChange={(event) => handleDueTimeChange(event.target.value)}
+                className="rounded-lg border border-transparent bg-transparent px-2 py-1 text-xs font-medium outline-none transition-all hover:bg-gray-100 focus:bg-white focus:ring-2 focus:ring-primary/20 [color-scheme:light] dark:hover:bg-white/5 dark:focus:bg-white/5 dark:[color-scheme:dark]"
               />
 
               <FieldLabel icon={<Paperclip size={14} />}>Files</FieldLabel>
@@ -662,9 +700,18 @@ export const IssueDetailPage: React.FC = () => {
             <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-border-dark dark:bg-card-dark">
               <h3 className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-400">Project scope</h3>
               <div className="mt-3 space-y-2 text-sm text-gray-600 dark:text-gray-400">
-                <p>{issue.project?.name || 'No project'}</p>
-                <p>{issue.team?.name || 'No team'}</p>
-                <p>{issue.department?.name || 'No department'}</p>
+                <p>
+                  <span className="font-semibold text-gray-500 dark:text-gray-300">Project:</span>{' '}
+                  {issue.project?.name || 'No project'}
+                </p>
+                <p>
+                  <span className="font-semibold text-gray-500 dark:text-gray-300">Team:</span>{' '}
+                  {issue.team?.name || 'No team'}
+                </p>
+                <p>
+                  <span className="font-semibold text-gray-500 dark:text-gray-300">Department:</span>{' '}
+                  {issue.department?.name || 'No department'}
+                </p>
               </div>
             </div>
 
