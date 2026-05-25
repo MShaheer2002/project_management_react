@@ -240,20 +240,7 @@ export const ProjectDetailPage: React.FC = () => {
               <p className="text-sm text-gray-400">Updated {new Date(project.updatedAt).toLocaleDateString()}</p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleInviteToProjectTeam}
-              className="p-2 rounded-lg border border-gray-200 dark:border-border-dark hover:bg-gray-50 dark:hover:bg-white/5 transition-colors"
-            >
-              <Plus size={18} />
-            </button>
-            <button 
-              onClick={() => navigate('/issues/create')}
-              className="px-4 py-2 rounded-lg bg-primary text-white text-sm font-bold hover:bg-primary/90 transition-all shadow-lg shadow-primary/20"
-            >
-              New Issue
-            </button>
-          </div>
+          <div />
         </div>
 
         <div className="flex items-center gap-6">

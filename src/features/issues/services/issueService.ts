@@ -7,6 +7,8 @@ import type {
   AddIssueCommentAttachmentsInput,
   AddIssueDependencyInput,
   AddIssueWatchersInput,
+  AttachIssueLabelsInput,
+  CreateLabelInput,
   CreateIssueCommentInput,
   CreateIssueInput,
   CreateIssueSubtaskInput,
@@ -17,12 +19,15 @@ import type {
   IssueDependencyRow,
   IssueDetail,
   IssueListResult,
+  IssueLabelRow,
   IssueSummary,
   IssueWatcherRow,
+  ListLabelsInput,
   ListIssueActivityInput,
   ListIssueCommentsInput,
   ListIssuesInput,
   ReorderIssueSubtasksInput,
+  UpdateLabelInput,
   UpdateIssueCommentInput,
   UpdateIssueInput,
   UpdateIssueIntegrationRefsInput,
@@ -107,6 +112,7 @@ type RawIssueSummary = {
   status: IssueSummary['status'];
   priority: IssueSummary['priority'];
   labels?: string[];
+  labelObjects?: IssueLabelRow[];
   dueDate?: string | null;
   dueTime?: string | null;
   createdAt: string;
@@ -134,6 +140,14 @@ type RawIssueSummary = {
   acceptanceCriteria?: string | null;
   relatedIssueKeys?: string[];
   notes?: string | null;
+};
+
+type RawLabelRow = {
+  id: string;
+  name: string;
+  color: string;
+  description?: string | null;
+  issueCount?: number;
 };
 
 type RawIssueDetail = RawIssueSummary & {
@@ -211,6 +225,7 @@ const normalizeIssueSummary = (issue: RawIssueSummary): IssueSummary => ({
   status: issue.status,
   priority: issue.priority,
   labels: issue.labels ?? [],
+  labelObjects: issue.labelObjects ?? [],
   dueDate: issue.dueDate ?? undefined,
   dueTime: issue.dueTime ?? undefined,
   createdAt: issue.createdAt,
@@ -527,5 +542,42 @@ export const issueService = {
       items: data.data.map(normalizeIssueActivityItem),
       meta: data.meta,
     };
+  },
+
+  listLabels: async (params: ListLabelsInput = {}): Promise<IssueListResult<IssueLabelRow>> => {
+    const { data } = await privateApi.get<ApiPaginatedResponse<RawLabelRow>>('/labels', {
+      params,
+    });
+
+    return {
+      items: data.data,
+      meta: data.meta,
+    };
+  },
+
+  createLabel: async (input: CreateLabelInput): Promise<IssueLabelRow> => {
+    const { data } = await privateApi.post<ApiResponse<RawLabelRow>>('/labels', input, mutationConfig);
+    return data.data;
+  },
+
+  updateLabel: async (labelId: string, input: UpdateLabelInput): Promise<IssueLabelRow> => {
+    const { data } = await privateApi.patch<ApiResponse<RawLabelRow>>(
+      `/labels/${labelId}`,
+      input,
+      mutationConfig
+    );
+    return data.data;
+  },
+
+  deleteLabel: async (labelId: string): Promise<void> => {
+    await privateApi.delete(`/labels/${labelId}`, mutationConfig);
+  },
+
+  attachIssueLabels: async (issueId: string, input: AttachIssueLabelsInput): Promise<void> => {
+    await privateApi.post(`/issues/${issueId}/labels`, input, mutationConfig);
+  },
+
+  removeIssueLabel: async (issueId: string, labelId: string): Promise<void> => {
+    await privateApi.delete(`/issues/${issueId}/labels/${labelId}`, mutationConfig);
   },
 };

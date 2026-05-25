@@ -10,6 +10,14 @@ import type {
   Status,
 } from '@/types';
 
+export interface IssueLabelRow {
+  id: string;
+  name: string;
+  color: string;
+  description?: string | null;
+  issueCount?: number;
+}
+
 export type IssueSort =
   | 'updatedAt:desc'
   | 'updatedAt:asc'
@@ -79,6 +87,7 @@ export interface IssueSummary extends Issue {
   department?: IssueDepartmentSummary | null;
   subtaskStats?: IssueSubtaskStats;
   attachmentCount?: number;
+  labelObjects?: IssueLabelRow[];
 }
 
 export interface IssueDetail extends IssueSummary {
@@ -204,6 +213,29 @@ export interface UpdateIssueInput {
   relatedIssueKeys?: string[];
   notes?: string | null;
   parentIssueId?: string | null;
+}
+
+export interface ListLabelsInput {
+  q?: string;
+  cursor?: string;
+  limit?: number;
+  sort?: 'name:asc' | 'usage:desc' | 'createdAt:desc' | 'createdAt:asc';
+}
+
+export interface CreateLabelInput {
+  name: string;
+  color: string;
+  description?: string | null;
+}
+
+export interface UpdateLabelInput {
+  name?: string;
+  color?: string;
+  description?: string | null;
+}
+
+export interface AttachIssueLabelsInput {
+  labelIds: string[];
 }
 
 export interface IssueCommentAuthor {

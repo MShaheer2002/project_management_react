@@ -25,6 +25,7 @@ import { useAuthStore } from '@/app/stores/useAuthStore';
 import { useApp } from '@/AppContext';
 import { PRIORITY_COLORS, STATUS_LABELS, ISSUE_TYPE_CONFIG } from '@/constants';
 import { canDeleteIssues } from '@shared/permissions';
+import { LabelChip } from '@shared/components/ui/LabelChip';
 import { getApiErrorCode, getApiErrorMessage } from '@shared/services';
 import { useOpenViewUploadUrl } from '@features/upload';
 import { AttachmentMediaPreview } from '@features/upload';
@@ -33,6 +34,7 @@ import {
   IssueAttachmentsField,
   IssueActivityTimeline,
   IssueCommentsThread,
+  IssueLabelsEditor,
   SubtaskList,
   useAddIssueAttachments,
   useDeleteIssue,
@@ -715,18 +717,23 @@ export const IssueDetailPage: React.FC = () => {
               </div>
             </div>
 
-            {issue.labels.length > 0 && (
-              <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-border-dark dark:bg-card-dark">
-                <h3 className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-400">Labels</h3>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {issue.labels.map((label) => (
-                    <span key={label} className="rounded-full bg-gray-100 px-2 py-1 text-[10px] font-semibold text-gray-500 dark:bg-white/[0.06] dark:text-gray-300">
-                      {label}
-                    </span>
-                  ))}
-                </div>
+            <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-border-dark dark:bg-card-dark">
+              <h3 className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-400">Labels</h3>
+              <div className="mt-3">
+                <IssueLabelsEditor
+                  issueId={issueResourceId}
+                  selectedLabels={
+                    issue.labelObjects?.length
+                      ? issue.labelObjects
+                      : issue.labels.map((label, index) => ({
+                          id: `${label}-${index}`,
+                          name: label,
+                          color: '#64748b',
+                        }))
+                  }
+                />
               </div>
-            )}
+            </div>
           </div>
         </aside>
       </div>

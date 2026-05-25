@@ -80,7 +80,6 @@ export const ProjectDetailPage: React.FC = () => {
   const [enableTracking, setEnableTracking] = useState(true);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
 
-  const memberPickerRef = useRef<HTMLDivElement | null>(null);
   const leadPickerRef = useRef<HTMLDivElement | null>(null);
   const deferredMemberSearch = useDeferredValue(memberSearch);
   const deferredLeadSearch = useDeferredValue(leadSearch);
@@ -189,20 +188,30 @@ export const ProjectDetailPage: React.FC = () => {
   useEffect(() => {
     const handlePointerDown = (event: MouseEvent) => {
       const target = event.target as Node;
-      if (memberPickerRef.current && !memberPickerRef.current.contains(target)) {
-        setIsMemberPickerOpen(false);
-      }
       if (leadPickerRef.current && !leadPickerRef.current.contains(target)) {
         setIsLeadPickerOpen(false);
       }
     };
 
-    if (isMemberPickerOpen || isLeadPickerOpen) {
+    if (isLeadPickerOpen) {
       document.addEventListener('mousedown', handlePointerDown);
     }
 
     return () => document.removeEventListener('mousedown', handlePointerDown);
-  }, [isLeadPickerOpen, isMemberPickerOpen]);
+  }, [isLeadPickerOpen]);
+
+  useEffect(() => {
+    if (!isMemberPickerOpen) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsMemberPickerOpen(false);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isMemberPickerOpen]);
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: <LayoutDashboard size={14} /> },
@@ -428,86 +437,106 @@ export const ProjectDetailPage: React.FC = () => {
           </div>
           <button
             type="button"
-            onClick={() => setIsMemberPickerOpen((current) => !current)}
+            onClick={() => setIsMemberPickerOpen(true)}
             className="inline-flex items-center gap-2 self-start rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white shadow-lg shadow-primary/20"
           >
             <Plus size={16} />
             Add Members
           </button>
         </div>
-
-        <div ref={memberPickerRef} className="relative">
-          {isMemberPickerOpen && (
-            <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm dark:border-border-dark dark:bg-card-dark">
-              <div className="relative">
-                <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input
-                  value={memberSearch}
-                  onChange={(event) => setMemberSearch(event.target.value)}
-                  placeholder="Search members"
-                  className="w-full rounded-lg border border-gray-200 bg-gray-50 py-2 pl-9 pr-3 text-sm outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-border-dark dark:bg-white/5"
-                />
-              </div>
-
-              <div className="mt-3 max-h-[220px] space-y-1 overflow-y-auto pr-1">
-                {selectableMembers.map((option) => (
-                  <button
-                    key={option.id}
-                    type="button"
-                    onClick={() =>
-                      setSelectedMemberIds((current) =>
-                        current.includes(option.id)
-                          ? current.filter((value) => value !== option.id)
-                          : [...current, option.id]
-                      )
-                    }
-                    className={`w-full rounded-lg border px-3 py-2 text-left transition-all ${
-                      selectedMemberIds.includes(option.id)
-                        ? 'border-primary bg-primary/5 text-primary'
-                        : 'border-gray-200 bg-white hover:border-primary/40 dark:border-border-dark dark:bg-white/[0.03]'
-                    }`}
-                  >
-                    <p className="truncate text-sm font-semibold">{option.name}</p>
-                    <p className="truncate text-[11px] text-gray-400">{option.email} · {option.role}</p>
-                  </button>
-                ))}
-              </div>
-
-              {memberOptionsQuery.hasNextPage && (
-                <button
-                  type="button"
-                  onClick={() => memberOptionsQuery.fetchNextPage()}
-                  className="mt-3 w-full rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold dark:border-border-dark"
-                >
-                  {memberOptionsQuery.isFetchingNextPage ? 'Loading...' : 'Load more'}
-                </button>
-              )}
-
-              <div className="mt-3 flex justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedMemberIds([]);
-                    setIsMemberPickerOpen(false);
-                  }}
-                  className="px-3 py-2 text-sm font-medium text-gray-500"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleAddMembers}
-                  disabled={addMembers.isPending || selectedMemberIds.length === 0}
-                  className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
-                >
-                  {addMembers.isPending && <Loader2 size={15} className="animate-spin" />}
-                  Add Selected
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
       </div>
+
+      {isMemberPickerOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+          <button
+            type="button"
+            aria-label="Close add members dialog"
+            onClick={() => setIsMemberPickerOpen(false)}
+            className="absolute inset-0 bg-black/50 backdrop-blur-[1px]"
+          />
+          <div className="relative z-10 w-full max-w-xl rounded-2xl border border-gray-200 bg-white p-4 shadow-2xl dark:border-border-dark dark:bg-card-dark sm:p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h4 className="text-sm font-bold uppercase tracking-wider text-gray-400">Add members</h4>
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Search teammates and add them to this project.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsMemberPickerOpen(false)}
+                className="rounded-lg border border-gray-200 px-2 py-1 text-xs font-semibold text-gray-500 transition-colors hover:border-primary/40 hover:text-primary dark:border-border-dark dark:text-gray-400"
+              >
+                Esc
+              </button>
+            </div>
+
+            <div className="mt-4 relative">
+              <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                value={memberSearch}
+                onChange={(event) => setMemberSearch(event.target.value)}
+                placeholder="Search members"
+                className="w-full rounded-lg border border-gray-200 bg-gray-50 py-2 pl-9 pr-3 text-sm outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-border-dark dark:bg-white/5"
+              />
+            </div>
+
+            <div className="mt-3 max-h-[320px] space-y-1 overflow-y-auto pr-1">
+              {selectableMembers.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() =>
+                    setSelectedMemberIds((current) =>
+                      current.includes(option.id)
+                        ? current.filter((value) => value !== option.id)
+                        : [...current, option.id]
+                    )
+                  }
+                  className={`w-full rounded-lg border px-3 py-2 text-left transition-all ${
+                    selectedMemberIds.includes(option.id)
+                      ? 'border-primary bg-primary/5 text-primary'
+                      : 'border-gray-200 bg-white hover:border-primary/40 dark:border-border-dark dark:bg-white/[0.03]'
+                  }`}
+                >
+                  <p className="truncate text-sm font-semibold">{option.name}</p>
+                  <p className="truncate text-[11px] text-gray-400">{option.email} · {option.role}</p>
+                </button>
+              ))}
+            </div>
+
+            {memberOptionsQuery.hasNextPage && (
+              <button
+                type="button"
+                onClick={() => memberOptionsQuery.fetchNextPage()}
+                className="mt-3 w-full rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold dark:border-border-dark"
+              >
+                {memberOptionsQuery.isFetchingNextPage ? 'Loading...' : 'Load more'}
+              </button>
+            )}
+
+            <div className="mt-4 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedMemberIds([]);
+                  setIsMemberPickerOpen(false);
+                }}
+                className="px-3 py-2 text-sm font-medium text-gray-500"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleAddMembers}
+                disabled={addMembers.isPending || selectedMemberIds.length === 0}
+                className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
+              >
+                {addMembers.isPending && <Loader2 size={15} className="animate-spin" />}
+                Add Selected
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-border-dark dark:bg-card-dark">
         <table className="w-full border-collapse text-left">
@@ -858,23 +887,7 @@ export const ProjectDetailPage: React.FC = () => {
               <p className="text-sm text-gray-400">Updated {new Date(project.updatedAt).toLocaleDateString()}</p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => {
-                setActiveTab('members');
-                setIsMemberPickerOpen(true);
-              }}
-              className="rounded-lg border border-gray-200 p-2 transition-colors hover:bg-gray-50 dark:border-border-dark dark:hover:bg-white/5"
-            >
-              <Plus size={18} />
-            </button>
-            <button
-              onClick={() => navigate('/issues/create')}
-              className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white shadow-lg shadow-primary/20 transition-all hover:bg-primary/90"
-            >
-              New Issue
-            </button>
-          </div>
+          <div />
         </div>
 
         <div className="flex items-center gap-6">

@@ -30,6 +30,7 @@ import { useWorkspaceMemberOptions } from '@features/workspace';
 import {
   IssueActivityTimeline,
   IssueCommentsThread,
+  IssueLabelsEditor,
   SubtaskList,
   useDeleteIssue,
   useIssueDetail,
@@ -403,6 +404,22 @@ export const ContextPanel: React.FC = () => {
                   {issue.department?.name || 'No department'}
                 </p>
               </div>
+            </div>
+
+            <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-border-dark dark:bg-card-dark">
+              <h3 className="mb-3 text-[10px] font-bold uppercase tracking-wider text-gray-400">Labels</h3>
+              <IssueLabelsEditor
+                issueId={issueResourceId}
+                selectedLabels={
+                  issue.labelObjects?.length
+                    ? issue.labelObjects
+                    : issue.labels.map((label, index) => ({
+                        id: `${label}-${index}`,
+                        name: label,
+                        color: '#64748b',
+                      }))
+                }
+              />
             </div>
 
             {issue.assignee && (

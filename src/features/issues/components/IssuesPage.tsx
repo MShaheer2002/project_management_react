@@ -19,6 +19,7 @@ import {
 import { useApp } from '@/AppContext';
 import { KanbanBoard } from '@/components/board/KanbanBoard';
 import { PRIORITY_COLORS, STATUS_LABELS, ISSUE_TYPE_CONFIG } from '@/constants';
+import { LabelChip } from '@shared/components/ui/LabelChip';
 import { useDepartmentsDirectory } from '@features/department';
 import { useTeamDetail } from '@features/team';
 import type { Issue, IssueType, Priority, Status } from '@/types';
@@ -198,9 +199,7 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
                   <span className="text-sm font-medium truncate">{issue.title}</span>
                   <div className="flex gap-1 mt-1 flex-wrap">
                     {issue.labels.map((label) => (
-                      <span key={label} className="text-[10px] px-1 rounded bg-gray-100 dark:bg-gray-800 text-gray-500">
-                        {label}
-                      </span>
+                      <LabelChip key={label} label={label} />
                     ))}
                   </div>
                 </div>

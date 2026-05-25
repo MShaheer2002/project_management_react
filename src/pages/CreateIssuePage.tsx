@@ -37,12 +37,17 @@ import {
 } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { RichTextEditor } from '../components/RichTextEditor';
+import { LabelChip } from '@shared/components/ui/LabelChip';
 import { getApiFieldErrors, getApiErrorMessage } from '@shared/services';
 import { useDepartmentOptions } from '@features/department';
 import { useProjectOptions } from '@features/projects';
 import { useWorkspaceMemberOptions } from '@features/workspace';
 import {
+  IssueLabelRow,
   IssueAttachmentsField,
+  useAttachIssueLabelsAny,
+  useCreateLabel,
+  useIssueLabels,
   IssueSystemParametersPanel,
   useAddIssueDependencyAny,
   useAddIssueWatchersAny,
@@ -55,19 +60,7 @@ interface Subtask extends IssueSubtask {
   isEditing?: boolean;
 }
 
-interface Label {
-  id: string;
-  name: string;
-  color: string;
-}
-
-const AVAILABLE_LABELS: Label[] = [
-  { id: 'l1', name: 'Bug', color: '#ef4444' },
-  { id: 'l2', name: 'Feature', color: '#5f72ea' },
-  { id: 'l3', name: 'Design', color: '#ec4899' },
-  { id: 'l4', name: 'Backend', color: '#10b981' },
-  { id: 'l5', name: 'Frontend', color: '#f59e0b' },
-];
+const DEFAULT_NEW_LABEL_COLOR = '#38bdf8';
 
 const normalizeDateForInput = (value: unknown): string => {
   if (typeof value !== 'string' || !value.trim()) return '';
@@ -113,7 +106,8 @@ export const CreateIssuePage: React.FC = () => {
   const [dueTime, setDueTime] = useState('12:00');
   const [estimate, setEstimate] = useState('');
   const [subtasks, setSubtasks] = useState<Subtask[]>([]);
-  const [selectedLabels, setSelectedLabels] = useState<string[]>([]);
+  const [selectedLabelIds, setSelectedLabelIds] = useState<string[]>([]);
+  const [labelSearch, setLabelSearch] = useState('');
   
   // Bug Specific State
   const [stepsToReproduce, setStepsToReproduce] = useState('');
@@ -163,9 +157,23 @@ export const CreateIssuePage: React.FC = () => {
   const addIssueDependencyAny = useAddIssueDependencyAny();
   const addIssueWatchersAny = useAddIssueWatchersAny();
   const updateIssueIntegrationRefsAny = useUpdateIssueIntegrationRefsAny();
+  const attachIssueLabelsAny = useAttachIssueLabelsAny();
+  const createLabel = useCreateLabel();
+  const labelsQuery = useIssueLabels(
+    {
+      q: labelSearch.trim() || undefined,
+      sort: 'name:asc',
+      limit: 100,
+    },
+    { enabled: true }
+  );
   const projectOptions = projectOptionsQuery.data?.pages.flatMap((page) => page.items) ?? [];
   const departmentOptions = departmentOptionsQuery.data?.pages.flatMap((page) => page.items) ?? [];
   const assigneeOptions = assigneeOptionsQuery.data?.pages.flatMap((page) => page.items) ?? [];
+  const labels = labelsQuery.data?.pages.flatMap((page) => page.items) ?? [];
+  const selectedLabels = selectedLabelIds
+    .map((id) => labels.find((label) => label.id === id))
+    .filter((label): label is IssueLabelRow => Boolean(label));
 
   // Click outside for label dropdown
   useEffect(() => {
@@ -229,9 +237,6 @@ export const CreateIssuePage: React.FC = () => {
         .map((subtask) => ({ ...subtask, title: subtask.title.trim(), isEditing: false }))
         .filter((subtask) => subtask.title.length > 0)
         .map(({ isEditing, ...rest }) => rest);
-      const selectedLabelNames = selectedLabels
-        .map((labelId) => AVAILABLE_LABELS.find((label) => label.id === labelId)?.name.toLowerCase())
-        .filter((label): label is string => Boolean(label));
       const cleanIntegrationRefs = integrationRefs.filter((ref) => ref.label || ref.externalId || ref.url);
 
       const parsedComplexity = Number.parseInt(estimate, 10);
@@ -247,7 +252,7 @@ export const CreateIssuePage: React.FC = () => {
         priority,
         assigneeId: assigneeId || null,
         projectId,
-        labels: selectedLabelNames,
+        labels: [],
         dueDate: dueDate || null,
         dueTime: dueTime || null,
         estimate: normalizedComplexity,
@@ -277,6 +282,13 @@ export const CreateIssuePage: React.FC = () => {
         departmentId: departmentId || null,
       });
       const createdIssueResourceId = createdIssue.entityId ?? createdIssue.id;
+
+      if (selectedLabelIds.length > 0) {
+        await attachIssueLabelsAny.mutateAsync({
+          issueId: createdIssueResourceId,
+          input: { labelIds: selectedLabelIds },
+        });
+      }
 
       if (parentIssueId) {
         await updateAnyIssue.mutateAsync({
@@ -379,7 +391,7 @@ export const CreateIssuePage: React.FC = () => {
         setDueDate(normalizeDateForInput(draft.dueDate));
         setDueTime(normalizeTimeForInput(draft.dueTime));
         setEstimate(draft.estimate || '');
-        setSelectedLabels(draft.selectedLabels || []);
+        setSelectedLabelIds(draft.selectedLabelIds || []);
         setSubtasks(draft.subtasks || []);
         setStepsToReproduce(draft.stepsToReproduce || '');
         setExpectedBehavior(draft.expectedBehavior || '');
@@ -413,7 +425,7 @@ export const CreateIssuePage: React.FC = () => {
       dueDate,
       dueTime,
       estimate,
-      selectedLabels,
+      selectedLabelIds,
       subtasks,
       stepsToReproduce,
       expectedBehavior,
@@ -433,7 +445,7 @@ export const CreateIssuePage: React.FC = () => {
       setIsSaving(false);
       setLastSaved(new Date());
     }, 800);
-  }, [title, description, type, projectId, priority, status, assigneeId, departmentId, dueDate, dueTime, estimate, selectedLabels, subtasks, stepsToReproduce, expectedBehavior, actualBehavior, severity, acceptanceCriteria, relatedIssues, notes, parentIssueId, dependencies, watcherIds, integrationRefs, attachments]);
+  }, [title, description, type, projectId, priority, status, assigneeId, departmentId, dueDate, dueTime, estimate, selectedLabelIds, subtasks, stepsToReproduce, expectedBehavior, actualBehavior, severity, acceptanceCriteria, relatedIssues, notes, parentIssueId, dependencies, watcherIds, integrationRefs, attachments]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -859,19 +871,7 @@ export const CreateIssuePage: React.FC = () => {
                       {selectedLabels.length === 0 ? (
                         <span className="text-gray-300 dark:text-gray-600 italic text-sm">Categorize...</span>
                       ) : (
-                        selectedLabels.map(labelId => {
-                          const label = AVAILABLE_LABELS.find(l => l.id === labelId);
-                          return (
-                            <span 
-                              key={labelId} 
-                              className="px-3 py-1 rounded-lg text-[9px] font-bold uppercase tracking-wide text-white shadow-lg shadow-black/5 flex items-center gap-1.5"
-                              style={{ backgroundColor: label?.color }}
-                            >
-                              <div className="w-1 h-1 rounded-full bg-white animate-pulse" />
-                              {label?.name}
-                            </span>
-                          );
-                        })
+                        selectedLabels.map((label) => <LabelChip key={label.id} label={label.name} />)
                       )}
                       <MoreVertical size={14} className="ml-auto text-gray-400 shrink-0 group-hover:text-primary transition-colors" />
                     </button>
@@ -886,23 +886,49 @@ export const CreateIssuePage: React.FC = () => {
                         >
                           <div className="flex items-center gap-3 px-4 py-3 bg-gray-50 dark:bg-white/5 rounded-xl border border-gray-100 dark:border-border-dark focus-within:ring-2 focus-within:ring-primary/20 transition-all">
                             <Search size={14} className="text-gray-400" />
-                            <input type="text" placeholder="Filter or create..." className="bg-transparent text-[10px] font-medium w-full focus:outline-none placeholder:text-gray-400" />
+                            <input
+                              type="text"
+                              value={labelSearch}
+                              onChange={(e) => setLabelSearch(e.target.value)}
+                              placeholder="Search or create label..."
+                              className="bg-transparent text-[10px] font-medium w-full focus:outline-none placeholder:text-gray-400"
+                            />
                           </div>
                           <div className="space-y-1.5 min-h-[150px] max-h-[250px] overflow-y-auto custom-scrollbar pr-1">
-                            {AVAILABLE_LABELS.map(label => (
+                            {labels.map(label => (
                               <button 
                                 key={label.id}
                                 onClick={() => {
-                                  if (selectedLabels.includes(label.id)) setSelectedLabels(selectedLabels.filter(id => id !== label.id));
-                                  else setSelectedLabels([...selectedLabels, label.id]);
+                                  if (selectedLabelIds.includes(label.id)) setSelectedLabelIds(selectedLabelIds.filter(id => id !== label.id));
+                                  else setSelectedLabelIds([...selectedLabelIds, label.id]);
                                 }}
-                                className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all text-[11px] font-bold group ${selectedLabels.includes(label.id) ? 'bg-primary/10 text-primary shadow-sm' : 'hover:bg-gray-50 dark:hover:bg-white/5'}`}
+                                className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all text-[11px] font-bold group ${selectedLabelIds.includes(label.id) ? 'bg-primary/10 text-primary shadow-sm' : 'hover:bg-gray-50 dark:hover:bg-white/5'}`}
                               >
                                 <div className="w-3 h-3 rounded-full shadow-inner" style={{ backgroundColor: label.color }} />
                                 <span className="flex-1 text-left tracking-wide uppercase">{label.name}</span>
-                                {selectedLabels.includes(label.id) && <Check size={14} strokeWidth={3} />}
+                                {selectedLabelIds.includes(label.id) && <Check size={14} strokeWidth={3} />}
                               </button>
                             ))}
+                            {labelSearch.trim() && !labels.some((label) => label.name.toLowerCase() === labelSearch.trim().toLowerCase()) && (
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    const created = await createLabel.mutateAsync({
+                                      name: labelSearch.trim(),
+                                      color: DEFAULT_NEW_LABEL_COLOR,
+                                    });
+                                    setSelectedLabelIds((current) => (current.includes(created.id) ? current : [...current, created.id]));
+                                    setLabelSearch('');
+                                  } catch (error) {
+                                    showToast(getApiErrorMessage(error) || 'Failed to create label.', 'error');
+                                  }
+                                }}
+                                className="w-full flex items-center gap-3 p-3 rounded-xl transition-all text-[11px] font-bold text-primary bg-primary/5 hover:bg-primary/10"
+                              >
+                                <Plus size={13} />
+                                <span className="flex-1 text-left">Create "{labelSearch.trim()}"</span>
+                              </button>
+                            )}
                           </div>
                         </motion.div>
                       )}

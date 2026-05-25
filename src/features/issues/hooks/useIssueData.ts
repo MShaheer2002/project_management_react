@@ -11,13 +11,17 @@ import type {
   AddIssueCommentAttachmentsInput,
   AddIssueDependencyInput,
   AddIssueWatchersInput,
+  AttachIssueLabelsInput,
+  CreateLabelInput,
   CreateIssueCommentInput,
   CreateIssueInput,
   CreateIssueSubtaskInput,
   ListIssueActivityInput,
   ListIssueCommentsInput,
+  ListLabelsInput,
   ListIssuesInput,
   ReorderIssueSubtasksInput,
+  UpdateLabelInput,
   UpdateIssueCommentInput,
   UpdateIssueInput,
   UpdateIssueIntegrationRefsInput,
@@ -39,6 +43,8 @@ export const issueQueryKeys = {
     [...issueQueryKeys.detail(workspaceId, issueId), 'comments'] as const,
   activity: (workspaceId: string | undefined, issueId: string | undefined) =>
     [...issueQueryKeys.detail(workspaceId, issueId), 'activity'] as const,
+  labels: (workspaceId: string | undefined, params: object) =>
+    [...issueQueryKeys.workspace(workspaceId), 'labels', params] as const,
 };
 
 const invalidateIssueRelatedQueries = (
@@ -174,6 +180,22 @@ export const useIssueActivity = (
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage.meta.cursor ?? undefined,
     enabled: Boolean(workspaceId && issueId) && (options?.enabled ?? true),
+  });
+};
+
+export const useIssueLabels = (params: ListLabelsInput = {}, options?: { enabled?: boolean }) => {
+  const workspaceId = useAuthStore((s) => s.workspace?.id);
+
+  return useInfiniteQuery({
+    queryKey: issueQueryKeys.labels(workspaceId, params),
+    queryFn: ({ pageParam }) =>
+      issueService.listLabels({
+        ...params,
+        cursor: pageParam || undefined,
+      }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.meta.cursor ?? undefined,
+    enabled: Boolean(workspaceId) && (options?.enabled ?? true),
   });
 };
 
@@ -504,6 +526,93 @@ export const useRemoveIssueCommentAttachment = (issueId: string | undefined) => 
       issueService.removeCommentAttachment(commentId, attachmentId),
     onSuccess: () => {
       invalidateIssueRelatedQueries(queryClient, workspaceId, issueId);
+    },
+  });
+};
+
+export const useCreateLabel = () => {
+  const queryClient = useQueryClient();
+  const workspaceId = useAuthStore((s) => s.workspace?.id);
+
+  return useMutation({
+    mutationFn: (input: CreateLabelInput) => issueService.createLabel(input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: issueQueryKeys.workspace(workspaceId) });
+    },
+  });
+};
+
+export const useUpdateLabel = () => {
+  const queryClient = useQueryClient();
+  const workspaceId = useAuthStore((s) => s.workspace?.id);
+
+  return useMutation({
+    mutationFn: ({ labelId, input }: { labelId: string; input: UpdateLabelInput }) =>
+      issueService.updateLabel(labelId, input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: issueQueryKeys.workspace(workspaceId) });
+    },
+  });
+};
+
+export const useDeleteLabel = () => {
+  const queryClient = useQueryClient();
+  const workspaceId = useAuthStore((s) => s.workspace?.id);
+
+  return useMutation({
+    mutationFn: (labelId: string) => issueService.deleteLabel(labelId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: issueQueryKeys.workspace(workspaceId) });
+    },
+  });
+};
+
+export const useAttachIssueLabels = (issueId: string | undefined) => {
+  const queryClient = useQueryClient();
+  const workspaceId = useAuthStore((s) => s.workspace?.id);
+
+  return useMutation({
+    mutationFn: (input: AttachIssueLabelsInput) => issueService.attachIssueLabels(issueId!, input),
+    onSuccess: () => {
+      invalidateIssueRelatedQueries(queryClient, workspaceId, issueId);
+    },
+  });
+};
+
+export const useAttachIssueLabelsAny = () => {
+  const queryClient = useQueryClient();
+  const workspaceId = useAuthStore((s) => s.workspace?.id);
+
+  return useMutation({
+    mutationFn: ({ issueId, input }: { issueId: string; input: AttachIssueLabelsInput }) =>
+      issueService.attachIssueLabels(issueId, input),
+    onSuccess: (_data, variables) => {
+      invalidateIssueRelatedQueries(queryClient, workspaceId, variables.issueId);
+    },
+  });
+};
+
+export const useRemoveIssueLabel = (issueId: string | undefined) => {
+  const queryClient = useQueryClient();
+  const workspaceId = useAuthStore((s) => s.workspace?.id);
+
+  return useMutation({
+    mutationFn: (labelId: string) => issueService.removeIssueLabel(issueId!, labelId),
+    onSuccess: () => {
+      invalidateIssueRelatedQueries(queryClient, workspaceId, issueId);
+    },
+  });
+};
+
+export const useRemoveIssueLabelAny = () => {
+  const queryClient = useQueryClient();
+  const workspaceId = useAuthStore((s) => s.workspace?.id);
+
+  return useMutation({
+    mutationFn: ({ issueId, labelId }: { issueId: string; labelId: string }) =>
+      issueService.removeIssueLabel(issueId, labelId),
+    onSuccess: (_data, variables) => {
+      invalidateIssueRelatedQueries(queryClient, workspaceId, variables.issueId);
     },
   });
 };
