@@ -294,9 +294,10 @@ export interface ListIssueCommentsInput {
 
 export interface IssueActivityItem {
   id: string;
-  type: 'COMMENT_CREATED' | 'COMMENT_EDITED' | 'COMMENT_DELETED' | 'COMMENT_MENTIONED';
+  type: string;
   message: string;
   createdAt: string;
+  metadata?: Record<string, unknown>;
   actor?: {
     id: string;
     name: string;

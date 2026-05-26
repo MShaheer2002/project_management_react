@@ -956,6 +956,8 @@ modules/issue/
 
 **Dependency:** Phase 5+ (needs issues, comments, memberships)
 
+Detailed frontend-ready contract: [phase8-backend-contract.md](./phase8-backend-contract.md)
+
 ### 8.1 Activity Routes
 
 ```

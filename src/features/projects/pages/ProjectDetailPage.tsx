@@ -19,10 +19,9 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useAuthStore } from '@/app/stores/useAuthStore';
 import { useApp } from '@/AppContext';
 import { MemberPerformancePanel } from '@/components/analytics/MemberPerformancePanel';
-import { ActivityPage } from '@/pages/ActivityPage';
+import { ActivityPage } from '@features/activity';
 import { RoadmapPage } from '@/pages/RoadmapPage';
 import { IssuesPage } from '@/features/issues/components/IssuesPage';
-import { MOCK_ACTIVITIES, MOCK_PROJECTS } from '@/constants';
 import { buildMemberPerformanceRows } from '@shared/analytics/memberPerformance';
 import { canManageProject } from '@shared/permissions';
 import { getApiErrorCode, getApiErrorMessage, getApiFieldErrors } from '@shared/services';
@@ -125,13 +124,6 @@ export const ProjectDetailPage: React.FC = () => {
   const leadOptions = leadOptionsQuery.data?.pages.flatMap((page) => page.items) ?? [];
   const errorCode = getApiErrorCode(projectQuery.error);
 
-  const matchedMockProject = useMemo(() => {
-    if (!project) return null;
-    return (
-      MOCK_PROJECTS.find((mockProject) => mockProject.name.toLowerCase() === project.name.toLowerCase()) ?? null
-    );
-  }, [project]);
-
   const projectIssues = useMemo(() => {
     const issuesById = new globalThis.Map<string, Issue>();
     issuesQuery.data?.pages.forEach((page) => {
@@ -141,15 +133,6 @@ export const ProjectDetailPage: React.FC = () => {
     });
     return Array.from(issuesById.values());
   }, [issuesQuery.data]);
-
-  const projectActivities = useMemo(() => {
-    if (!matchedMockProject) return [];
-    return MOCK_ACTIVITIES.filter(
-      (activity) =>
-        activity.targetId === matchedMockProject.id ||
-        projectIssues.some((issue) => issue.id === activity.targetId)
-    );
-  }, [matchedMockProject, projectIssues]);
 
   const projectAnalyticsRows = useMemo(() => {
     const subjects = members.map((member) => {
@@ -922,7 +905,7 @@ export const ProjectDetailPage: React.FC = () => {
         )}
         {activeTab === 'roadmap' && <RoadmapPage />}
         {activeTab === 'members' && renderMembers()}
-        {activeTab === 'activity' && <ActivityPage activities={projectActivities} title="Project Activity" />}
+        {activeTab === 'activity' && <ActivityPage scope="project" scopeId={project?.id} title="Activity" />}
         {activeTab === 'settings' && canManage && renderSettings()}
       </div>
     </div>

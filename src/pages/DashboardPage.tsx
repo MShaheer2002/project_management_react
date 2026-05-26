@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/app/stores/useAuthStore';
+import { useApp } from '@/AppContext';
 import { useDashboardData, type DashboardChartPoint } from '@features/dashboard';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
 
@@ -92,6 +93,7 @@ const formatDate = (value?: string | null) => {
 
 export const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
+  const { setSelectedIssueId } = useApp();
   const currentUser = useAuthStore((s) => s.currentUser);
   const { data, isLoading, error, refetch } = useDashboardData();
 
@@ -102,6 +104,28 @@ export const DashboardPage: React.FC = () => {
   const teamActivity = data?.teamActivity ?? [];
   const velocityData = data?.charts.velocity.length ? normalizeChartData(data.charts.velocity) : emptyChartData;
   const sprintProgressData = data?.charts.sprintProgress.length ? normalizeChartData(data.charts.sprintProgress) : emptyChartData;
+
+  const renderActivityDescription = (description: string) => {
+    const issueKeyRegex = /(LIN-\d+)/g;
+    const parts = description.split(issueKeyRegex);
+
+    return parts.map((part, index) => {
+      if (/^LIN-\d+$/.test(part)) {
+        return (
+          <button
+            key={`${part}-${index}`}
+            type="button"
+            onClick={() => setSelectedIssueId(part)}
+            className="font-semibold text-primary hover:underline"
+          >
+            {part}
+          </button>
+        );
+      }
+
+      return <React.Fragment key={`text-${index}`}>{part}</React.Fragment>;
+    });
+  };
 
   if (isLoading) {
     return (
@@ -255,7 +279,7 @@ export const DashboardPage: React.FC = () => {
               <div className="divide-y divide-gray-100 dark:divide-border-dark">
                 {teamActivity.map((activity) => (
                   <div key={activity.id} className="px-6 py-4">
-                    <p className="text-sm text-gray-900 dark:text-text-primary-dark">{activity.description}</p>
+                    <p className="text-sm text-gray-900 dark:text-text-primary-dark">{renderActivityDescription(activity.description)}</p>
                     {activity.timestamp && (
                       <p className="mt-1 text-xs text-gray-500 dark:text-text-secondary-dark">{formatDate(activity.timestamp)}</p>
                     )}

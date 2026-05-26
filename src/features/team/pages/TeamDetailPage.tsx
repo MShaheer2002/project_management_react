@@ -17,9 +17,8 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuthStore } from '@/app/stores/useAuthStore';
 import { useApp } from '@/AppContext';
 import { MemberPerformancePanel } from '@/components/analytics/MemberPerformancePanel';
-import { MOCK_ACTIVITIES, MOCK_ISSUES, MOCK_PROJECTS, MOCK_TEAMS, MOCK_USERS } from '@/constants';
+import { ActivityPage } from '@features/activity';
 import { IssuesPage } from '@/features/issues/components/IssuesPage';
-import { ActivityPage } from '@/pages/ActivityPage';
 import { buildMemberPerformanceRows } from '@shared/analytics/memberPerformance';
 import { canManageTeam } from '@shared/permissions';
 import { getApiErrorCode, getApiErrorMessage, getApiFieldErrors } from '@shared/services';
@@ -126,20 +125,6 @@ export const TeamDetailPage: React.FC = () => {
   const leadOptions = leadOptionsQuery.data?.pages.flatMap((page) => page.items) ?? [];
   const errorCode = getApiErrorCode(teamQuery.error);
 
-  const matchedMockTeam = useMemo(() => {
-    if (!team) return MOCK_TEAMS[0] ?? null;
-    return (
-      MOCK_TEAMS.find((mockTeam) => mockTeam.name.toLowerCase() === team.name.toLowerCase()) ??
-      MOCK_TEAMS[0] ??
-      null
-    );
-  }, [team]);
-
-  const mockProjects = useMemo(() => {
-    if (!matchedMockTeam) return [];
-    return MOCK_PROJECTS.filter((project) => project.teamId === matchedMockTeam.id);
-  }, [matchedMockTeam]);
-
   const teamIssues = useMemo(() => {
     const issuesById = new Map<string, Issue>();
     issuesQuery.data?.pages.forEach((page) => {
@@ -149,16 +134,6 @@ export const TeamDetailPage: React.FC = () => {
     });
     return Array.from(issuesById.values());
   }, [issuesQuery.data]);
-
-  const mockActivities = useMemo(() => {
-    if (!matchedMockTeam) return [];
-    return MOCK_ACTIVITIES.filter(
-      (activity) =>
-        activity.targetId === matchedMockTeam.id ||
-        matchedMockTeam.memberIds.includes(activity.actorId) ||
-        teamIssues.some((issue) => issue.id === activity.targetId)
-    );
-  }, [matchedMockTeam, teamIssues]);
 
   useEffect(() => {
     if (!team) return;
@@ -764,7 +739,7 @@ export const TeamDetailPage: React.FC = () => {
         {activeTab === 'members' && renderMembers()}
         {activeTab === 'projects' && renderProjects()}
         {activeTab === 'issues' && renderIssues()}
-        {activeTab === 'activity' && <ActivityPage activities={mockActivities} title="Activity" />}
+        {activeTab === 'activity' && <ActivityPage scope="team" scopeId={team.id} title="Activity" />}
         {activeTab === 'settings' && renderSettings()}
       </div>
     </div>

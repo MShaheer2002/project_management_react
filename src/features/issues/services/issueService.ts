@@ -184,6 +184,7 @@ type RawIssueActivityItem = {
   createdAt: string;
   issueId: string;
   commentId?: string;
+  metadata?: Record<string, unknown>;
   actor?: {
     id: string;
     name: string;
@@ -328,6 +329,7 @@ const normalizeIssueActivityItem = (item: RawIssueActivityItem): IssueActivityIt
   type: item.type,
   message: item.message ?? item.description ?? '',
   createdAt: item.createdAt,
+  metadata: item.metadata,
   issueId: item.issueId,
   commentId: item.commentId,
   actor: item.actor

@@ -40,9 +40,8 @@ import {
 import { useAuthStore } from '@/app/stores/useAuthStore';
 import { useApp } from '@/AppContext';
 import { Modal } from '@/components/modals/Modal';
-import { ActivityPage } from '@/pages/ActivityPage';
+import { ActivityPage } from '@features/activity';
 import {
-  MOCK_ACTIVITIES,
   MOCK_DEPARTMENTS,
   MOCK_ISSUES,
   MOCK_PROJECTS,
@@ -251,17 +250,6 @@ export const DepartmentDetailPage: React.FC = () => {
         mockProjects.some((project) => project.id === issue.projectId)
     );
   }, [mockDepartmentTeamIds, mockProjects]);
-
-  const mockActivities = useMemo(() => {
-    if (!matchedMockDepartment) return [];
-    return MOCK_ACTIVITIES.filter(
-      (activity) =>
-        matchedMockDepartment.memberIds.includes(activity.actorId) ||
-        mockDepartmentTeamIds.includes(activity.targetId) ||
-        mockProjects.some((project) => project.id === activity.targetId) ||
-        mockIssues.some((issue) => issue.id === activity.targetId)
-    );
-  }, [matchedMockDepartment, mockDepartmentTeamIds, mockProjects, mockIssues]);
 
   const completedMockIssues = useMemo(
     () => mockIssues.filter((issue) => issue.status === 'done').length,
@@ -899,7 +887,7 @@ export const DepartmentDetailPage: React.FC = () => {
     </div>
   );
 
-  const renderActivity = () => <ActivityPage activities={mockActivities} title="Activity" />;
+  const renderActivity = () => <ActivityPage scope="workspace" title="Activity" />;
 
   const renderSettings = () => (
     <form onSubmit={handleSave} className="mx-auto max-w-4xl space-y-12 p-8 pb-24">

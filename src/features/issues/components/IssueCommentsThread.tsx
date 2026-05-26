@@ -194,7 +194,8 @@ const CommentComposer: React.FC<{
   placeholder: string;
   submitLabel: string;
   compact?: boolean;
-}> = ({ onSubmit, placeholder, submitLabel, compact }) => {
+  variant?: 'default' | 'minimal';
+}> = ({ onSubmit, placeholder, submitLabel, compact, variant = 'default' }) => {
   const [value, setValue] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [mentionQuery, setMentionQuery] = useState('');
@@ -342,6 +343,110 @@ const CommentComposer: React.FC<{
     }
   };
 
+  const disabled =
+    (!value.trim() && draftAttachments.every((item) => item.status !== 'uploaded')) ||
+    isSubmitting ||
+    draftAttachments.some((item) => item.status === 'uploading' || item.status === 'failed');
+
+  if (variant === 'minimal') {
+    return (
+      <div className="space-y-2">
+        <div className="relative">
+          <textarea
+            ref={textareaRef}
+            value={value}
+            onChange={(event) => {
+              const nextValue = event.target.value;
+              const cursorPos = event.target.selectionStart ?? nextValue.length;
+              setValue(nextValue);
+              updateMentionState(nextValue, cursorPos);
+            }}
+            onClick={(event) => {
+              const cursorPos = (event.target as HTMLTextAreaElement).selectionStart ?? value.length;
+              updateMentionState(value, cursorPos);
+            }}
+            onKeyUp={(event) => {
+              const cursorPos = (event.target as HTMLTextAreaElement).selectionStart ?? value.length;
+              updateMentionState(value, cursorPos);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && mentionOpen && mentionOptions.length === 1) {
+                event.preventDefault();
+                handleInsertMention(mentionOptions[0].name);
+              }
+            }}
+            onBlur={() => {
+              setTimeout(() => setMentionOpen(false), 120);
+            }}
+            onFocus={(event) => {
+              const cursorPos = event.target.selectionStart ?? value.length;
+              updateMentionState(value, cursorPos);
+            }}
+            placeholder={placeholder}
+            className="w-full resize-y rounded-2xl border border-gray-200/80 bg-gray-50/40 px-4 py-3 pr-24 text-sm outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-border-dark dark:bg-white/[0.02] min-h-[84px]"
+          />
+          {mentionOpen && (
+            <div className="absolute left-2 z-30 mt-1 w-[260px] max-h-52 overflow-y-auto rounded-xl border border-gray-200 bg-white p-1 shadow-xl dark:border-border-dark dark:bg-card-dark">
+              {mentionOptionsQuery.isLoading ? (
+                <div className="px-3 py-2 text-xs text-gray-400">Loading users...</div>
+              ) : mentionOptions.length === 0 ? (
+                <div className="px-3 py-2 text-xs text-gray-400">No matching users</div>
+              ) : (
+                mentionOptions.map((member) => (
+                  <button
+                    key={member.id}
+                    type="button"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => handleInsertMention(member.name)}
+                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs transition-all hover:bg-gray-50 dark:hover:bg-white/[0.06]"
+                  >
+                    <div className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/15 text-[10px] font-bold text-primary">
+                      {(member.email || 'U').charAt(0).toUpperCase()}
+                    </div>
+                    <span className="truncate text-[11px] text-gray-500 dark:text-gray-300">{member.email}</span>
+                  </button>
+                ))
+              )}
+            </div>
+          )}
+
+          <div className="absolute bottom-3 right-3 flex items-center gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              className="hidden"
+              accept="image/*,video/*"
+              multiple
+              onChange={(event) => {
+                void handleFilesSelected(event.target.files);
+                event.currentTarget.value = '';
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-white/10 hover:text-gray-200"
+              title="Attach"
+            >
+              <Paperclip size={15} />
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleSubmit()}
+              disabled={disabled}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-gray-300 transition-colors hover:bg-primary hover:text-white disabled:opacity-50"
+              title={submitLabel}
+            >
+              {isSubmitting ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+            </button>
+          </div>
+        </div>
+
+        <DraftAttachmentList items={draftAttachments} onRemove={removeDraftAttachment} />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-2 rounded-2xl border border-gray-200/80 bg-gray-50/60 p-3 dark:border-border-dark dark:bg-white/[0.02]">
       <div className="relative">
@@ -432,11 +537,7 @@ const CommentComposer: React.FC<{
         <button
           type="button"
           onClick={() => void handleSubmit()}
-          disabled={
-            (!value.trim() && draftAttachments.every((item) => item.status !== 'uploaded')) ||
-            isSubmitting ||
-            draftAttachments.some((item) => item.status === 'uploading' || item.status === 'failed')
-          }
+          disabled={disabled}
           className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50"
         >
           {isSubmitting ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
@@ -773,13 +874,6 @@ export const IssueCommentsThread: React.FC<IssueCommentsThreadProps> = ({ issueI
 
   return (
     <div className="space-y-4">
-      <CommentComposer
-        compact={compact}
-        placeholder="Write a comment... Use @ to mention"
-        submitLabel="Comment"
-        onSubmit={(value, attachments) => handleCreate(value, undefined, attachments)}
-      />
-
       {commentsQuery.isLoading ? (
         <div className="flex items-center gap-2 text-sm text-gray-400">
           <Loader2 size={14} className="animate-spin" /> Loading comments...
@@ -825,6 +919,14 @@ export const IssueCommentsThread: React.FC<IssueCommentsThreadProps> = ({ issueI
           {commentsQuery.isFetchingNextPage ? 'Loading...' : 'Load older comments'}
         </button>
       )}
+
+      <CommentComposer
+        compact={compact}
+        variant="minimal"
+        placeholder="Leave a comment..."
+        submitLabel="Comment"
+        onSubmit={(value, attachments) => handleCreate(value, undefined, attachments)}
+      />
 
       {viewerAttachment && (
         <MediaViewer attachment={viewerAttachment} onClose={() => setViewerAttachment(null)} />
