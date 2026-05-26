@@ -1037,6 +1037,8 @@ modules/activity/
 
 **Dependency:** Phase 8 complete (notifications are derived from activity-worthy events and mention/assignment logic).
 
+Detailed frontend-ready contract: [phase9-backend-contract.md](./phase9-backend-contract.md)
+
 ### 9.1 Notification Routes
 
 ```

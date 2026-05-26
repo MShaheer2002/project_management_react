@@ -216,6 +216,7 @@ export const CreateIssuePage: React.FC = () => {
     const newErrors: { project?: string } = {};
     if (!projectId) newErrors.project = 'Project selection is required';
     setErrors(newErrors);
+    const hasAcceptanceCriteria = acceptanceCriteria.trim().length > 0;
     const parsedComplexity = Number.parseInt(estimate, 10);
     const hasValidComplexity =
       !Number.isNaN(parsedComplexity) && parsedComplexity >= 1 && parsedComplexity <= 5;
@@ -225,8 +226,15 @@ export const CreateIssuePage: React.FC = () => {
       showToast('Please select a project', 'error');
     } else if (type === 'task' && !hasValidComplexity) {
       showToast('Please select a complexity between 1 (lowest) and 5 (highest)', 'error');
+    } else if (type === 'issue' && !hasAcceptanceCriteria) {
+      showToast('Please add acceptance criteria for issue type', 'error');
     }
-    return title.trim().length > 0 && Object.keys(newErrors).length === 0 && (type !== 'task' || hasValidComplexity);
+    return (
+      title.trim().length > 0 &&
+      Object.keys(newErrors).length === 0 &&
+      (type !== 'task' || hasValidComplexity) &&
+      (type !== 'issue' || hasAcceptanceCriteria)
+    );
   };
 
   const handleCreate = async () => {
@@ -238,6 +246,7 @@ export const CreateIssuePage: React.FC = () => {
         .filter((subtask) => subtask.title.length > 0)
         .map(({ isEditing, ...rest }) => rest);
       const cleanIntegrationRefs = integrationRefs.filter((ref) => ref.label || ref.externalId || ref.url);
+      const cleanAcceptanceCriteria = acceptanceCriteria.trim();
 
       const parsedComplexity = Number.parseInt(estimate, 10);
       const normalizedComplexity = Number.isNaN(parsedComplexity)
@@ -273,7 +282,7 @@ export const CreateIssuePage: React.FC = () => {
         expectedBehavior: type === 'bug' ? expectedBehavior : undefined,
         actualBehavior: type === 'bug' ? actualBehavior : undefined,
         severity: type === 'bug' ? severity : undefined,
-        acceptanceCriteria: type === 'issue' ? acceptanceCriteria : undefined,
+        acceptanceCriteria: type === 'issue' ? cleanAcceptanceCriteria : undefined,
         relatedIssueKeys:
           type === 'issue'
             ? relatedIssues.split(',').map((value) => value.trim()).filter(Boolean)
@@ -293,7 +302,10 @@ export const CreateIssuePage: React.FC = () => {
       if (parentIssueId) {
         await updateAnyIssue.mutateAsync({
           issueId: createdIssueResourceId,
-          input: { parentIssueId },
+          input: {
+            parentIssueId,
+            ...(type === 'issue' ? { acceptanceCriteria: cleanAcceptanceCriteria } : {}),
+          },
         });
       }
 

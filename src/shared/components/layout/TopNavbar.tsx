@@ -17,6 +17,7 @@ import {
   Sun,
   Globe
 } from 'lucide-react';
+import { useUnreadNotificationsCount } from '@features/notifications';
 
 export const TopNavbar: React.FC = () => {
   const { signOut } = useAuth();
@@ -26,6 +27,8 @@ export const TopNavbar: React.FC = () => {
   const setTheme = useThemeStore((s) => s.setTheme);
   const [isUserMenuOpen, setUserMenuOpen] = useState(false);
   const navigate = useNavigate();
+  const unreadNotifications = useUnreadNotificationsCount({ enabled: true, refetchInterval: 30_000 });
+  const unreadCount = unreadNotifications.data?.unread ?? 0;
 
   /** Logout — clear store + Clerk sign-out */
   const handleLogout = async () => {
@@ -66,7 +69,9 @@ export const TopNavbar: React.FC = () => {
           className="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-white/5 text-gray-400 transition-colors relative"
         >
           <Bell size={18} />
-          <span className="absolute top-2 right-2 w-2 h-2 bg-primary rounded-full border-2 border-white dark:border-bg-dark" />
+          {unreadCount > 0 && (
+            <span className="absolute top-2 right-2 w-2 h-2 bg-primary rounded-full border-2 border-white dark:border-bg-dark" />
+          )}
         </button>
 
         <div className="relative">
