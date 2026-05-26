@@ -30,6 +30,7 @@ import { getApiErrorCode, getApiErrorMessage } from '@shared/services';
 import { useOpenViewUploadUrl } from '@features/upload';
 import { AttachmentMediaPreview } from '@features/upload';
 import { useWorkspaceMemberOptions } from '@features/workspace';
+import { useIssueSocketRoom } from '@features/notifications';
 import {
   IssueAttachmentsField,
   IssueActivityTimeline,
@@ -152,6 +153,7 @@ export const IssueDetailPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'comments' | 'activity'>('comments');
   const [isAttachmentComposerOpen, setIsAttachmentComposerOpen] = useState(false);
   const [newAttachments, setNewAttachments] = useState<IssueAttachment[]>([]);
+  useIssueSocketRoom(issueId);
 
   const issueQuery = useIssueDetail(issueId);
   const issue = issueQuery.data;

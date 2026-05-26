@@ -1,0 +1,357 @@
+import { useAuth } from '@clerk/clerk-react';
+import type { InfiniteData, QueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
+import { useEffect, useRef } from 'react';
+import { useAuthStore } from '@/app/stores/useAuthStore';
+import { useToastStore } from '@/app/stores/useToastStore';
+import { issueQueryKeys } from '@features/issues';
+import { dashboardQueryKeys } from '@features/dashboard';
+import { sidebarQueryKeys } from '@features/sidebar';
+import { notificationQueryKeys } from './useNotificationData';
+import type { NotificationItem, NotificationsListResult } from '../types';
+import { realtimeSocket } from '@/shared/services/realtimeSocket';
+
+type RealtimeEnvelope<TPayload> = {
+  id: string;
+  type: string;
+  workspaceId: string;
+  createdAt: string;
+  dedupeKey?: string;
+  payload: TPayload;
+};
+
+type NotificationCreatedPayload = {
+  notification: NotificationItem;
+  unread: number;
+  ui?: {
+    toast?: boolean;
+    soundKey?: 'default' | 'mention' | 'assignment' | 'warning';
+    priority?: 'low' | 'normal' | 'high';
+  };
+};
+
+type NotificationReadPayload = {
+  workspaceId: string;
+  id: string;
+  readAt: string | null;
+};
+
+type NotificationReadAllPayload = {
+  workspaceId: string;
+  updated: number;
+  readAt: string;
+};
+
+const LOG_PREFIX = '[NotificationRealtime]';
+
+const log = (message: string, payload?: unknown) => {
+  if (!import.meta.env.DEV) return;
+  if (payload === undefined) {
+    console.info(`${LOG_PREFIX} ${message}`);
+    return;
+  }
+  console.info(`${LOG_PREFIX} ${message}`, payload);
+};
+
+const isInfiniteNotificationCache = (
+  value: unknown
+): value is InfiniteData<NotificationsListResult> => {
+  if (!value || typeof value !== 'object') return false;
+  const maybe = value as { pages?: unknown };
+  return Array.isArray(maybe.pages);
+};
+
+const patchInfiniteNotifications = (
+  queryClient: QueryClient,
+  workspaceId: string,
+  updater: (item: NotificationItem) => NotificationItem
+) => {
+  queryClient.setQueriesData<InfiniteData<NotificationsListResult>>(
+    { queryKey: notificationQueryKeys.workspace(workspaceId) },
+    (previous) => {
+      if (!isInfiniteNotificationCache(previous)) return previous;
+      return {
+        ...previous,
+        pages: previous.pages.map((page) => ({
+          ...page,
+          items: page.items.map(updater),
+        })),
+      };
+    }
+  );
+};
+
+const prependNotificationToLists = (queryClient: QueryClient, workspaceId: string, notification: NotificationItem) => {
+  queryClient.setQueriesData<InfiniteData<NotificationsListResult>>(
+    { queryKey: notificationQueryKeys.workspace(workspaceId) },
+    (previous) => {
+      if (!isInfiniteNotificationCache(previous)) return previous;
+      const alreadyExists = previous.pages.some((page) => page.items.some((item) => item.id === notification.id));
+      if (alreadyExists) return previous;
+      if (!previous.pages.length) return previous;
+      const [firstPage, ...rest] = previous.pages;
+      return {
+        ...previous,
+        pages: [
+          {
+            ...firstPage,
+            items: [notification, ...firstPage.items],
+            meta: {
+              ...firstPage.meta,
+              total: (firstPage.meta.total ?? firstPage.items.length) + 1,
+            },
+          },
+          ...rest,
+        ],
+      };
+    }
+  );
+};
+
+const extractSoundFrequency = (soundKey: NotificationCreatedPayload['ui']['soundKey']) => {
+  switch (soundKey) {
+    case 'mention':
+      return 980;
+    case 'assignment':
+      return 820;
+    case 'warning':
+      return 620;
+    default:
+      return 740;
+  }
+};
+
+const tryPlaySound = (soundKey: NotificationCreatedPayload['ui']['soundKey']) => {
+  try {
+    const audioContext = new window.AudioContext();
+    const oscillator = audioContext.createOscillator();
+    const gain = audioContext.createGain();
+    oscillator.type = 'sine';
+    oscillator.frequency.value = extractSoundFrequency(soundKey);
+    gain.gain.value = 0.02;
+    oscillator.connect(gain);
+    gain.connect(audioContext.destination);
+    oscillator.start();
+    oscillator.stop(audioContext.currentTime + 0.12);
+    oscillator.onended = () => {
+      void audioContext.close();
+    };
+  } catch {
+    log('sound playback blocked by browser');
+  }
+};
+
+export const useNotificationRealtime = () => {
+  const { getToken, isSignedIn } = useAuth();
+  const queryClient = useQueryClient();
+  const workspaceId = useAuthStore((state) => state.workspace?.id);
+  const showToast = useToastStore((state) => state.showToast);
+  const processedEnvelopeIdsRef = useRef<Set<string>>(new Set());
+  const processedNotificationIdsRef = useRef<Set<string>>(new Set());
+  const allowSoundRef = useRef(false);
+
+  useEffect(() => {
+    const enableSound = () => {
+      allowSoundRef.current = true;
+    };
+    window.addEventListener('pointerdown', enableSound, { once: true });
+    window.addEventListener('keydown', enableSound, { once: true });
+    return () => {
+      window.removeEventListener('pointerdown', enableSound);
+      window.removeEventListener('keydown', enableSound);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isSignedIn || !workspaceId) {
+      realtimeSocket.disconnect();
+      return;
+    }
+
+    let active = true;
+    let reconnectingForAuth = false;
+
+    const connectSocket = async () => {
+      const token = await getToken();
+      if (!token || !active) return;
+
+      const socket = realtimeSocket.connect({ token, workspaceId, clientVersion: 'phase10-web' });
+
+      const handleNotificationCreated = (envelope: RealtimeEnvelope<NotificationCreatedPayload>) => {
+        if (envelope.workspaceId !== workspaceId) return;
+        if (processedEnvelopeIdsRef.current.has(envelope.id)) return;
+        processedEnvelopeIdsRef.current.add(envelope.id);
+
+        const payload = envelope.payload;
+        if (!payload?.notification) return;
+        if (processedNotificationIdsRef.current.has(payload.notification.id)) return;
+        processedNotificationIdsRef.current.add(payload.notification.id);
+
+        prependNotificationToLists(queryClient, workspaceId, payload.notification);
+        queryClient.setQueryData(notificationQueryKeys.unread(workspaceId), { unread: payload.unread });
+        queryClient.invalidateQueries({ queryKey: sidebarQueryKeys.byWorkspace(workspaceId) });
+        queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.byWorkspace(workspaceId) });
+
+        if (payload.ui?.toast) {
+          showToast(payload.notification.message, 'info', payload.notification.title);
+        }
+        if (allowSoundRef.current && payload.ui?.soundKey) {
+          tryPlaySound(payload.ui.soundKey);
+        }
+
+        log('notification:created', {
+          envelopeId: envelope.id,
+          notificationId: payload.notification.id,
+          type: payload.notification.type,
+        });
+      };
+
+      const handleNotificationRead = (envelope: RealtimeEnvelope<NotificationReadPayload>) => {
+        if (envelope.workspaceId !== workspaceId) return;
+        if (processedEnvelopeIdsRef.current.has(envelope.id)) return;
+        processedEnvelopeIdsRef.current.add(envelope.id);
+
+        patchInfiniteNotifications(queryClient, workspaceId, (item) =>
+          item.id === envelope.payload.id ? { ...item, readAt: envelope.payload.readAt } : item
+        );
+        queryClient.invalidateQueries({ queryKey: notificationQueryKeys.unread(workspaceId) });
+        log('notification:read', envelope.payload);
+      };
+
+      const handleNotificationReadAll = (envelope: RealtimeEnvelope<NotificationReadAllPayload>) => {
+        if (envelope.workspaceId !== workspaceId) return;
+        if (processedEnvelopeIdsRef.current.has(envelope.id)) return;
+        processedEnvelopeIdsRef.current.add(envelope.id);
+
+        patchInfiniteNotifications(queryClient, workspaceId, (item) => ({ ...item, readAt: envelope.payload.readAt }));
+        queryClient.setQueryData(notificationQueryKeys.unread(workspaceId), { unread: 0 });
+        queryClient.invalidateQueries({ queryKey: notificationQueryKeys.workspace(workspaceId) });
+        log('notification:read-all', envelope.payload);
+      };
+
+      const handleWorkspaceIssueChange = (envelope: RealtimeEnvelope<{ issueId?: string }>) => {
+        if (envelope.workspaceId !== workspaceId) return;
+        queryClient.invalidateQueries({ queryKey: issueQueryKeys.workspace(workspaceId) });
+      };
+
+      const handleIssueCommentChange = (envelope: RealtimeEnvelope<{ issueId?: string }>) => {
+        if (envelope.workspaceId !== workspaceId) return;
+        const issueId = envelope.payload?.issueId;
+        if (!issueId) return;
+        queryClient.invalidateQueries({ queryKey: issueQueryKeys.comments(workspaceId, issueId) });
+        queryClient.invalidateQueries({ queryKey: issueQueryKeys.activity(workspaceId, issueId) });
+      };
+
+      const handleConnect = async () => {
+        log('socket connected: triggering notification resync');
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: notificationQueryKeys.workspace(workspaceId) }),
+          queryClient.invalidateQueries({ queryKey: notificationQueryKeys.unread(workspaceId) }),
+        ]);
+      };
+
+      const handleReconnectAttempt = async () => {
+        const refreshedToken = await getToken({ skipCache: true });
+        if (!refreshedToken) return;
+        socket.auth = {
+          token: refreshedToken,
+          workspaceId,
+          clientVersion: 'phase10-web',
+        };
+        log('reconnect_attempt: refreshed auth token');
+      };
+
+      const handleConnectError = async (error: Error) => {
+        const msg = error.message.toLowerCase();
+        const authLikelyFailed = msg.includes('auth') || msg.includes('token') || msg.includes('unauthorized');
+        if (!authLikelyFailed || reconnectingForAuth) return;
+
+        reconnectingForAuth = true;
+        log('connect_error auth failure: refreshing token and reconnecting');
+        const refreshedToken = await getToken({ skipCache: true });
+        if (!refreshedToken || !active) {
+          reconnectingForAuth = false;
+          return;
+        }
+        socket.auth = {
+          token: refreshedToken,
+          workspaceId,
+          clientVersion: 'phase10-web',
+        };
+        socket.connect();
+        reconnectingForAuth = false;
+      };
+
+      socket.on('notification:created', handleNotificationCreated);
+      socket.on('notification:read', handleNotificationRead);
+      socket.on('notification:read-all', handleNotificationReadAll);
+      socket.on('issue:created', handleWorkspaceIssueChange);
+      socket.on('issue:updated', handleWorkspaceIssueChange);
+      socket.on('issue:deleted', handleWorkspaceIssueChange);
+      socket.on('comment:created', handleIssueCommentChange);
+      socket.on('comment:updated', handleIssueCommentChange);
+      socket.on('comment:deleted', handleIssueCommentChange);
+      socket.on('connect', handleConnect);
+      socket.on('connect_error', handleConnectError);
+      socket.io.on('reconnect_attempt', handleReconnectAttempt);
+
+      const handleWindowFocus = () => {
+        queryClient.invalidateQueries({ queryKey: notificationQueryKeys.workspace(workspaceId) });
+        queryClient.invalidateQueries({ queryKey: notificationQueryKeys.unread(workspaceId) });
+      };
+      window.addEventListener('focus', handleWindowFocus);
+
+      const cleanup = () => {
+        socket.off('notification:created', handleNotificationCreated);
+        socket.off('notification:read', handleNotificationRead);
+        socket.off('notification:read-all', handleNotificationReadAll);
+        socket.off('issue:created', handleWorkspaceIssueChange);
+        socket.off('issue:updated', handleWorkspaceIssueChange);
+        socket.off('issue:deleted', handleWorkspaceIssueChange);
+        socket.off('comment:created', handleIssueCommentChange);
+        socket.off('comment:updated', handleIssueCommentChange);
+        socket.off('comment:deleted', handleIssueCommentChange);
+        socket.off('connect', handleConnect);
+        socket.off('connect_error', handleConnectError);
+        socket.io.off('reconnect_attempt', handleReconnectAttempt);
+        window.removeEventListener('focus', handleWindowFocus);
+      };
+
+      return cleanup;
+    };
+
+    let teardown: (() => void) | undefined;
+    void connectSocket().then((cleanup) => {
+      teardown = cleanup;
+    });
+
+    return () => {
+      active = false;
+      if (teardown) teardown();
+    };
+  }, [getToken, isSignedIn, queryClient, showToast, workspaceId]);
+};
+
+export const useIssueSocketRoom = (issueId: string | undefined) => {
+  useEffect(() => {
+    if (!issueId) return;
+    const socket = realtimeSocket.getSocket();
+    if (!socket) return;
+
+    const joinRoom = () => {
+      socket.emit('issue:join', { issueId });
+      log('issue:join', { issueId });
+    };
+
+    if (socket.connected) {
+      joinRoom();
+    }
+    socket.on('connect', joinRoom);
+
+    return () => {
+      socket.off('connect', joinRoom);
+      socket.emit('issue:leave', { issueId });
+      log('issue:leave', { issueId });
+    };
+  }, [issueId]);
+};

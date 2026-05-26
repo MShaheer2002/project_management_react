@@ -49,7 +49,7 @@ export const ToastContainer: React.FC = () => {
   const dismissToast = useToastStore((s) => s.dismissToast);
 
   return (
-    <div className="fixed bottom-5 right-5 z-[200] flex flex-col gap-3 max-w-[420px] w-full pointer-events-none">
+    <div className="fixed right-5 top-5 z-[200] flex w-full max-w-[420px] flex-col gap-3 pointer-events-none">
       <AnimatePresence mode="popLayout">
         {toasts.map((toast) => {
           const config = toastConfig[toast.type];

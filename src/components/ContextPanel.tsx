@@ -27,6 +27,7 @@ import { getApiErrorCode, getApiErrorMessage } from '@shared/services';
 import { useOpenViewUploadUrl } from '@features/upload';
 import { AttachmentMediaPreview } from '@features/upload';
 import { useWorkspaceMemberOptions } from '@features/workspace';
+import { useIssueSocketRoom } from '@features/notifications';
 import {
   IssueActivityTimeline,
   IssueCommentsThread,
@@ -80,6 +81,7 @@ export const ContextPanel: React.FC = () => {
   const canDelete = canDeleteIssues(role);
 
   const [activeTab, setActiveTab] = useState<'comments' | 'activity'>('comments');
+  useIssueSocketRoom(selectedIssueId || undefined);
 
   const issueQuery = useIssueDetail(selectedIssueId || undefined);
   const issue = issueQuery.data;

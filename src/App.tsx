@@ -1,5 +1,6 @@
 import { ClerkTokenBridge } from '@/app/providers/ClerkTokenBridge';
 import { AuthSync } from '@/app/providers/AuthSync';
+import { RealtimeNotificationProvider } from '@/app/providers/RealtimeNotificationProvider';
 import { AppProvider } from './AppContext';
 import { AppRoutes } from '@/app/routes';
 import { ToastContainer } from '@/components/ToastContainer';
@@ -24,11 +25,13 @@ export default function App() {
   return (
     <ClerkTokenBridge>
       <AuthSync>
-        <AppProvider>
-          <AppRoutes />
-          {/* Global toast — renders on all pages (auth, dashboard, everywhere) */}
-          <ToastContainer />
-        </AppProvider>
+        <RealtimeNotificationProvider>
+          <AppProvider>
+            <AppRoutes />
+            {/* Global toast — renders on all pages (auth, dashboard, everywhere) */}
+            <ToastContainer />
+          </AppProvider>
+        </RealtimeNotificationProvider>
       </AuthSync>
     </ClerkTokenBridge>
   );

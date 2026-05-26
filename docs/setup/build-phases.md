@@ -1096,6 +1096,8 @@ socket/
 
 **Dependency:** Phase 8 and Phase 9 (activity and notifications already in place)
 
+Detailed frontend-ready contract: [phase10-backend-contract.md](./phase10-backend-contract.md)
+
 ### 10.1 Architecture
 
 ```
