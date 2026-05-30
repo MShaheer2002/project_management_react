@@ -5,5 +5,6 @@ export {
   canDeleteIssues,
   canManageDepartment,
   canManageProject,
+  canManageTemplates,
   canManageTeam,
 } from './workspace';

@@ -34,3 +34,6 @@ export const canManageProject = (
 
 export const canDeleteIssues = (role: WorkspaceRoleInput): boolean =>
   role === 'owner' || role === 'admin';
+
+export const canManageTemplates = (role: WorkspaceRoleInput): boolean =>
+  role === 'owner' || role === 'admin';

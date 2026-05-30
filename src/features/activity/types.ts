@@ -1,11 +1,12 @@
 import type { ApiListMeta } from '@shared/services/types';
 
-export type ActivityScope = 'workspace' | 'project' | 'team' | 'issue';
+export type ActivityScope = 'workspace' | 'project' | 'team' | 'issue' | 'cycle';
 
 export type ActivityTargetType =
   | 'workspace'
   | 'project'
   | 'team'
+  | 'cycle'
   | 'issue'
   | 'comment'
   | 'label'

@@ -18,6 +18,9 @@ type ActivityTimelineProps = {
   scope?: ActivityScope;
   scopeId?: string;
   title?: string;
+  emptyTitle?: string;
+  emptyDescription?: string;
+  errorMessage?: string;
   compact?: boolean;
   limit?: number;
 };
@@ -80,6 +83,9 @@ export const ActivityTimeline: React.FC<ActivityTimelineProps> = ({
   scope = 'workspace',
   scopeId,
   title = 'Activity',
+  emptyTitle,
+  emptyDescription,
+  errorMessage,
   compact,
   limit = 50,
 }) => {
@@ -127,12 +133,14 @@ export const ActivityTimeline: React.FC<ActivityTimelineProps> = ({
 
   if (query.isError) {
     return (
-      <div className="rounded-xl border border-red-200 bg-red-50/80 p-4 text-sm text-red-600 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-200">
-        <p>Failed to load activity.</p>
+      <div className="flex h-full min-h-[360px] flex-col items-center justify-center px-6 py-10 text-center">
+        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+          {errorMessage ?? 'Failed to load activity.'}
+        </p>
         <button
           type="button"
           onClick={() => query.refetch()}
-          className="mt-3 rounded-md bg-red-500 px-3 py-1.5 text-xs font-semibold text-white"
+          className="mt-3 rounded-lg bg-primary px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-primary/90"
         >
           Retry
         </button>
@@ -210,8 +218,12 @@ export const ActivityTimeline: React.FC<ActivityTimelineProps> = ({
               <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-100 text-gray-400 dark:bg-white/5">
                 <History size={32} />
               </div>
-              <h1 className="text-xl font-bold">No activity found</h1>
-              <p className="mt-2 max-w-xs text-sm text-gray-400">Try adjusting your filters or search terms.</p>
+              <h1 className="text-xl font-bold">{emptyTitle ?? 'No activity found'}</h1>
+              <p className="mt-2 max-w-xs text-sm text-gray-400">
+                {search.trim()
+                  ? 'Try adjusting your filters or search terms.'
+                  : emptyDescription ?? 'Try adjusting your filters or search terms.'}
+              </p>
             </div>
           )}
 

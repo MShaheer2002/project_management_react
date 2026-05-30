@@ -34,13 +34,14 @@ import { ReportsPage } from '@/pages/ReportsPage';
 import { IntegrationsPage } from '@/pages/IntegrationsPage';
 import { MarketingPage } from '@/pages/MarketingPage';
 import { CyclesPage } from '@/pages/CyclesPage';
+import { CycleDetailPage } from '@/pages/CycleDetailPage';
 import { BillingPage } from '@/pages/BillingPage';
 import { ApiKeysPage } from '@/pages/ApiKeysPage';
 import { ProjectDetailPage } from '@/features/projects/pages/ProjectDetailPage';
 import { DepartmentsPage } from '@/features/department/pages/DepartmentsPage';
 import { DepartmentDetailPage } from '@/features/department/pages/DepartmentDetailPage';
 import { CreateIssuePage } from '@/pages/CreateIssuePage';
-import { TemplatesPage } from '@/pages/TemplatesPage';
+import { TemplatesPage } from '@features/templates';
 import { IssueDetailPage } from '@/pages/IssueDetailPage';
 
 const RootPage: React.FC = () => {
@@ -143,6 +144,7 @@ export const AppRoutes: React.FC = () => {
           <Route path="/members" element={<MembersPage />} />
           <Route path="/roadmap" element={<RoadmapPage />} />
           <Route path="/cycles" element={<CyclesPage />} />
+          <Route path="/cycles/:cycleId" element={<CycleDetailPage />} />
           <Route path="/activity" element={<ActivityPage />} />
           <Route path="/settings" element={isAdmin ? <SettingsPage /> : <Navigate to="/dashboard" />} />
 
@@ -150,6 +152,10 @@ export const AppRoutes: React.FC = () => {
           <Route path="/analytics" element={isLead ? <ReportsPage /> : <Navigate to="/" />} />
           <Route path="/integrations" element={isLead ? <IntegrationsPage /> : <Navigate to="/" />} />
           <Route path="/templates" element={isAdmin ? <TemplatesPage /> : <Navigate to="/" />} />
+          <Route path="/templates/new" element={isAdmin ? <TemplatesPage /> : <Navigate to="/" />} />
+          <Route path="/templates/:templateId" element={isAdmin ? <TemplatesPage /> : <Navigate to="/" />} />
+          <Route path="/templates/:templateId/edit" element={isAdmin ? <TemplatesPage /> : <Navigate to="/" />} />
+          <Route path="/templates/:templateId/apply" element={isAdmin ? <TemplatesPage /> : <Navigate to="/" />} />
           <Route path="/api-keys" element={isAdmin ? <ApiKeysPage /> : <Navigate to="/" />} />
           <Route path="/billing" element={isAdmin ? <BillingPage /> : <Navigate to="/" />} />
 

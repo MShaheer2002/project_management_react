@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { 
   ChevronLeft, 
   Plus, 
@@ -20,9 +20,10 @@ import {
   Check,
   Bug,
   FileText,
-  Zap
+  Zap,
+  Sparkles
 } from 'lucide-react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useApp } from '../AppContext';
 import { STATUS_LABELS, ISSUE_TYPE_CONFIG } from '../constants';
 import {
@@ -40,6 +41,7 @@ import { RichTextEditor } from '../components/RichTextEditor';
 import { LabelChip } from '@shared/components/ui/LabelChip';
 import { getApiFieldErrors, getApiErrorMessage } from '@shared/services';
 import { useDepartmentOptions } from '@features/department';
+import { useActiveTemplates, useApplyTemplate } from '@features/templates';
 import { useProjectOptions } from '@features/projects';
 import { useWorkspaceMemberOptions } from '@features/workspace';
 import {
@@ -59,6 +61,35 @@ import {
 interface Subtask extends IssueSubtask {
   isEditing?: boolean;
 }
+
+type IssueDraftSnapshot = {
+  title?: string;
+  description?: string;
+  type?: IssueType;
+  projectId?: string;
+  priority?: Priority;
+  status?: Status;
+  templateId?: string;
+  assigneeId?: string;
+  departmentId?: string;
+  dueDate?: string;
+  dueTime?: string;
+  estimate?: string | number;
+  selectedLabelIds?: string[];
+  subtasks?: Subtask[];
+  stepsToReproduce?: string;
+  expectedBehavior?: string;
+  actualBehavior?: string;
+  severity?: Severity;
+  acceptanceCriteria?: string;
+  relatedIssues?: string;
+  notes?: string;
+  parentIssueId?: string;
+  dependencies?: IssueDependency[];
+  watcherIds?: string[];
+  integrationRefs?: IssueIntegrationRef[];
+  attachments?: IssueAttachment[];
+};
 
 const DEFAULT_NEW_LABEL_COLOR = '#38bdf8';
 
@@ -88,9 +119,16 @@ const normalizeTimeForInput = (value: unknown): string => {
   return parsed.toISOString().slice(11, 16);
 };
 
+const addDaysToDateInput = (days: number): string => {
+  const next = new Date();
+  next.setDate(next.getDate() + days);
+  return next.toISOString().slice(0, 10);
+};
+
 export const CreateIssuePage: React.FC = () => {
   const { showToast } = useApp();
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   
   // Form State
@@ -124,6 +162,9 @@ export const CreateIssuePage: React.FC = () => {
   const [watcherIds, setWatcherIds] = useState<string[]>([]);
   const [integrationRefs, setIntegrationRefs] = useState<IssueIntegrationRef[]>([]);
   const [attachments, setAttachments] = useState<IssueAttachment[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
+  const [isApplyingTemplate, setIsApplyingTemplate] = useState(false);
+  const [lastAutoAppliedType, setLastAutoAppliedType] = useState<IssueType | null>(null);
   
   // UI State
   const [errors, setErrors] = useState<{ project?: string }>({});
@@ -171,9 +212,63 @@ export const CreateIssuePage: React.FC = () => {
   const departmentOptions = departmentOptionsQuery.data?.pages.flatMap((page) => page.items) ?? [];
   const assigneeOptions = assigneeOptionsQuery.data?.pages.flatMap((page) => page.items) ?? [];
   const labels = labelsQuery.data?.pages.flatMap((page) => page.items) ?? [];
+  const selectedProject = useMemo(() => projectOptions.find((project) => project.id === projectId) ?? null, [projectId, projectOptions]);
+  const issueDraftFromRoute = (location.state as { issueDraft?: IssueDraftSnapshot } | null)?.issueDraft ?? null;
+  const activeTemplatesQuery = useActiveTemplates({
+    limit: 100,
+    issueType: type,
+  });
+  const applyTemplate = useApplyTemplate();
+  const activeTemplates = activeTemplatesQuery.data ?? [];
+  const effectiveTemplate = useMemo(() => {
+    const templatesForType = activeTemplates.filter((template) => template.issueType === type);
+    if (templatesForType.length === 0) return null;
+
+    const projectTemplate = projectId
+      ? templatesForType.find((template) => template.scopeType === 'PROJECT' && template.scopeId === projectId)
+      : undefined;
+    if (projectTemplate) return projectTemplate;
+
+    const teamTemplate = selectedProject?.teamId
+      ? templatesForType.find((template) => template.scopeType === 'TEAM' && template.scopeId === selectedProject.teamId)
+      : undefined;
+    if (teamTemplate) return teamTemplate;
+
+    return templatesForType.find((template) => template.scopeType === 'WORKSPACE') ?? templatesForType[0] ?? null;
+  }, [activeTemplates, projectId, selectedProject?.teamId, type]);
   const selectedLabels = selectedLabelIds
     .map((id) => labels.find((label) => label.id === id))
     .filter((label): label is IssueLabelRow => Boolean(label));
+
+  const hydrateDraft = useCallback((draft: IssueDraftSnapshot) => {
+    setTitle(draft.title || '');
+    setDescription(draft.description || '');
+    setType(draft.type || 'task');
+    setProjectId(draft.projectId || '');
+    setPriority(draft.priority || 'medium');
+    setStatus(draft.status || 'todo');
+    setAssigneeId(draft.assigneeId || undefined);
+    setDepartmentId(draft.departmentId || '');
+    setSelectedTemplateId(draft.templateId || '');
+    setLastAutoAppliedType(draft.templateId ? draft.type ?? 'task' : null);
+    setDueDate(normalizeDateForInput(draft.dueDate));
+    setDueTime(normalizeTimeForInput(draft.dueTime));
+    setEstimate(typeof draft.estimate === 'number' ? String(draft.estimate) : draft.estimate || '');
+    setSelectedLabelIds(draft.selectedLabelIds || []);
+    setSubtasks(draft.subtasks || []);
+    setStepsToReproduce(draft.stepsToReproduce || '');
+    setExpectedBehavior(draft.expectedBehavior || '');
+    setActualBehavior(draft.actualBehavior || '');
+    setSeverity(draft.severity || 'medium');
+    setAcceptanceCriteria(draft.acceptanceCriteria || '');
+    setRelatedIssues(draft.relatedIssues || '');
+    setNotes(draft.notes || '');
+    setParentIssueId(draft.parentIssueId || '');
+    setDependencies(draft.dependencies || []);
+    setWatcherIds(draft.watcherIds || []);
+    setIntegrationRefs(draft.integrationRefs || []);
+    setAttachments(draft.attachments || []);
+  }, []);
 
   // Click outside for label dropdown
   useEffect(() => {
@@ -210,6 +305,120 @@ export const CreateIssuePage: React.FC = () => {
       setProjectId(projectParam);
     }
   }, [searchParams]);
+
+  const handleApplyTemplate = async () => {
+    if (!selectedTemplateId) {
+      showToast('Select a template first.', 'error');
+      return;
+    }
+
+    setIsApplyingTemplate(true);
+    try {
+      const draft = await applyTemplate.mutateAsync(selectedTemplateId);
+      setTitle(draft.title || '');
+      setDescription(draft.description || '');
+      setType(draft.issueType);
+      setPriority(draft.priority);
+      setStatus(draft.status);
+      setAssigneeId(draft.assigneeType === 'SPECIFIC_USER' ? draft.assigneeId ?? undefined : undefined);
+      setEstimate(draft.estimate != null ? String(draft.estimate) : '');
+      setSelectedLabelIds(draft.labels ?? []);
+      setSubtasks((draft.subtasks ?? []).map((item, index) => ({
+        id: `${selectedTemplateId}-${index}-${item.slice(0, 12)}`,
+        title: item,
+        completed: false,
+        order: index,
+        isEditing: false,
+      })));
+      setSeverity(draft.severity ?? 'medium');
+      setStepsToReproduce(draft.stepsToReproduce ?? '');
+      setExpectedBehavior(draft.expectedBehavior ?? '');
+      setActualBehavior(draft.actualBehavior ?? '');
+      setAcceptanceCriteria(draft.acceptanceCriteria ?? '');
+      setRelatedIssues(draft.relatedIssueKeys ?? '');
+      setNotes(draft.notes ?? '');
+
+      if (typeof draft.dueDateOffset === 'number') {
+        setDueDate(addDaysToDateInput(draft.dueDateOffset));
+      }
+
+      showToast('Template applied to the issue draft.', 'success');
+    } catch (error) {
+      showToast(getApiErrorMessage(error) || 'Failed to apply template.', 'error');
+    } finally {
+      setIsApplyingTemplate(false);
+    }
+  };
+
+  const resetTemplateDrivenState = (nextType: IssueType) => {
+    setSelectedTemplateId('');
+    setLastAutoAppliedType(null);
+    setTitle('');
+    setDescription('');
+    setPriority('medium');
+    setStatus('todo');
+    setEstimate(nextType === 'task' ? '1' : '');
+    setSelectedLabelIds([]);
+    setSubtasks([]);
+    setStepsToReproduce('');
+    setExpectedBehavior('');
+    setActualBehavior('');
+    setSeverity('medium');
+    setAcceptanceCriteria('');
+    setRelatedIssues('');
+    setNotes('');
+    setParentIssueId('');
+    setDependencies([]);
+    setWatcherIds([]);
+    setIntegrationRefs([]);
+    setAttachments([]);
+  };
+
+  useEffect(() => {
+    if (!effectiveTemplate || isApplyingTemplate) return;
+
+    const template = effectiveTemplate;
+    if (selectedTemplateId === template.id && lastAutoAppliedType === type) return;
+    if (selectedTemplateId && selectedTemplateId !== template.id && lastAutoAppliedType === type) return;
+
+    setSelectedTemplateId(template.id);
+    setLastAutoAppliedType(type);
+    void (async () => {
+      try {
+        setIsApplyingTemplate(true);
+        const draft = await applyTemplate.mutateAsync(template.id);
+        setTitle(draft.title || '');
+        setDescription(draft.description || '');
+        setPriority(draft.priority);
+        setStatus(draft.status);
+        setAssigneeId(draft.assigneeType === 'SPECIFIC_USER' ? draft.assigneeId ?? undefined : undefined);
+        setEstimate(draft.estimate != null ? String(draft.estimate) : '');
+        setSelectedLabelIds(draft.labels ?? []);
+        setSubtasks((draft.subtasks ?? []).map((item, index) => ({
+          id: `${template.id}-${index}-${item.slice(0, 12)}`,
+          title: item,
+          completed: false,
+          order: index,
+          isEditing: false,
+        })));
+        setSeverity(draft.severity ?? 'medium');
+        setStepsToReproduce(draft.stepsToReproduce ?? '');
+        setExpectedBehavior(draft.expectedBehavior ?? '');
+        setActualBehavior(draft.actualBehavior ?? '');
+        setAcceptanceCriteria(draft.acceptanceCriteria ?? '');
+        setRelatedIssues(draft.relatedIssueKeys ?? '');
+        setNotes(draft.notes ?? '');
+        if (typeof draft.dueDateOffset === 'number') {
+          setDueDate(addDaysToDateInput(draft.dueDateOffset));
+        }
+        showToast(`Auto-applied ${template.name}.`, 'success');
+      } catch (error) {
+        showToast(getApiErrorMessage(error) || 'Failed to auto-apply template.', 'error');
+      } finally {
+        setIsApplyingTemplate(false);
+      }
+    })();
+  }, [applyTemplate, effectiveTemplate, isApplyingTemplate, lastAutoAppliedType, selectedTemplateId, showToast, type]);
 
   // Validation
   const validate = () => {
@@ -252,11 +461,13 @@ export const CreateIssuePage: React.FC = () => {
       const normalizedComplexity = Number.isNaN(parsedComplexity)
         ? null
         : Math.min(5, Math.max(1, parsedComplexity));
+      const templateId = selectedTemplateId && lastAutoAppliedType === type ? selectedTemplateId : undefined;
 
       const createdIssue = await createIssue.mutateAsync({
         title: title.trim(),
         description,
         type,
+        templateId,
         status,
         priority,
         assigneeId: assigneeId || null,
@@ -388,43 +599,25 @@ export const CreateIssuePage: React.FC = () => {
 
   // Draft Logic
   useEffect(() => {
+    if (issueDraftFromRoute) {
+      hydrateDraft(issueDraftFromRoute);
+      localStorage.removeItem('issue_draft');
+      return;
+    }
+
     const savedDraft = localStorage.getItem('issue_draft');
     if (savedDraft) {
       try {
-        const draft = JSON.parse(savedDraft);
-        setTitle(draft.title || '');
-        setDescription(draft.description || '');
-        setType(draft.type || 'task');
-        setProjectId(draft.projectId || '');
-        setPriority(draft.priority || 'medium');
-        setStatus(draft.status || 'todo');
-        setAssigneeId(draft.assigneeId || undefined);
-        setDepartmentId(draft.departmentId || '');
-        setDueDate(normalizeDateForInput(draft.dueDate));
-        setDueTime(normalizeTimeForInput(draft.dueTime));
-        setEstimate(draft.estimate || '');
-        setSelectedLabelIds(draft.selectedLabelIds || []);
-        setSubtasks(draft.subtasks || []);
-        setStepsToReproduce(draft.stepsToReproduce || '');
-        setExpectedBehavior(draft.expectedBehavior || '');
-        setActualBehavior(draft.actualBehavior || '');
-        setSeverity(draft.severity || 'medium');
-        setAcceptanceCriteria(draft.acceptanceCriteria || '');
-        setRelatedIssues(draft.relatedIssues || '');
-        setNotes(draft.notes || '');
-        setParentIssueId(draft.parentIssueId || '');
-        setDependencies(draft.dependencies || []);
-        setWatcherIds(draft.watcherIds || []);
-        setIntegrationRefs(draft.integrationRefs || []);
-        setAttachments(draft.attachments || []);
+        hydrateDraft(JSON.parse(savedDraft) as IssueDraftSnapshot);
       } catch (e) {
         console.error('Failed to load draft');
       }
     }
-  }, []);
+  }, [hydrateDraft, issueDraftFromRoute]);
 
   const saveDraft = useCallback(() => {
     setIsSaving(true);
+    const templateId = selectedTemplateId && lastAutoAppliedType === type ? selectedTemplateId : '';
     const draft = {
       title,
       description,
@@ -432,6 +625,7 @@ export const CreateIssuePage: React.FC = () => {
       projectId,
       priority,
       status,
+      templateId,
       assigneeId,
       departmentId,
       dueDate,
@@ -457,7 +651,7 @@ export const CreateIssuePage: React.FC = () => {
       setIsSaving(false);
       setLastSaved(new Date());
     }, 800);
-  }, [title, description, type, projectId, priority, status, assigneeId, departmentId, dueDate, dueTime, estimate, selectedLabelIds, subtasks, stepsToReproduce, expectedBehavior, actualBehavior, severity, acceptanceCriteria, relatedIssues, notes, parentIssueId, dependencies, watcherIds, integrationRefs, attachments]);
+  }, [title, description, type, projectId, priority, status, selectedTemplateId, lastAutoAppliedType, assigneeId, departmentId, dueDate, dueTime, estimate, selectedLabelIds, subtasks, stepsToReproduce, expectedBehavior, actualBehavior, severity, acceptanceCriteria, relatedIssues, notes, parentIssueId, dependencies, watcherIds, integrationRefs, attachments]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -555,7 +749,12 @@ export const CreateIssuePage: React.FC = () => {
                 {(['task', 'bug', 'issue'] as IssueType[]).map((t) => (
                   <button
                     key={t}
-                    onClick={() => setType(t)}
+                    onClick={() => {
+                      if (t !== type) {
+                        resetTemplateDrivenState(t);
+                      }
+                      setType(t);
+                    }}
                     className={`flex-1 flex items-center justify-center gap-3 p-4 rounded-2xl border transition-all ${
                       type === t 
                         ? 'bg-primary/5 border-primary text-primary shadow-sm' 

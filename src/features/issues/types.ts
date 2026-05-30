@@ -176,6 +176,8 @@ export interface CreateIssueInput {
   description?: string;
   type: Issue['type'];
   projectId: string;
+  templateId?: string | null;
+  templateDraftId?: string | null;
   priority: Priority;
   status?: Status;
   assigneeId?: string | null;
