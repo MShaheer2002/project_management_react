@@ -30,7 +30,7 @@ import { SettingsPage } from '@/pages/SettingsPage';
 import { MembersPage } from '@/pages/MembersPage';
 import { MyIssuesPage } from '@/pages/MyIssuesPage';
 import { NotificationsPage } from '@/pages/NotificationsPage';
-import { ReportsPage } from '@/pages/ReportsPage';
+import { AnalyticsPage } from '@features/analytics';
 import { IntegrationsPage } from '@/pages/IntegrationsPage';
 import { MarketingPage } from '@/pages/MarketingPage';
 import { CyclesPage } from '@/pages/CyclesPage';
@@ -149,7 +149,7 @@ export const AppRoutes: React.FC = () => {
           <Route path="/settings" element={isAdmin ? <SettingsPage /> : <Navigate to="/dashboard" />} />
 
           {/* Role-guarded routes (inline checks — will use RoleGuard component in Phase 3) */}
-          <Route path="/analytics" element={isLead ? <ReportsPage /> : <Navigate to="/" />} />
+          <Route path="/analytics" element={isLead ? <AnalyticsPage /> : <Navigate to="/" />} />
           <Route path="/integrations" element={isLead ? <IntegrationsPage /> : <Navigate to="/" />} />
           <Route path="/templates" element={isAdmin ? <TemplatesPage /> : <Navigate to="/" />} />
           <Route path="/templates/new" element={isAdmin ? <TemplatesPage /> : <Navigate to="/" />} />
