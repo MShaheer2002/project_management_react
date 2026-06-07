@@ -32,6 +32,18 @@ export const canManageProject = (
 ): boolean =>
   canCreateDepartment(role) || (Boolean(currentUserId) && currentUserId === leadId);
 
+export const canManageRoadmap = (
+  role: WorkspaceRoleInput,
+  currentUserId: string | null | undefined,
+  projectLeadId: string | null | undefined,
+  teamLeadId: string | null | undefined
+): boolean =>
+  canCreateDepartment(role) ||
+  (Boolean(currentUserId) && (currentUserId === projectLeadId || currentUserId === teamLeadId));
+
+export const canForceRoadmapOverride = (role: WorkspaceRoleInput): boolean =>
+  role === 'owner' || role === 'admin';
+
 export const canDeleteIssues = (role: WorkspaceRoleInput): boolean =>
   role === 'owner' || role === 'admin';
 

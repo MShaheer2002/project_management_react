@@ -25,7 +25,7 @@ import { ProjectsPage } from '@/features/projects/pages/ProjectsPage';
 import { TeamsPage } from '@/features/team/pages/TeamsPage';
 import { TeamDetailPage } from '@/features/team/pages/TeamDetailPage';
 import { ActivityPage } from '@features/activity';
-import { RoadmapPage } from '@/pages/RoadmapPage';
+import { RoadmapPage } from '@features/roadmap';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { MembersPage } from '@/pages/MembersPage';
 import { MyIssuesPage } from '@/pages/MyIssuesPage';

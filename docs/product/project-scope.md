@@ -576,17 +576,7 @@ Time-boxed periods for tracking issue progress.
 - Team-scoped filtering (via `?team=` param)
 - Create cycle modal: name, start date, end date
 
-### 6.7 Roadmap
-
-Visual timeline of project progress.
-
-**Roadmap page** (`/roadmap`):
-- Gantt-chart style horizontal timeline
-- Monthly/quarterly view toggle
-- Projects as timeline bars with progress %
-- Quarter/month navigation (prev/next)
-
-### 6.8 Notifications (Inbox)
+### 6.7 Notifications (Inbox)
 
 **Notification types:**
 - `mention`: @mention in a comment
@@ -599,7 +589,7 @@ Visual timeline of project progress.
 - Mark as read, archive actions
 - Unread count badge in sidebar
 
-### 6.9 Activity Feed
+### 6.8 Activity Feed
 
 **Activity page** (`/activity`):
 - Vertical timeline of all workspace actions
@@ -607,7 +597,7 @@ Visual timeline of project progress.
 - Each entry: actor avatar, name, action badge, description, timestamp
 - Search and filter
 
-### 6.10 Analytics & Reports
+### 6.9 Analytics & Reports
 
 **Reports page** (`/analytics`, admin/member only):
 - Stat cards: tasks completed, avg resolution time, active projects, team workload
@@ -616,6 +606,35 @@ Visual timeline of project progress.
 - Team performance table: team name, members, completed, efficiency %, progress bar
 - Date range filter: 7 days / 30 days
 - Export data button
+
+### 6.10 Roadmap
+
+Visual planning timeline for projects, milestones, and delivery risk.
+
+**Current frontend baseline already exists in code:**
+- Dedicated `/roadmap` page
+- Team-scoped filtering via `?team=...`
+- Quarterly/monthly toggle UI
+- Prev/next timeline navigation
+- Project bars with progress %
+
+**Roadmap page** (`/roadmap`):
+- Gantt-style horizontal timeline backed by real `project.startDate` and `project.targetDate`
+- Workspace view and team-scoped view using the same screen
+- Projects rendered as timeline bars with progress %, owner, and health state
+- Monthly/quarterly view toggle
+- Quarter/month navigation (prev/next)
+- Filters: team, department, project lead, status
+- Milestones shown inside or beneath project bars
+- Dependency indicators for blocked / blocking projects
+- Inline rescheduling for project dates
+- Add project CTA from roadmap view
+
+**Production-grade behavior for productivity:**
+- Timeline bars should expose at-a-glance risk: `on track`, `at risk`, `off track`
+- Embedded roadmap tab inside project detail should reuse the same data model as the main roadmap page
+- Large workspaces must remain usable with stable sorting, predictable filtering, and efficient rendering
+- Empty, loading, and error states must be first-class; roadmap cannot depend on mock-only happy paths
 
 ### 6.11 Templates
 

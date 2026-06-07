@@ -15,12 +15,12 @@ import {
   Users,
 } from 'lucide-react';
 import { motion } from 'motion/react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '@/app/stores/useAuthStore';
 import { useApp } from '@/AppContext';
 import { MemberPerformancePanel } from '@/components/analytics/MemberPerformancePanel';
 import { ActivityPage } from '@features/activity';
-import { RoadmapPage } from '@/pages/RoadmapPage';
+import { ProjectRoadmapPanel } from '@features/roadmap';
 import { IssuesPage } from '@/features/issues/components/IssuesPage';
 import { buildMemberPerformanceRows } from '@shared/analytics/memberPerformance';
 import { canManageProject } from '@shared/permissions';
@@ -57,11 +57,10 @@ const AvatarFallback: React.FC<{ name: string; sizeClassName: string; textClassN
 export const ProjectDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { showToast } = useApp();
   const role = useAuthStore((state) => state.workspace?.role);
   const currentUserId = useAuthStore((state) => state.currentUser?.id);
-
-  const [activeTab, setActiveTab] = useState<'overview' | 'issues' | 'board' | 'roadmap' | 'members' | 'activity' | 'settings'>('overview');
   const [memberSearch, setMemberSearch] = useState('');
   const [leadSearch, setLeadSearch] = useState('');
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
@@ -151,6 +150,11 @@ export const ProjectDetailPage: React.FC = () => {
 
   const projectUnassignedCount = projectIssues.filter((issue) => !issue.assigneeId).length;
   const canManage = canManageProject(role, currentUserId, project?.lead?.id);
+  const allowedTabs = canManage
+    ? ['overview', 'issues', 'board', 'roadmap', 'members', 'activity', 'settings']
+    : ['overview', 'issues', 'board', 'roadmap', 'members', 'activity'];
+  const rawTab = searchParams.get('tab');
+  const activeTab = allowedTabs.includes(rawTab ?? '') ? (rawTab as (typeof allowedTabs)[number]) : 'overview';
 
   useEffect(() => {
     if (!project) return;
@@ -167,6 +171,14 @@ export const ProjectDetailPage: React.FC = () => {
     setEnableTracking(project.features.issueTracking);
     setFieldErrors({});
   }, [project]);
+
+  useEffect(() => {
+    if (activeTab === 'settings' && !canManage) {
+      const next = new URLSearchParams(searchParams);
+      next.delete('tab');
+      setSearchParams(next, { replace: true });
+    }
+  }, [activeTab, canManage, searchParams, setSearchParams]);
 
   useEffect(() => {
     const handlePointerDown = (event: MouseEvent) => {
@@ -207,6 +219,13 @@ export const ProjectDetailPage: React.FC = () => {
   const visibleTabs = canManage
     ? [...tabs, { id: 'settings', label: 'Settings', icon: <Settings size={14} /> }]
     : tabs;
+
+  const handleTabChange = (tab: (typeof visibleTabs)[number]['id']) => {
+    const next = new URLSearchParams(searchParams);
+    if (tab === 'overview') next.delete('tab');
+    else next.set('tab', tab);
+    setSearchParams(next, { replace: true });
+  };
 
   const selectedLead =
     leadOptions.find((option) => option.id === leadId) ??
@@ -367,7 +386,7 @@ export const ProjectDetailPage: React.FC = () => {
               <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400">Team</h3>
               <button
                 onClick={() => {
-                  setActiveTab('members');
+                  handleTabChange('members');
                   setIsMemberPickerOpen(true);
                 }}
                 className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 text-gray-400 transition-colors hover:border-primary/40 hover:text-primary dark:border-border-dark dark:hover:bg-white/5"
@@ -877,7 +896,7 @@ export const ProjectDetailPage: React.FC = () => {
           {visibleTabs.map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => handleTabChange(tab.id)}
                 className={`relative flex items-center gap-2 pb-3 text-sm font-medium transition-all ${
                   activeTab === tab.id ? 'text-primary' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200'
                 }`}
@@ -903,7 +922,7 @@ export const ProjectDetailPage: React.FC = () => {
             initialViewMode="kanban"
           />
         )}
-        {activeTab === 'roadmap' && <RoadmapPage />}
+        {activeTab === 'roadmap' && <ProjectRoadmapPanel projectId={project.id} />}
         {activeTab === 'members' && renderMembers()}
         {activeTab === 'activity' && <ActivityPage scope="project" scopeId={project?.id} title="Activity" />}
         {activeTab === 'settings' && canManage && renderSettings()}

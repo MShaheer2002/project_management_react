@@ -6,6 +6,7 @@ import { useAuthStore } from '@/app/stores/useAuthStore';
 import { useToastStore } from '@/app/stores/useToastStore';
 import { issueQueryKeys } from '@features/issues';
 import { dashboardQueryKeys } from '@features/dashboard';
+import { roadmapQueryKeys } from '@features/roadmap';
 import { sidebarQueryKeys } from '@features/sidebar';
 import { notificationQueryKeys } from './useNotificationData';
 import type { NotificationItem, NotificationsListResult } from '../types';
@@ -242,6 +243,15 @@ export const useNotificationRealtime = () => {
         queryClient.invalidateQueries({ queryKey: issueQueryKeys.activity(workspaceId, issueId) });
       };
 
+      const handleRoadmapChange = (envelope: RealtimeEnvelope<{ projectId?: string }>) => {
+        if (envelope.workspaceId !== workspaceId) return;
+        queryClient.invalidateQueries({ queryKey: roadmapQueryKeys.workspace(workspaceId) });
+        const projectId = envelope.payload?.projectId;
+        if (projectId) {
+          queryClient.invalidateQueries({ queryKey: roadmapQueryKeys.project(workspaceId, projectId) });
+        }
+      };
+
       const handleConnect = async () => {
         log('socket connected: triggering notification resync');
         await Promise.all([
@@ -291,6 +301,14 @@ export const useNotificationRealtime = () => {
       socket.on('comment:created', handleIssueCommentChange);
       socket.on('comment:updated', handleIssueCommentChange);
       socket.on('comment:deleted', handleIssueCommentChange);
+      socket.on('roadmap:project-updated', handleRoadmapChange);
+      socket.on('roadmap:milestone-created', handleRoadmapChange);
+      socket.on('roadmap:milestone-updated', handleRoadmapChange);
+      socket.on('roadmap:milestone-deleted', handleRoadmapChange);
+      socket.on('roadmap:dependency-created', handleRoadmapChange);
+      socket.on('roadmap:dependency-resolved', handleRoadmapChange);
+      socket.on('roadmap:dependency-cancelled', handleRoadmapChange);
+      socket.on('roadmap:dependency-deleted', handleRoadmapChange);
       socket.on('connect', handleConnect);
       socket.on('connect_error', handleConnectError);
       socket.io.on('reconnect_attempt', handleReconnectAttempt);
@@ -311,6 +329,14 @@ export const useNotificationRealtime = () => {
         socket.off('comment:created', handleIssueCommentChange);
         socket.off('comment:updated', handleIssueCommentChange);
         socket.off('comment:deleted', handleIssueCommentChange);
+        socket.off('roadmap:project-updated', handleRoadmapChange);
+        socket.off('roadmap:milestone-created', handleRoadmapChange);
+        socket.off('roadmap:milestone-updated', handleRoadmapChange);
+        socket.off('roadmap:milestone-deleted', handleRoadmapChange);
+        socket.off('roadmap:dependency-created', handleRoadmapChange);
+        socket.off('roadmap:dependency-resolved', handleRoadmapChange);
+        socket.off('roadmap:dependency-cancelled', handleRoadmapChange);
+        socket.off('roadmap:dependency-deleted', handleRoadmapChange);
         socket.off('connect', handleConnect);
         socket.off('connect_error', handleConnectError);
         socket.io.off('reconnect_attempt', handleReconnectAttempt);

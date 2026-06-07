@@ -585,10 +585,10 @@ export const Sidebar: React.FC = () => {
                                   indent
                                 />
                                 <SidebarNavLink
-                                  to={`/roadmap?team=${team.id}`}
+                                  to={`/roadmap?teamId=${team.id}`}
                                   icon={<Map size={15} />}
                                   label="Roadmap"
-                                  active={isNavActive(`/roadmap?team=${team.id}`)}
+                                  active={isNavActive(`/roadmap?teamId=${team.id}`)}
                                   indent
                                 />
                               </motion.div>
@@ -984,7 +984,7 @@ const TeamsFlyoutPanel: React.FC<{
                   { to: `/projects?team=${team.id}`, label: 'Projects', active: isNavActive(`/projects?team=${team.id}`) },
                   { to: `/teams/${team.id}`, label: 'Team', active: locationPathname === `/teams/${team.id}` },
                   { to: `/cycles?team=${team.id}`, label: 'Cycles', active: isNavActive(`/cycles?team=${team.id}`) },
-                  { to: `/roadmap?team=${team.id}`, label: 'Roadmap', active: isNavActive(`/roadmap?team=${team.id}`) },
+                  { to: `/roadmap?teamId=${team.id}`, label: 'Roadmap', active: isNavActive(`/roadmap?teamId=${team.id}`) },
                 ].map(link => (
                   <Link
                     key={link.to}
