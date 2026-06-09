@@ -1,10 +1,18 @@
 import React, { useDeferredValue, useEffect, useRef, useState } from 'react';
 import { Layout, Loader2, Map, RotateCcw, Search } from 'lucide-react';
+import { useAuthStore } from '@/app/stores/useAuthStore';
 import { useApp } from '@/AppContext';
 import { useDepartmentOptions, type DepartmentCompact } from '@features/department';
+import {
+  createPendingDocumentDrafts,
+  DocumentUploadComposer,
+  type PendingDocumentDraft,
+  useDocumentDraftUploads,
+} from '@features/documents';
 import { useCreateProject, type ProjectVisibility } from '@features/projects';
 import { useTeamOptions, type TeamCompact } from '@features/team';
 import { useWorkspaceMemberOptions, type WorkspaceMemberOption } from '@features/workspace';
+import { canManageDocuments } from '@shared/permissions';
 import { getApiErrorCode, getApiErrorMessage, getApiFieldErrors } from '@shared/services';
 import { Modal } from './Modal';
 
@@ -56,7 +64,9 @@ const renderFieldError = (errors: Record<string, string[]>, field: string) =>
 
 export const CreateProjectModal: React.FC = () => {
   const { activeModal, setActiveModal, showToast } = useApp();
+  const role = useAuthStore((state) => state.workspace?.role);
   const createProject = useCreateProject();
+  const { isUploading: isUploadingDocs, uploadDrafts } = useDocumentDraftUploads();
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -64,6 +74,7 @@ export const CreateProjectModal: React.FC = () => {
   const [departmentId, setDepartmentId] = useState('');
   const [leadId, setLeadId] = useState('');
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
+  const [pendingDocs, setPendingDocs] = useState<PendingDocumentDraft[]>([]);
   const [visibility, setVisibility] = useState<ProjectVisibility>('PUBLIC');
   const [startDate, setStartDate] = useState('');
   const [targetDate, setTargetDate] = useState('');
@@ -143,6 +154,7 @@ export const CreateProjectModal: React.FC = () => {
     leadOptions.find((option) => option.id === leadId) ??
     recentLeads.find((option) => option.id === leadId) ??
     null;
+  const canAttachDocs = canManageDocuments(role);
   const selectedMemberPreview = selectedMemberIds
     .map(
       (memberId) =>
@@ -257,6 +269,7 @@ export const CreateProjectModal: React.FC = () => {
     setDepartmentId('');
     setLeadId('');
     setSelectedMemberIds([]);
+    setPendingDocs([]);
     setVisibility('PUBLIC');
     setStartDate('');
     setTargetDate('');
@@ -275,6 +288,13 @@ export const CreateProjectModal: React.FC = () => {
     setActiveModal(null);
   };
 
+  const updatePendingDocument = (
+    draftId: string,
+    updater: (draft: PendingDocumentDraft) => PendingDocumentDraft
+  ) => {
+    setPendingDocs((current) => current.map((draft) => (draft.id === draftId ? updater(draft) : draft)));
+  };
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setFieldErrors({});
@@ -286,6 +306,11 @@ export const CreateProjectModal: React.FC = () => {
     }
 
     try {
+      const docs =
+        canAttachDocs && pendingDocs.length > 0
+          ? (await uploadDrafts(pendingDocs, updatePendingDocument)).map((item) => item.input)
+          : undefined;
+
       await createProject.mutateAsync({
         name: name.trim(),
         description: description.trim() || undefined,
@@ -301,6 +326,7 @@ export const CreateProjectModal: React.FC = () => {
           cycles: enableCycles,
           issueTracking: enableTracking,
         },
+        ...(docs && docs.length > 0 ? { docs } : {}),
       });
       showToast('Project created successfully.', 'success');
       setActiveModal(null);
@@ -319,6 +345,11 @@ export const CreateProjectModal: React.FC = () => {
       const validationErrors = getApiFieldErrors(error);
       if (Object.keys(validationErrors).length > 0) {
         setFieldErrors(validationErrors);
+        return;
+      }
+
+      if (code === 'DOCUMENT_UPLOAD_FORBIDDEN') {
+        showToast('Only workspace admins and owners can attach documents during project creation.', 'error', 'Permission denied');
         return;
       }
 
@@ -779,6 +810,31 @@ export const CreateProjectModal: React.FC = () => {
           </div>
         </div>
 
+        {canAttachDocs && (
+          <DocumentUploadComposer
+            title="Attach project reference docs"
+            description="Add specs, briefs, or planning notes that should open with the project from the first day."
+            drafts={pendingDocs}
+            onAddFiles={(files) => {
+              const result = createPendingDocumentDrafts(files);
+              if (result.errors.length > 0) {
+                showToast(result.errors[0], 'error', 'Upload blocked');
+              }
+              if (result.drafts.length > 0) {
+                setPendingDocs((current) => [...current, ...result.drafts]);
+              }
+            }}
+            onUpdateDraft={(draftId, patch) =>
+              setPendingDocs((current) =>
+                current.map((draft) => (draft.id === draftId ? { ...draft, ...patch } : draft))
+              )
+            }
+            onRemoveDraft={(draftId) =>
+              setPendingDocs((current) => current.filter((draft) => draft.id !== draftId))
+            }
+          />
+        )}
+
         <div className="flex items-center justify-end gap-3 border-t border-gray-100 pt-4 dark:border-border-dark">
           <button
             type="button"
@@ -789,10 +845,10 @@ export const CreateProjectModal: React.FC = () => {
           </button>
           <button
             type="submit"
-            disabled={createProject.isPending || !name.trim() || !teamId || !leadId}
+            disabled={createProject.isPending || isUploadingDocs || !name.trim() || !teamId || !leadId}
             className="flex items-center gap-2 rounded-lg bg-primary px-6 py-2 text-sm font-bold text-white shadow-lg shadow-primary/20 transition-all disabled:opacity-50 disabled:shadow-none"
           >
-            {createProject.isPending && <Loader2 size={16} className="animate-spin" />}
+            {(createProject.isPending || isUploadingDocs) && <Loader2 size={16} className="animate-spin" />}
             Create Project
           </button>
         </div>

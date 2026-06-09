@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { Loader2, Moon, Save, Sun, Globe, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { DocumentsPanel } from '@features/documents';
 import {
   useDeleteWorkspace,
   useUpdateWorkspace,
   useWorkspaces,
   useWorkspaceDetails,
 } from '@features/workspace';
+import { canManageDocuments } from '@shared/permissions';
 import type { ApiAxiosError } from '@shared/services/types';
 import { useApp } from '../AppContext';
 import { useAuthStore } from '@/app/stores/useAuthStore';
@@ -57,7 +59,7 @@ export const SettingsPage: React.FC = () => {
   const [confirmName, setConfirmName] = useState('');
 
   const role = activeWorkspace?.role;
-  const canManageSettings = role === 'owner' || role === 'admin';
+  const canManageSettings = canManageDocuments(role);
   const canDeleteWorkspace = role === 'owner';
 
   useEffect(() => {
@@ -233,6 +235,26 @@ export const SettingsPage: React.FC = () => {
             </div>
           </SettingsItem>
         </SettingsSection>
+
+        {workspace && (
+          <div className="space-y-4">
+            <div>
+              <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400">Workspace Documents</h3>
+              <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                Workspace docs keep policies, onboarding, and shared references in one place.
+              </p>
+            </div>
+            <DocumentsPanel
+              scope="workspace"
+              workspaceId={workspace.id}
+              entityId={workspace.id}
+              title="Workspace docs"
+              description="Workspace docs keep policies, onboarding, and shared references in one place."
+              emptyTitle="No workspace docs yet"
+              emptyDescription="Add shared references, policies, and onboarding material for everyone in this workspace."
+            />
+          </div>
+        )}
 
         {canDeleteWorkspace && (
           <SettingsSection title="Danger Zone">

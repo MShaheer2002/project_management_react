@@ -1,4 +1,5 @@
 import type { ApiListMeta } from '@shared/services/types';
+import type { CreateDocumentInput } from '@shared/types/documents';
 
 export type ProjectStatus = 'ACTIVE' | 'ARCHIVED' | 'COMPLETED';
 export type ProjectVisibility = 'PUBLIC' | 'PRIVATE';
@@ -135,6 +136,7 @@ export interface CreateProjectInput {
   startDate?: string | null;
   targetDate?: string | null;
   features?: Partial<ProjectFeatures>;
+  docs?: CreateDocumentInput[];
 }
 
 export interface UpdateProjectInput {

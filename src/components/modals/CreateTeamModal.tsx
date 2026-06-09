@@ -3,8 +3,15 @@ import { Loader2, Search } from 'lucide-react';
 import { useAuthStore } from '@/app/stores/useAuthStore';
 import { useApp } from '@/AppContext';
 import { useDepartmentOptions } from '@features/department';
+import {
+  createPendingDocumentDrafts,
+  DocumentUploadComposer,
+  type PendingDocumentDraft,
+  useDocumentDraftUploads,
+} from '@features/documents';
 import { useCreateTeam } from '@features/team';
 import { useWorkspaceMemberOptions } from '@features/workspace';
+import { canManageDocuments } from '@shared/permissions';
 import { getApiErrorCode, getApiErrorMessage, getApiFieldErrors } from '@shared/services';
 import { consumeCreateTeamDraft } from '@shared/utils/createTeamDraft';
 import { Modal } from './Modal';
@@ -63,13 +70,16 @@ const renderFieldError = (errors: Record<string, string[]>, field: string) =>
 export const CreateTeamModal: React.FC = () => {
   const { activeModal, setActiveModal, showToast } = useApp();
   const currentUser = useAuthStore((s) => s.currentUser);
+  const role = useAuthStore((s) => s.workspace?.role);
   const createTeam = useCreateTeam();
+  const { isUploading: isUploadingDocs, uploadDrafts } = useDocumentDraftUploads();
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [leadId, setLeadId] = useState(currentUser?.id ?? '');
   const [departmentId, setDepartmentId] = useState('');
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
+  const [pendingDocs, setPendingDocs] = useState<PendingDocumentDraft[]>([]);
   const [leadSearch, setLeadSearch] = useState('');
   const [departmentSearch, setDepartmentSearch] = useState('');
   const [memberSearch, setMemberSearch] = useState('');
@@ -133,6 +143,7 @@ export const CreateTeamModal: React.FC = () => {
     departmentOptions.find((option) => option.id === departmentId) ??
     recentDepartments.find((option) => option.id === departmentId) ??
     null;
+  const canAttachDocs = canManageDocuments(role);
 
   const selectedMemberPreview = selectedMemberIds
     .map((memberId) =>
@@ -250,11 +261,23 @@ export const CreateTeamModal: React.FC = () => {
     setActiveModal(null);
   };
 
+  const updatePendingDocument = (
+    draftId: string,
+    updater: (draft: PendingDocumentDraft) => PendingDocumentDraft
+  ) => {
+    setPendingDocs((current) => current.map((draft) => (draft.id === draftId ? updater(draft) : draft)));
+  };
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setFieldErrors({});
 
     try {
+      const docs =
+        canAttachDocs && pendingDocs.length > 0
+          ? (await uploadDrafts(pendingDocs, updatePendingDocument)).map((item) => item.input)
+          : undefined;
+
       await createTeam.mutateAsync({
         name: name.trim(),
         description: description.trim() || undefined,
@@ -262,6 +285,7 @@ export const CreateTeamModal: React.FC = () => {
         departmentId: departmentId || null,
         visibility: 'PUBLIC',
         memberIds: selectedMemberIds,
+        ...(docs && docs.length > 0 ? { docs } : {}),
       });
       showToast('Team created successfully.', 'success');
       setActiveModal(null);
@@ -269,6 +293,7 @@ export const CreateTeamModal: React.FC = () => {
       setDescription('');
       setDepartmentId('');
       setSelectedMemberIds([]);
+      setPendingDocs([]);
       setLeadSearch('');
       setDepartmentSearch('');
       setMemberSearch('');
@@ -295,6 +320,11 @@ export const CreateTeamModal: React.FC = () => {
       const validationErrors = getApiFieldErrors(error);
       if (Object.keys(validationErrors).length > 0) {
         setFieldErrors(validationErrors);
+        return;
+      }
+
+      if (code === 'DOCUMENT_UPLOAD_FORBIDDEN') {
+        showToast('Only workspace admins and owners can attach documents during team creation.', 'error', 'Permission denied');
         return;
       }
 
@@ -578,6 +608,31 @@ export const CreateTeamModal: React.FC = () => {
           )}
         </div>
 
+        {canAttachDocs && (
+          <DocumentUploadComposer
+            title="Attach starting docs"
+            description="Add briefs, operating notes, or kickoff references that should stay with this team from day one."
+            drafts={pendingDocs}
+            onAddFiles={(files) => {
+              const result = createPendingDocumentDrafts(files);
+              if (result.errors.length > 0) {
+                showToast(result.errors[0], 'error', 'Upload blocked');
+              }
+              if (result.drafts.length > 0) {
+                setPendingDocs((current) => [...current, ...result.drafts]);
+              }
+            }}
+            onUpdateDraft={(draftId, patch) =>
+              setPendingDocs((current) =>
+                current.map((draft) => (draft.id === draftId ? { ...draft, ...patch } : draft))
+              )
+            }
+            onRemoveDraft={(draftId) =>
+              setPendingDocs((current) => current.filter((draft) => draft.id !== draftId))
+            }
+          />
+        )}
+
         <div className="flex items-center justify-end gap-3 border-t border-gray-100 pt-4 dark:border-border-dark">
           <button
             type="button"
@@ -588,10 +643,10 @@ export const CreateTeamModal: React.FC = () => {
           </button>
           <button
             type="submit"
-            disabled={createTeam.isPending || !name.trim() || !leadId}
+            disabled={createTeam.isPending || isUploadingDocs || !name.trim() || !leadId}
             className="inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2 text-sm font-bold text-white shadow-lg shadow-primary/20 disabled:opacity-50"
           >
-            {createTeam.isPending && <Loader2 size={16} className="animate-spin" />}
+            {(createTeam.isPending || isUploadingDocs) && <Loader2 size={16} className="animate-spin" />}
             Create team
           </button>
         </div>

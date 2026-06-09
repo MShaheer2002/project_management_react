@@ -16,7 +16,7 @@ import {
   AlertTriangle,
   TrendingUp,
   Timer,
-  User,
+
 } from 'lucide-react';
 import { StatCard } from './shared/StatCard';
 import { ChartCard } from './shared/ChartCard';
@@ -237,33 +237,14 @@ export const MemberAnalytics: React.FC<MemberAnalyticsProps> = ({
   if (isError) return <AnalyticsErrorState onRetry={() => refetch()} />;
   if (!data) return <EmptyAnalyticsState />;
 
-  const { member, summary, charts, tables } = data;
+  const { summary, charts, tables } = data;
 
   return (
     <div className="space-y-6">
       {/* ── Header ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          {member.avatar ? (
-            <img
-              src={member.avatar}
-              alt={member.name}
-              className="w-12 h-12 rounded-full object-cover border-2 border-gray-200 dark:border-border-dark"
-            />
-          ) : (
-            <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-              <User size={24} />
-            </div>
-          )}
-          <div>
-            <h2 className="text-lg font-bold text-gray-900 dark:text-text-primary-dark">{member.name}</h2>
-            <p className="text-sm text-gray-400">{member.email}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
-          <PeriodSelector value={period} onChange={onPeriodChange} />
-          <ExportButton scope="member" scopeId={memberId} params={{ period }} />
-        </div>
+      <div className="flex items-center justify-end gap-3">
+        <PeriodSelector value={period} onChange={onPeriodChange} />
+        <ExportButton scope="member" scopeId={memberId} params={{ period }} />
       </div>
 
       {/* ── Stats Row ── */}

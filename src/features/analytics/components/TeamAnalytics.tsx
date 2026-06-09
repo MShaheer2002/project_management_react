@@ -48,19 +48,14 @@ export const TeamAnalytics: React.FC<TeamAnalyticsProps> = ({
   if (isError) return <AnalyticsErrorState onRetry={() => refetch()} />;
   if (!analytics) return <EmptyAnalyticsState title="No team data" description="Analytics will appear once the team has activity." />;
 
-  const { team, summary, charts, tables } = analytics;
+  const { summary, charts, tables } = analytics;
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <h2 className="text-xl font-bold text-gray-900 dark:text-text-primary-dark">
-          {team.name}
-        </h2>
-        <div className="flex items-center gap-3">
-          <PeriodSelector value={period} onChange={onPeriodChange} />
-          <ExportButton scope="team" scopeId={teamId} params={{ period }} />
-        </div>
+      <div className="flex items-center justify-end gap-3">
+        <PeriodSelector value={period} onChange={onPeriodChange} />
+        <ExportButton scope="team" scopeId={teamId} params={{ period }} />
       </div>
 
       {/* Stats Row */}
@@ -197,7 +192,7 @@ export const TeamAnalytics: React.FC<TeamAnalyticsProps> = ({
           <div className="overflow-x-auto">
             <table className="w-full min-w-[700px]">
               <thead>
-                <tr className="bg-gray-50/60 text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:bg-black/10">
+                <tr className="bg-gray-50/60 text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:bg-black/20">
                   <th className="px-6 py-3 text-left">Member</th>
                   <th className="px-4 py-3 text-right">Assigned</th>
                   <th className="px-4 py-3 text-right">Completed</th>
@@ -226,7 +221,7 @@ export const TeamAnalytics: React.FC<TeamAnalyticsProps> = ({
                             {member.name.charAt(0).toUpperCase()}
                           </div>
                         )}
-                        <span className="text-sm font-medium text-gray-900 dark:text-text-primary-dark">
+                        <span className="text-sm font-medium text-gray-900 dark:text-white">
                           {member.name}
                         </span>
                       </div>

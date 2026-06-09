@@ -6,7 +6,6 @@ import {
   ChevronLeft,
   ChevronRight,
   GitBranch,
-  Loader2,
   Map,
   Search,
   Target,
@@ -83,41 +82,39 @@ const getTimelineSegments = (from: string, to: string, view: RoadmapView) => {
   return segments;
 };
 
-const healthClassName = (status: RoadmapHealth) => {
+const healthBadge = (status: RoadmapHealth) => {
   switch (status) {
     case 'ON_TRACK':
-      return 'border-emerald-200 bg-emerald-500/10 text-emerald-600 dark:border-emerald-500/20 dark:text-emerald-300';
+      return 'text-emerald-600 bg-emerald-500/10 dark:text-emerald-400';
     case 'AT_RISK':
-      return 'border-amber-200 bg-amber-500/10 text-amber-600 dark:border-amber-500/20 dark:text-amber-300';
+      return 'text-amber-600 bg-amber-500/10 dark:text-amber-400';
     case 'OFF_TRACK':
-      return 'border-red-200 bg-red-500/10 text-red-600 dark:border-red-500/20 dark:text-red-300';
+      return 'text-red-500 bg-red-500/10 dark:text-red-400';
     case 'BLOCKED':
-      return 'border-rose-200 bg-rose-500/10 text-rose-600 dark:border-rose-500/20 dark:text-rose-300';
+      return 'text-rose-500 bg-rose-500/10 dark:text-rose-400';
     default:
-      return 'border-gray-200 bg-gray-500/10 text-gray-500 dark:border-border-dark dark:text-gray-300';
+      return 'text-gray-500 bg-gray-100 dark:bg-gray-800 dark:text-gray-400';
   }
 };
 
-const barClassName = (item: RoadmapItem) => {
-  if (item.dependencySummary.blocked) {
-    return 'bg-rose-500/15 border-rose-500/30 text-rose-700 dark:text-rose-200';
-  }
+const barColor = (item: RoadmapItem) => {
+  if (item.dependencySummary.blocked) return 'bg-rose-500/15 text-rose-700 dark:text-rose-300';
 
   switch (item.health.status) {
     case 'ON_TRACK':
-      return 'bg-emerald-500/15 border-emerald-500/30 text-emerald-700 dark:text-emerald-200';
+      return 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300';
     case 'AT_RISK':
-      return 'bg-amber-500/15 border-amber-500/30 text-amber-700 dark:text-amber-200';
+      return 'bg-amber-500/15 text-amber-700 dark:text-amber-300';
     case 'OFF_TRACK':
-      return 'bg-red-500/15 border-red-500/30 text-red-700 dark:text-red-200';
+      return 'bg-red-500/15 text-red-700 dark:text-red-300';
     case 'BLOCKED':
-      return 'bg-rose-500/15 border-rose-500/30 text-rose-700 dark:text-rose-200';
+      return 'bg-rose-500/15 text-rose-700 dark:text-rose-300';
     default:
-      return 'bg-primary/15 border-primary/30 text-primary';
+      return 'bg-primary/10 text-primary';
   }
 };
 
-const progressBarClassName = (status: RoadmapHealth) => {
+const progressBarColor = (status: RoadmapHealth) => {
   switch (status) {
     case 'ON_TRACK':
       return 'bg-emerald-500';
@@ -132,6 +129,84 @@ const progressBarClassName = (status: RoadmapHealth) => {
   }
 };
 
+/* ------------------------------------------------------------------ */
+/*  Shimmer skeleton                                                   */
+/* ------------------------------------------------------------------ */
+const ShimmerBlock: React.FC<{ className: string }> = ({ className }) => (
+  <div className={`animate-pulse rounded bg-gray-200 dark:bg-white/[0.06] ${className}`} />
+);
+
+const RoadmapSkeleton: React.FC = () => (
+  <div className="flex h-full flex-col bg-gray-50/30 dark:bg-transparent">
+    <header className="border-b border-gray-200 px-6 py-6 dark:border-border-dark">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <ShimmerBlock className="h-10 w-10 !rounded-xl" />
+          <div className="space-y-2">
+            <ShimmerBlock className="h-5 w-36" />
+            <ShimmerBlock className="h-3 w-24 !bg-gray-100 dark:!bg-white/[0.03]" />
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <ShimmerBlock className="h-8 w-40 !rounded-lg" />
+          <ShimmerBlock className="h-8 w-28 !rounded-lg" />
+          <ShimmerBlock className="h-8 w-20 !rounded-lg" />
+        </div>
+      </div>
+      <div className="mt-4 flex gap-2">
+        <ShimmerBlock className="h-9 w-48 !rounded-lg" />
+        {Array.from({ length: 5 }).map((_, i) => (
+          <ShimmerBlock key={i} className="h-9 w-28 !rounded-lg" />
+        ))}
+      </div>
+    </header>
+
+    <div className="flex-1 overflow-hidden p-6">
+      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-border-dark dark:bg-card-dark">
+        {/* Header row */}
+        <div className="flex border-b border-gray-100 dark:border-border-dark/40">
+          <div className="w-72 shrink-0 px-4 py-3">
+            <ShimmerBlock className="h-3 w-16" />
+          </div>
+          <div className="flex flex-1">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className={`flex flex-1 justify-center py-3 ${i > 0 ? 'border-l border-gray-100 dark:border-border-dark/40' : ''}`}>
+                <ShimmerBlock className="h-3 w-8" />
+              </div>
+            ))}
+          </div>
+        </div>
+        {/* Rows */}
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div key={i} className="flex border-b border-gray-100 last:border-b-0 dark:border-border-dark/30">
+            <div className="w-72 shrink-0 space-y-2 px-4 py-4">
+              <ShimmerBlock className="h-4 w-32" />
+              <ShimmerBlock className="h-3 w-20 !bg-gray-100 dark:!bg-white/[0.03]" />
+              <ShimmerBlock className="h-1.5 w-full !rounded-full !bg-gray-100 dark:!bg-white/[0.03]" />
+              <ShimmerBlock className="h-4 w-16 !rounded-md" />
+            </div>
+            <div className="flex flex-1 items-center px-3">
+              <div
+                className="h-7 animate-pulse rounded-lg bg-gray-100 dark:bg-white/[0.04]"
+                style={{ marginLeft: `${5 + i * 12}%`, width: `${18 + i * 6}%` }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+);
+
+/* ------------------------------------------------------------------ */
+/*  Shared select class                                                */
+/* ------------------------------------------------------------------ */
+const selectClass =
+  'rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-border-dark dark:bg-white/5 dark:text-gray-300';
+
+/* ------------------------------------------------------------------ */
+/*  Page                                                               */
+/* ------------------------------------------------------------------ */
 export const RoadmapPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -203,29 +278,24 @@ export const RoadmapPage: React.FC = () => {
     setSearchParams(next);
   };
 
-  if (roadmapQuery.isLoading) {
-    return (
-      <div className="flex h-full items-center justify-center text-sm text-gray-400">
-        <Loader2 size={18} className="mr-2 animate-spin" />
-        Loading roadmap...
-      </div>
-    );
-  }
+  /* Loading */
+  if (roadmapQuery.isLoading) return <RoadmapSkeleton />;
 
+  /* Error */
   if (roadmapQuery.error || !firstPage) {
     return (
       <div className="flex h-full flex-col items-center justify-center px-6 text-center">
-        <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-500/10 text-red-500">
+        <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary">
           <Map size={28} />
         </div>
-        <h2 className="text-xl font-bold">Roadmap unavailable</h2>
-        <p className="mt-2 max-w-md text-sm text-gray-400">
-          We couldn&apos;t load the roadmap for this view.
+        <h2 className="text-lg font-bold">Roadmap unavailable</h2>
+        <p className="mt-2 max-w-sm text-sm text-gray-400">
+          We couldn&apos;t load the roadmap. Try again or adjust your filters.
         </p>
         <button
           type="button"
           onClick={() => roadmapQuery.refetch()}
-          className="mt-6 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white"
+          className="mt-5 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white shadow-lg shadow-primary/20 transition-all hover:bg-primary/90"
         >
           Retry
         </button>
@@ -235,80 +305,78 @@ export const RoadmapPage: React.FC = () => {
 
   return (
     <div className="flex h-full flex-col bg-gray-50/30 dark:bg-transparent">
+      {/* ── Header ────────────────────────────────────────────── */}
       <header className="border-b border-gray-200 px-6 py-6 dark:border-border-dark">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-          <div className="space-y-3">
-            <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div className="space-y-2">
+            <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
                 <Map size={20} />
               </div>
               <div>
-                <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-3">
                   <h1 className="text-xl font-bold tracking-tight">
-                {selectedTeam ? `${selectedTeam.name} — Roadmap` : 'Roadmap'}
+                    {selectedTeam ? `${selectedTeam.name} Roadmap` : 'Roadmap'}
                   </h1>
                   {selectedTeam && (
                     <span className="rounded-full bg-primary/10 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-primary">
-                      Team view
-                    </span>
-                  )}
-                  {includeUnscheduled && (
-                    <span className="rounded-full border border-gray-200 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500 dark:border-border-dark">
-                      Showing unscheduled
+                      Team Scope
                     </span>
                   )}
                 </div>
-                <p className="mt-1 text-xs text-gray-400">
+                <p className="text-xs text-gray-400">
                   {firstPage.meta.total} project{firstPage.meta.total === 1 ? '' : 's'} in this view
                 </p>
               </div>
             </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="flex items-center rounded-md bg-gray-100 p-1 dark:bg-white/5">
-                {(['QUARTER', 'MONTH'] as RoadmapView[]).map((option) => (
-                  <button
-                    key={option}
-                    type="button"
-                    onClick={() => updateSearchParams({ view: option, from: firstPage.window.from })}
-                    className={`rounded px-3 py-1 text-xs font-medium transition-colors ${
-                      firstPage.window.view === option
-                        ? 'bg-white shadow-sm dark:bg-gray-800'
-                        : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200'
-                    }`}
-                  >
-                    {option === 'QUARTER' ? 'Quarterly' : 'Monthly'}
-                  </button>
-                ))}
-              </div>
-
-              <div className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-1 py-1 shadow-sm dark:border-border-dark dark:bg-white/[0.03]">
-                <button
-                  type="button"
-                  onClick={() =>
-                    updateSearchParams({ from: firstPage.window.previous.from, view: firstPage.window.view })
-                  }
-                  className="rounded p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-white/5 dark:hover:text-gray-200"
-                >
-                  <ChevronLeft size={16} />
-                </button>
-                <span className="min-w-[88px] text-center text-sm font-medium">{firstPage.window.label}</span>
-                <button
-                  type="button"
-                  onClick={() => updateSearchParams({ from: firstPage.window.next.from, view: firstPage.window.view })}
-                  className="rounded p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-white/5 dark:hover:text-gray-200"
-                >
-                  <ChevronRight size={16} />
-                </button>
-              </div>
-            </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            {/* View toggle */}
+            <div className="flex items-center rounded-lg bg-gray-100 p-0.5 dark:bg-white/5">
+              {(['QUARTER', 'MONTH'] as RoadmapView[]).map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  onClick={() => updateSearchParams({ view: option, from: firstPage.window.from })}
+                  className={`rounded-md px-3 py-1.5 text-xs font-medium transition-all ${
+                    firstPage.window.view === option
+                      ? 'bg-white text-gray-900 shadow-sm dark:bg-gray-800 dark:text-white'
+                      : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200'
+                  }`}
+                >
+                  {option === 'QUARTER' ? 'Quarterly' : 'Monthly'}
+                </button>
+              ))}
+            </div>
+
+            {/* Navigation */}
+            <div className="flex items-center rounded-lg border border-gray-200 bg-white dark:border-border-dark dark:bg-white/5">
+              <button
+                type="button"
+                onClick={() =>
+                  updateSearchParams({ from: firstPage.window.previous.from, view: firstPage.window.view })
+                }
+                className="rounded-l-lg p-2 text-gray-400 transition-colors hover:bg-gray-50 hover:text-gray-600 dark:hover:bg-white/5 dark:hover:text-gray-200"
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <span className="min-w-[90px] border-x border-gray-200 px-3 py-1.5 text-center text-xs font-semibold dark:border-border-dark">
+                {firstPage.window.label}
+              </span>
+              <button
+                type="button"
+                onClick={() => updateSearchParams({ from: firstPage.window.next.from, view: firstPage.window.view })}
+                className="rounded-r-lg p-2 text-gray-400 transition-colors hover:bg-gray-50 hover:text-gray-600 dark:hover:bg-white/5 dark:hover:text-gray-200"
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+
             <button
               type="button"
               onClick={() => navigate('/projects')}
-              className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90"
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white shadow-lg shadow-primary/20 transition-all hover:bg-primary/90"
             >
               <CalendarRange size={14} />
               Projects
@@ -316,225 +384,161 @@ export const RoadmapPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-6">
-          <label className="relative lg:col-span-2">
+        {/* Filters */}
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <div className="relative min-w-[200px]">
             <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               value={q}
               onChange={(event) => updateSearchParams({ q: event.target.value || null })}
-              placeholder="Search roadmap"
-              className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-border-dark dark:bg-white/[0.03]"
+              placeholder="Search projects"
+              className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-3 text-sm outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-border-dark dark:bg-white/5 dark:text-gray-300"
             />
-          </label>
+          </div>
 
-          <select
-            value={teamId ?? ''}
-            onChange={(event) => updateSearchParams({ teamId: event.target.value || null })}
-            className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-border-dark dark:bg-white/[0.03]"
-          >
+          <select value={teamId ?? ''} onChange={(event) => updateSearchParams({ teamId: event.target.value || null })} className={selectClass}>
             <option value="">All teams</option>
             {teamOptions.map((option) => (
-              <option key={option.id} value={option.id}>
-                {option.name}
-              </option>
+              <option key={option.id} value={option.id}>{option.name}</option>
             ))}
           </select>
 
-          <select
-            value={departmentId ?? ''}
-            onChange={(event) => updateSearchParams({ departmentId: event.target.value || null })}
-            className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-border-dark dark:bg-white/[0.03]"
-          >
+          <select value={departmentId ?? ''} onChange={(event) => updateSearchParams({ departmentId: event.target.value || null })} className={selectClass}>
             <option value="">All departments</option>
             {departmentOptions.map((option) => (
-              <option key={option.id} value={option.id}>
-                {option.name}
-              </option>
+              <option key={option.id} value={option.id}>{option.name}</option>
             ))}
           </select>
 
-          <select
-            value={leadId ?? ''}
-            onChange={(event) => updateSearchParams({ leadId: event.target.value || null })}
-            className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-border-dark dark:bg-white/[0.03]"
-          >
+          <select value={leadId ?? ''} onChange={(event) => updateSearchParams({ leadId: event.target.value || null })} className={selectClass}>
             <option value="">All leads</option>
             {leadOptions.map((option) => (
-              <option key={option.id} value={option.id}>
-                {option.name}
-              </option>
+              <option key={option.id} value={option.id}>{option.name}</option>
             ))}
           </select>
 
-          <div className="grid grid-cols-2 gap-2">
-            <select
-              value={status ?? ''}
-              onChange={(event) => updateSearchParams({ status: event.target.value || null })}
-              className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-border-dark dark:bg-white/[0.03]"
-            >
-              <option value="">All status</option>
-              {statusOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            <select
-              value={health ?? ''}
-              onChange={(event) => updateSearchParams({ health: event.target.value || null })}
-              className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-border-dark dark:bg-white/[0.03]"
-            >
-              <option value="">All health</option>
-              {healthOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
+          <select value={status ?? ''} onChange={(event) => updateSearchParams({ status: event.target.value || null })} className={selectClass}>
+            <option value="">All status</option>
+            {statusOptions.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
 
-        <label className="mt-3 inline-flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-          <input
-            type="checkbox"
-            checked={includeUnscheduled}
-            onChange={(event) => updateSearchParams({ includeUnscheduled: event.target.checked })}
-            className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-          />
-          Include unscheduled projects
-        </label>
+          <select value={health ?? ''} onChange={(event) => updateSearchParams({ health: event.target.value || null })} className={selectClass}>
+            <option value="">All health</option>
+            {healthOptions.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
 
-        <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-3">
-          <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-border-dark dark:bg-card-dark">
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                <Map size={18} />
-              </div>
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-400">Timeline</p>
-                <p className="mt-1 text-sm font-bold">{firstPage.window.label}</p>
-              </div>
-            </div>
-          </div>
-          <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-border-dark dark:bg-card-dark">
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-300">
-                <Target size={18} />
-              </div>
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-400">On timeline</p>
-                <p className="mt-1 text-sm font-bold">{items.length}</p>
-              </div>
-            </div>
-          </div>
-          <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-border-dark dark:bg-card-dark">
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-rose-500/10 text-rose-600 dark:text-rose-300">
-                <GitBranch size={18} />
-              </div>
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-400">Needs dates</p>
-                <p className="mt-1 text-sm font-bold">{firstPage.unscheduled.count}</p>
-              </div>
-            </div>
-          </div>
+          <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-500 transition-all hover:border-primary/40 dark:border-border-dark dark:bg-white/5 dark:text-gray-400">
+            <input
+              type="checkbox"
+              checked={includeUnscheduled}
+              onChange={(event) => updateSearchParams({ includeUnscheduled: event.target.checked })}
+              className="h-3.5 w-3.5 rounded border-gray-300 text-primary focus:ring-primary"
+            />
+            Unscheduled
+          </label>
         </div>
       </header>
 
-      <div className="flex-1 overflow-auto px-6 py-6">
+      {/* ── Timeline ──────────────────────────────────────────── */}
+      <div className="flex-1 overflow-auto p-6">
         <div className="min-w-[1080px]">
-          <div className="sticky top-0 z-10 flex rounded-t-3xl border border-gray-200 bg-gray-50/95 backdrop-blur dark:border-border-dark dark:bg-black/40">
-            <div className="w-80 border-r border-gray-200 p-4 text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:border-border-dark">
-              Projects
+          <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-border-dark dark:bg-card-dark">
+            {/* Column header */}
+            <div className="flex border-b border-gray-200 dark:border-border-dark">
+              <div className="w-72 shrink-0 border-r border-gray-100 px-4 py-3 text-[10px] font-bold uppercase tracking-[0.18em] text-gray-400 dark:border-border-dark/50">
+                Project
+              </div>
+              <div className="flex flex-1">
+                {segments.map((segment, i) => (
+                  <div
+                    key={segment.key}
+                    className={`flex-1 py-3 text-center text-[10px] font-bold uppercase tracking-[0.18em] text-gray-400 ${
+                      i > 0 ? 'border-l border-gray-100 dark:border-border-dark/50' : ''
+                    }`}
+                  >
+                    {segment.label}
+                  </div>
+                ))}
+              </div>
             </div>
-            <div className="flex flex-1">
-              {segments.map((segment) => (
-                <div
-                  key={segment.key}
-                  className="flex-1 border-r border-gray-200 p-4 text-center text-[10px] font-bold uppercase tracking-wider text-gray-400 last:border-r-0 dark:border-border-dark"
-                >
-                  {segment.label}
-                </div>
-              ))}
-            </div>
-          </div>
 
-          <div className="overflow-hidden rounded-b-3xl border-x border-b border-gray-200 bg-white shadow-sm dark:border-border-dark dark:bg-card-dark">
-          <div className="divide-y divide-gray-100 dark:divide-border-dark">
+            {/* Empty state */}
             {items.length === 0 && (
-              <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
-                <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-                  <Map size={24} />
+              <div className="flex min-h-[30vh] flex-col items-center justify-center px-6 text-center">
+                <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                  <Target size={28} />
                 </div>
-                <h3 className="text-lg font-semibold">No roadmap projects in this scope</h3>
-                <p className="mt-2 max-w-lg text-sm text-gray-400">
-                  Try changing the filters, or add project dates to start building your roadmap.
+                <h2 className="text-lg font-bold">No roadmap projects</h2>
+                <p className="mt-2 max-w-sm text-sm text-gray-400">
+                  Try changing filters, or add project dates to start building your roadmap.
                 </p>
               </div>
             )}
 
+            {/* Rows */}
             {items.map((item) => {
               const layout = item.schedule.layout;
+              const barWidth = layout?.overlapsWindow ? Math.max(layout.widthPercent, 14) : 0;
+              const showDuration = barWidth >= 22;
 
               return (
-                <div key={item.id} className="flex transition-colors hover:bg-gray-50/60 dark:hover:bg-white/[0.02]">
-                  <div className="w-80 border-r border-gray-200 p-4 dark:border-border-dark">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <button
-                          type="button"
-                          onClick={() => navigate(`/projects/${item.id}?tab=roadmap`)}
-                          className="truncate text-left text-sm font-semibold transition-colors hover:text-primary"
-                        >
-                          {item.name}
-                        </button>
-                        <p className="mt-1 truncate text-xs text-gray-400">
-                          {item.team?.name || 'No team'}
-                          {item.department ? ` · ${item.department.name}` : ''}
-                        </p>
-                        <div className="mt-3 space-y-2">
-                          <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800">
-                            <div
-                              className={`h-full rounded-full transition-all ${progressBarClassName(item.health.status)}`}
-                              style={{ width: `${item.progress}%` }}
-                            />
-                          </div>
-                          <div className="flex items-center justify-between text-[11px] text-gray-400">
-                            <span>{item.stats.completedIssues}/{item.stats.totalIssues} issues done</span>
-                            <span>{item.progress}%</span>
-                          </div>
-                        </div>
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          <span className={`rounded-full border px-2 py-1 text-[10px] font-bold uppercase tracking-[0.18em] ${healthClassName(item.health.status)}`}>
-                            {item.health.status.replace('_', ' ')}
-                          </span>
-                          {item.dependencySummary.blocked && (
-                            <span className="rounded-full border border-rose-200 bg-rose-500/10 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-rose-600 dark:border-rose-500/20 dark:text-rose-300">
-                              Blocked
-                            </span>
-                          )}
-                          {item.milestoneSummary.overdue > 0 && (
-                            <span className="rounded-full border border-amber-200 bg-amber-500/10 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-amber-600 dark:border-amber-500/20 dark:text-amber-300">
-                              {item.milestoneSummary.overdue} overdue
-                            </span>
-                          )}
-                        </div>
+                <div
+                  key={item.id}
+                  className="group flex border-b border-gray-100 last:border-b-0 transition-colors hover:bg-gray-50 dark:border-border-dark/30 dark:hover:bg-white/[0.02]"
+                >
+                  {/* Project info */}
+                  <div className="w-72 shrink-0 border-r border-gray-100 px-4 py-4 dark:border-border-dark/50">
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/projects/${item.id}?tab=roadmap`)}
+                      className="block truncate text-sm font-bold tracking-tight transition-colors hover:text-primary"
+                    >
+                      {item.name}
+                    </button>
+                    <p className="mt-0.5 truncate text-[11px] text-gray-400">
+                      {item.team?.name || 'No team'}
+                      {item.department ? ` · ${item.department.name}` : ''}
+                    </p>
+
+                    <div className="mt-3 flex items-center gap-2">
+                      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-gray-100 dark:bg-white/10">
+                        <div
+                          className={`h-full rounded-full transition-all ${progressBarColor(item.health.status)}`}
+                          style={{ width: `${item.progress}%` }}
+                        />
                       </div>
-                      <div className="text-right">
-                        <span className="text-xs font-bold text-gray-500">{item.progress}%</span>
-                        <p className="mt-1 text-[11px] text-gray-400">
-                          {item.targetDate ? formatShortDate(item.targetDate) : 'No target'}
-                        </p>
-                      </div>
+                      <span className="text-[10px] font-bold tabular-nums text-gray-400">{item.progress}%</span>
+                    </div>
+
+                    <div className="mt-2.5 flex items-center gap-1.5">
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${healthBadge(item.health.status)}`}>
+                        {item.health.status.replace('_', ' ')}
+                      </span>
+                      {item.dependencySummary.blocked && (
+                        <span className="rounded-full bg-rose-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-rose-500 dark:text-rose-400">
+                          Blocked
+                        </span>
+                      )}
+                      {item.milestoneSummary.overdue > 0 && (
+                        <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                          {item.milestoneSummary.overdue} overdue
+                        </span>
+                      )}
                     </div>
                   </div>
 
-                  <div className="relative flex flex-1 items-center p-4">
-                    <div className="absolute inset-0 flex">
-                      {segments.map((segment) => (
+                  {/* Timeline bar */}
+                  <div className="relative flex flex-1 items-center px-1">
+                    {/* Column gridlines */}
+                    <div className="pointer-events-none absolute inset-0 flex">
+                      {segments.map((segment, i) => (
                         <div
-                          key={`${item.id}-${segment.key}`}
-                          className="flex-1 border-r border-gray-100 last:border-r-0 dark:border-border-dark/30"
+                          key={`g-${item.id}-${segment.key}`}
+                          className={`flex-1 ${i > 0 ? 'border-l border-gray-50 dark:border-border-dark/20' : ''}`}
                         />
                       ))}
                     </div>
@@ -543,22 +547,23 @@ export const RoadmapPage: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => navigate(`/projects/${item.id}?tab=roadmap`)}
-                        className={`relative z-10 flex h-11 items-center rounded-xl border px-3 text-left transition-all hover:-translate-y-0.5 hover:shadow-md ${barClassName(item)}`}
+                        title={`${item.name} — ${item.schedule.durationDays ?? layout.durationDays} days`}
+                        className={`relative z-10 flex h-7 items-center rounded-lg px-2.5 text-left transition-all hover:-translate-y-px hover:shadow-md ${barColor(item)}`}
                         style={{
                           marginLeft: `${layout.offsetPercent}%`,
-                          width: `${Math.max(layout.widthPercent, 6)}%`,
+                          width: `${barWidth}%`,
                         }}
                       >
-                        <div className="flex w-full items-center justify-between gap-3">
-                          <span className="truncate text-xs font-semibold">{item.name}</span>
-                          <span className="shrink-0 text-[10px] font-bold">
+                        <span className="truncate text-[11px] font-semibold">{item.name}</span>
+                        {showDuration && (
+                          <span className="ml-auto shrink-0 pl-2 text-[10px] font-medium opacity-60">
                             {item.schedule.durationDays ?? layout.durationDays}d
                           </span>
-                        </div>
+                        )}
                       </button>
                     ) : (
-                      <div className="relative z-10 inline-flex items-center gap-2 rounded-lg border border-dashed border-gray-200 px-3 py-2 text-xs text-gray-400 dark:border-border-dark">
-                        <AlertTriangle size={12} />
+                      <div className="relative z-10 ml-3 inline-flex items-center gap-1.5 rounded-lg border border-dashed border-gray-200 px-3 py-1.5 text-[11px] text-gray-400 dark:border-border-dark">
+                        <AlertTriangle size={11} />
                         Outside this timeline
                       </div>
                     )}
@@ -567,54 +572,63 @@ export const RoadmapPage: React.FC = () => {
               );
             })}
           </div>
-          </div>
 
+          {/* ── Unscheduled ─────────────────────────────────────── */}
           {includeUnscheduled && unscheduledItems.length > 0 && (
-            <section className="mt-6 rounded-3xl border border-gray-200 bg-gray-50/50 px-6 py-6 dark:border-border-dark dark:bg-white/[0.02]">
-              <div className="mb-4">
-                <h2 className="text-sm font-bold uppercase tracking-wider text-gray-400">Unscheduled</h2>
-                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                  These projects don&apos;t have enough date information to appear on the timeline yet.
-                </p>
-              </div>
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <div className="mt-6">
+              <h2 className="text-sm font-bold uppercase tracking-wider text-gray-400">
+                Unscheduled
+                <span className="ml-2 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-gray-100 px-1.5 text-[10px] font-bold text-gray-500 dark:bg-white/5">
+                  {unscheduledItems.length}
+                </span>
+              </h2>
+              <p className="mt-1 text-xs text-gray-400">
+                Add start and target dates so these projects appear on the timeline.
+              </p>
+              <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {unscheduledItems.map((item) => (
                   <button
                     key={item.id}
                     type="button"
                     onClick={() => navigate(`/projects/${item.id}?tab=roadmap`)}
-                    className="rounded-2xl border border-gray-200 bg-white p-4 text-left shadow-sm transition-all hover:border-primary/30 hover:shadow-md dark:border-border-dark dark:bg-card-dark"
+                    className="group rounded-xl border border-gray-200 bg-white p-5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/40 dark:border-border-dark dark:bg-card-dark"
                   >
                     <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold">{item.name}</p>
-                        <p className="mt-1 text-xs text-gray-400">
+                      <div className="min-w-0">
+                        <p className="truncate font-bold tracking-tight">{item.name}</p>
+                        <p className="mt-1 text-[11px] text-gray-400">
                           {item.team?.name || 'No team'}
                           {item.department ? ` · ${item.department.name}` : ''}
                         </p>
                       </div>
-                      <span className="text-xs font-bold text-gray-500">{item.progress}%</span>
+                      <span className="shrink-0 text-xs font-bold text-gray-400">{item.progress}%</span>
                     </div>
-                    <div className="mt-3 text-xs text-gray-500 dark:text-gray-400">
-                      Start: {formatShortDate(item.startDate)}
-                      <br />
-                      Target: {formatShortDate(item.targetDate)}
+                    <div className="mt-4 grid grid-cols-2 gap-3 border-t border-gray-100 pt-3 dark:border-border-dark/70">
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-400">Start</p>
+                        <p className="mt-1 text-xs font-semibold text-gray-600 dark:text-gray-300">{formatShortDate(item.startDate)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-400">Target</p>
+                        <p className="mt-1 text-xs font-semibold text-gray-600 dark:text-gray-300">{formatShortDate(item.targetDate)}</p>
+                      </div>
                     </div>
                   </button>
                 ))}
               </div>
-            </section>
+            </div>
           )}
 
+          {/* Load more */}
           {roadmapQuery.hasNextPage && (
-            <div className="flex justify-center px-6 py-6">
+            <div className="flex justify-center py-6">
               <button
                 type="button"
                 onClick={() => roadmapQuery.fetchNextPage()}
                 className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold transition-colors hover:border-primary/40 hover:text-primary disabled:opacity-50 dark:border-border-dark"
                 disabled={roadmapQuery.isFetchingNextPage}
               >
-                {roadmapQuery.isFetchingNextPage ? 'Loading…' : 'Load more'}
+                {roadmapQuery.isFetchingNextPage ? 'Loading...' : 'Load more'}
               </button>
             </div>
           )}

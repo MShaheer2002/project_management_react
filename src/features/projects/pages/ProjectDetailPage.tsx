@@ -2,6 +2,7 @@ import React, { useDeferredValue, useEffect, useMemo, useRef, useState } from 'r
 import {
   Activity,
   ChevronRight,
+  FileText,
   Filter,
   Layers,
   LayoutDashboard,
@@ -20,8 +21,10 @@ import { useAuthStore } from '@/app/stores/useAuthStore';
 import { useApp } from '@/AppContext';
 import { MemberPerformancePanel } from '@/components/analytics/MemberPerformancePanel';
 import { ActivityPage } from '@features/activity';
+import { DocumentsPanel, useProjectDocuments } from '@features/documents';
+import type { DocumentRecord } from '@features/documents';
+import { IssuesPage } from '@features/issues';
 import { ProjectRoadmapPanel } from '@features/roadmap';
-import { IssuesPage } from '@/features/issues/components/IssuesPage';
 import { buildMemberPerformanceRows } from '@shared/analytics/memberPerformance';
 import { canManageProject } from '@shared/permissions';
 import { getApiErrorCode, getApiErrorMessage, getApiFieldErrors } from '@shared/services';
@@ -95,6 +98,9 @@ export const ProjectDetailPage: React.FC = () => {
     },
     { enabled: Boolean(id) }
   );
+  const recentDocsQuery = useProjectDocuments(id, { sort: 'createdAt:desc', limit: 5 }, { enabled: Boolean(id) });
+  const recentDocs: DocumentRecord[] = recentDocsQuery.data?.pages.flatMap((page) => page.items).slice(0, 5) ?? [];
+
   const addMembers = useAddProjectMembers(id);
   const removeMember = useRemoveProjectMember(id);
   const updateProject = useUpdateProject(id);
@@ -151,8 +157,8 @@ export const ProjectDetailPage: React.FC = () => {
   const projectUnassignedCount = projectIssues.filter((issue) => !issue.assigneeId).length;
   const canManage = canManageProject(role, currentUserId, project?.lead?.id);
   const allowedTabs = canManage
-    ? ['overview', 'issues', 'board', 'roadmap', 'members', 'activity', 'settings']
-    : ['overview', 'issues', 'board', 'roadmap', 'members', 'activity'];
+    ? ['overview', 'issues', 'board', 'roadmap', 'docs', 'members', 'activity', 'settings']
+    : ['overview', 'issues', 'board', 'roadmap', 'docs', 'members', 'activity'];
   const rawTab = searchParams.get('tab');
   const activeTab = allowedTabs.includes(rawTab ?? '') ? (rawTab as (typeof allowedTabs)[number]) : 'overview';
 
@@ -213,6 +219,7 @@ export const ProjectDetailPage: React.FC = () => {
     { id: 'issues', label: 'Issues', icon: <Filter size={14} /> },
     { id: 'board', label: 'Board', icon: <Layers size={14} /> },
     { id: 'roadmap', label: 'Roadmap', icon: <Map size={14} /> },
+    { id: 'docs', label: 'Docs', icon: <FileText size={14} /> },
     { id: 'members', label: 'Members', icon: <Users size={14} /> },
     { id: 'activity', label: 'Activity', icon: <Activity size={14} /> },
   ] as const;
@@ -421,6 +428,45 @@ export const ProjectDetailPage: React.FC = () => {
                 {project?.stats.memberCount ?? members.length} members
               </p>
             </div>
+          </div>
+
+          <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm dark:border-border-dark dark:bg-card-dark">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400">Docs</h3>
+              <button
+                onClick={() => handleTabChange('docs')}
+                className="text-xs font-semibold text-primary hover:underline"
+              >
+                View all
+              </button>
+            </div>
+            {recentDocs.length === 0 ? (
+              <div className="flex flex-col items-center py-6 text-center">
+                <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100 text-gray-300 dark:bg-white/5 dark:text-gray-600">
+                  <FileText size={18} />
+                </div>
+                <p className="text-xs text-gray-400">No docs attached yet</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {recentDocs.map((doc) => (
+                  <button
+                    key={doc.id}
+                    type="button"
+                    onClick={() => handleTabChange('docs')}
+                    className="flex w-full items-center gap-3 rounded-lg p-2 text-left transition-colors hover:bg-gray-50 dark:hover:bg-white/5"
+                  >
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                      <FileText size={14} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold">{doc.name}</p>
+                      <p className="truncate text-[11px] text-gray-400">{doc.fileName}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -923,6 +969,16 @@ export const ProjectDetailPage: React.FC = () => {
           />
         )}
         {activeTab === 'roadmap' && <ProjectRoadmapPanel projectId={project.id} />}
+        {activeTab === 'docs' && (
+          <DocumentsPanel
+            scope="project"
+            entityId={project.id}
+            title="Project docs"
+            description="Project docs keep specs, plans, and delivery context attached to the work."
+            emptyTitle="No project docs yet"
+            emptyDescription="Add specs, plans, and delivery notes that keep project context close to the work."
+          />
+        )}
         {activeTab === 'members' && renderMembers()}
         {activeTab === 'activity' && <ActivityPage scope="project" scopeId={project?.id} title="Activity" />}
         {activeTab === 'settings' && canManage && renderSettings()}

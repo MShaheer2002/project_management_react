@@ -19,7 +19,7 @@ import {
   CheckCircle2,
   AlertCircle,
   Clock,
-  CalendarDays,
+
 } from 'lucide-react';
 import { StatCard } from './shared/StatCard';
 import { ChartCard } from './shared/ChartCard';
@@ -63,27 +63,6 @@ const PRIORITY_COLORS: Record<string, string> = {
 };
 
 const TYPE_COLORS = ['#5f72ea', '#8B5CF6', '#F59E0B', '#10B981', '#EF4444', '#EC4899', '#6366F1', '#14B8A6'];
-
-function getCycleStatusBadge(status: string): { label: string; className: string } {
-  switch (status.toLowerCase()) {
-    case 'upcoming':
-      return { label: 'Upcoming', className: 'bg-blue-500/10 text-blue-500' };
-    case 'current':
-      return { label: 'Current', className: 'bg-green-500/10 text-green-500' };
-    case 'completed':
-      return { label: 'Completed', className: 'bg-gray-500/10 text-gray-400' };
-    default:
-      return { label: status, className: 'bg-gray-500/10 text-gray-400' };
-  }
-}
-
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
-}
 
 // ── Donut Chart ──
 
@@ -180,46 +159,22 @@ export const CycleAnalytics: React.FC<CycleAnalyticsProps> = ({
   if (isError) return <AnalyticsErrorState onRetry={() => refetch()} />;
   if (!data) return <EmptyAnalyticsState />;
 
-  const { cycle, summary, charts } = data;
-  const statusBadge = getCycleStatusBadge(cycle.status);
+  const { summary, charts } = data;
   const progressPct = Math.min(100, Math.max(0, summary.progress));
 
   return (
     <div className="space-y-6">
       {/* ── Header ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-lg bg-primary/10 text-primary">
-            <CalendarDays size={22} />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-lg font-bold text-gray-900 dark:text-text-primary-dark">{cycle.name}</h2>
-              <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${statusBadge.className}`}>
-                {statusBadge.label}
-              </span>
-            </div>
-            <p className="text-sm text-gray-400">
-              {formatDate(cycle.startsAt)} &ndash; {formatDate(cycle.endsAt)}
-              {cycle.completedAt && (
-                <span className="ml-2 text-gray-500">
-                  (completed {formatDate(cycle.completedAt)})
-                </span>
-              )}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
-          <PeriodSelector value={period} onChange={onPeriodChange} />
-          <ExportButton scope="cycle" scopeId={cycleId} params={{ period }} />
-        </div>
+      <div className="flex items-center justify-end gap-3">
+        <PeriodSelector value={period} onChange={onPeriodChange} />
+        <ExportButton scope="cycle" scopeId={cycleId} params={{ period }} />
       </div>
 
       {/* ── Progress Bar Hero ── */}
       <div className="bg-white dark:bg-card-dark p-6 rounded-xl border border-gray-200 dark:border-border-dark shadow-sm">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400">Cycle Progress</h3>
-          <span className="text-2xl font-bold text-gray-900 dark:text-text-primary-dark">
+          <span className="text-2xl font-bold text-gray-900 dark:text-white">
             {progressPct}%
           </span>
         </div>

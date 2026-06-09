@@ -2,6 +2,7 @@ import React, { useDeferredValue, useEffect, useMemo, useRef, useState } from 'r
 import {
   Activity,
   ChevronRight,
+  FileText,
   Filter,
   Layers,
   LayoutDashboard,
@@ -13,12 +14,14 @@ import {
   Trash2,
   Users,
 } from 'lucide-react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '@/app/stores/useAuthStore';
 import { useApp } from '@/AppContext';
 import { MemberPerformancePanel } from '@/components/analytics/MemberPerformancePanel';
 import { ActivityPage } from '@features/activity';
-import { IssuesPage } from '@/features/issues/components/IssuesPage';
+import { DocumentsPanel, useTeamDocuments } from '@features/documents';
+import type { DocumentRecord } from '@features/documents';
+import { IssuesPage } from '@features/issues';
 import { buildMemberPerformanceRows } from '@shared/analytics/memberPerformance';
 import { canManageTeam } from '@shared/permissions';
 import { getApiErrorCode, getApiErrorMessage, getApiFieldErrors } from '@shared/services';
@@ -54,11 +57,11 @@ const AvatarFallback: React.FC<{ name: string; sizeClassName: string; textClassN
 export const TeamDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { showToast } = useApp();
   const currentUserId = useAuthStore((state) => state.currentUser?.id);
   const role = useAuthStore((state) => state.workspace?.role);
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'members' | 'projects' | 'issues' | 'activity' | 'settings'>('overview');
   const [memberPickerSearch, setMemberPickerSearch] = useState('');
   const [leadSearch, setLeadSearch] = useState('');
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
@@ -96,6 +99,9 @@ export const TeamDetailPage: React.FC = () => {
     },
     { enabled: Boolean(id) }
   );
+  const recentDocsQuery = useTeamDocuments(id, { sort: 'createdAt:desc', limit: 5 }, { enabled: Boolean(id) });
+  const recentDocs: DocumentRecord[] = recentDocsQuery.data?.pages.flatMap((page) => page.items).slice(0, 5) ?? [];
+
   const addMembers = useAddTeamMembers(id);
   const removeMember = useRemoveTeamMember(id);
   const updateTeam = useUpdateTeam(id);
@@ -162,10 +168,33 @@ export const TeamDetailPage: React.FC = () => {
     return () => document.removeEventListener('mousedown', handlePointerDown);
   }, [isLeadPickerOpen, isMemberPickerOpen]);
 
+  const canManage = canManageTeam(role, currentUserId, team?.lead?.id ?? null);
+  const allowedTabs = canManage
+    ? ['overview', 'members', 'projects', 'docs', 'issues', 'activity', 'settings']
+    : ['overview', 'members', 'projects', 'docs', 'issues', 'activity'];
+  const rawTab = searchParams.get('tab');
+  const activeTab = allowedTabs.includes(rawTab ?? '') ? (rawTab as (typeof allowedTabs)[number]) : 'overview';
+
+  useEffect(() => {
+    if (activeTab === 'settings' && !canManage) {
+      const next = new URLSearchParams(searchParams);
+      next.delete('tab');
+      setSearchParams(next, { replace: true });
+    }
+  }, [activeTab, canManage, searchParams, setSearchParams]);
+
+  const handleTabChange = (tab: (typeof allowedTabs)[number]) => {
+    const next = new URLSearchParams(searchParams);
+    if (tab === 'overview') next.delete('tab');
+    else next.set('tab', tab);
+    setSearchParams(next, { replace: true });
+  };
+
   const tabs = [
     { id: 'overview', label: 'Overview', icon: <LayoutDashboard size={14} /> },
     { id: 'members', label: 'Members', icon: <Users size={14} /> },
     { id: 'projects', label: 'Projects', icon: <Layers size={14} /> },
+    { id: 'docs', label: 'Docs', icon: <FileText size={14} /> },
     { id: 'issues', label: 'Issues', icon: <Filter size={14} /> },
     { id: 'activity', label: 'Activity', icon: <Activity size={14} /> },
   ] as const;
@@ -226,8 +255,6 @@ export const TeamDetailPage: React.FC = () => {
       </div>
     );
   }
-
-  const canManage = canManageTeam(role, currentUserId, team.lead?.id ?? null);
 
   const handleToggleMember = (memberId: string) => {
     setSelectedMemberIds((current) =>
@@ -393,15 +420,58 @@ export const TeamDetailPage: React.FC = () => {
   );
 
   const renderOverview = () => (
-    <div className="p-6">
-      <MemberPerformancePanel
-        title="Member Performance"
-        subtitle="Completion progress for issues assigned across this team."
-        rows={teamAnalyticsRows}
-        emptyTitle="No member performance yet"
-        emptyDescription="Assign issues to team members to start tracking completion and workload."
-        unassignedCount={teamUnassignedCount}
-      />
+    <div className="space-y-6 p-6">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <MemberPerformancePanel
+            title="Member Performance"
+            subtitle="Completion progress for issues assigned across this team."
+            rows={teamAnalyticsRows}
+            emptyTitle="No member performance yet"
+            emptyDescription="Assign issues to team members to start tracking completion and workload."
+            unassignedCount={teamUnassignedCount}
+          />
+        </div>
+
+        <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm dark:border-border-dark dark:bg-card-dark">
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400">Docs</h3>
+            <button
+              onClick={() => handleTabChange('docs')}
+              className="text-xs font-semibold text-primary hover:underline"
+            >
+              View all
+            </button>
+          </div>
+          {recentDocs.length === 0 ? (
+            <div className="flex flex-col items-center py-6 text-center">
+              <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100 text-gray-300 dark:bg-white/5 dark:text-gray-600">
+                <FileText size={18} />
+              </div>
+              <p className="text-xs text-gray-400">No docs attached yet</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {recentDocs.map((doc) => (
+                <button
+                  key={doc.id}
+                  type="button"
+                  onClick={() => handleTabChange('docs')}
+                  className="flex w-full items-center gap-3 rounded-lg p-2 text-left transition-colors hover:bg-gray-50 dark:hover:bg-white/5"
+                >
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                    <FileText size={14} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold">{doc.name}</p>
+                    <p className="truncate text-[11px] text-gray-400">{doc.fileName}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 
@@ -473,6 +543,17 @@ export const TeamDetailPage: React.FC = () => {
       teamId={team.id}
       title="All Issues"
       showTeamScopeBadge={false}
+    />
+  );
+
+  const renderDocs = () => (
+    <DocumentsPanel
+      scope="team"
+      entityId={team.id}
+      title="Team docs"
+      description="Team docs keep operating notes, rituals, and working agreements close to the team."
+      emptyTitle="No team docs yet"
+      emptyDescription="Add briefs, rituals, and working agreements that help this team stay aligned."
     />
   );
 
@@ -635,7 +716,7 @@ export const TeamDetailPage: React.FC = () => {
           <div className="flex items-center gap-3">
             {canManage && (
               <button
-                onClick={() => setActiveTab('settings')}
+                onClick={() => handleTabChange('settings')}
                 className="rounded-lg border border-gray-200 p-2 transition-colors hover:bg-gray-50 dark:border-border-dark dark:hover:bg-white/5"
               >
                 <Settings size={18} />
@@ -646,7 +727,7 @@ export const TeamDetailPage: React.FC = () => {
               <div ref={memberPickerRef} className="relative">
                 <button
                   onClick={() => {
-                    setActiveTab('members');
+                    handleTabChange('members');
                     setIsMemberPickerOpen((current) => !current);
                   }}
                   className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white shadow-lg shadow-primary/20 transition-all hover:bg-primary/90"
@@ -719,7 +800,7 @@ export const TeamDetailPage: React.FC = () => {
           {tabs.map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => handleTabChange(tab.id)}
               className={`relative flex items-center gap-2 pb-3 text-sm font-medium transition-all ${
                 activeTab === tab.id
                   ? 'text-primary'
@@ -738,9 +819,10 @@ export const TeamDetailPage: React.FC = () => {
         {activeTab === 'overview' && renderOverview()}
         {activeTab === 'members' && renderMembers()}
         {activeTab === 'projects' && renderProjects()}
+        {activeTab === 'docs' && renderDocs()}
         {activeTab === 'issues' && renderIssues()}
         {activeTab === 'activity' && <ActivityPage scope="team" scopeId={team.id} title="Activity" />}
-        {activeTab === 'settings' && renderSettings()}
+        {activeTab === 'settings' && canManage && renderSettings()}
       </div>
     </div>
   );

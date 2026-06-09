@@ -1,4 +1,5 @@
 import type { ApiListMeta } from '@shared/services/types';
+import type { CreateDocumentInput } from '@shared/types/documents';
 
 export type TeamVisibility = 'PUBLIC' | 'PRIVATE';
 export type TeamSort = 'name:asc' | 'name:desc' | 'createdAt:asc' | 'createdAt:desc';
@@ -102,6 +103,7 @@ export interface CreateTeamInput {
   departmentId?: string | null;
   visibility?: TeamVisibility;
   memberIds?: string[];
+  docs?: CreateDocumentInput[];
 }
 
 export interface UpdateTeamInput {

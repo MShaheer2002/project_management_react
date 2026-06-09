@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { motion } from 'motion/react';
 import {
   BarChart3,
   FolderKanban,
@@ -39,14 +40,14 @@ const EntitySelector: React.FC<{
   loading?: boolean;
 }> = ({ label, options, value, onChange, loading }) => (
   <div className="flex items-center gap-3">
-    <label className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+    <label className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-400">
       {label}
     </label>
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
       disabled={loading}
-      className="px-3 py-1.5 rounded-lg border border-gray-200 dark:border-border-dark bg-white dark:bg-card-dark text-sm font-medium text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-50 min-w-[200px]"
+      className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-border-dark dark:bg-white/5 text-gray-900 dark:text-gray-100 disabled:opacity-50 min-w-[200px]"
     >
       <option value="">Select {label.toLowerCase()}...</option>
       {options.map((opt) => (
@@ -189,11 +190,13 @@ export const AnalyticsPage: React.FC = () => {
   return (
     <div className="flex flex-col h-full">
       {/* Page Header */}
-      <header className="shrink-0 border-b border-gray-200 dark:border-border-dark">
-        <div className="flex items-center justify-between px-6 py-4">
+      <header className="shrink-0 border-b border-gray-200 bg-gray-50/30 dark:bg-transparent dark:border-border-dark">
+        <div className="flex items-center justify-between px-6 py-6">
           <div className="flex items-center gap-3">
-            <BarChart3 size={20} className="text-primary" />
-            <h1 className="text-lg font-semibold text-gray-900 dark:text-text-primary-dark">Analytics</h1>
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <BarChart3 size={20} />
+            </div>
+            <h1 className="text-xl font-bold tracking-tight text-gray-900 dark:text-white">Analytics</h1>
           </div>
           {activeTab !== 'workspace' && renderEntitySelector()}
         </div>
@@ -209,14 +212,21 @@ export const AnalyticsPage: React.FC = () => {
                 key={tab.value}
                 type="button"
                 onClick={() => setTab(tab.value)}
-                className={`flex items-center gap-2 px-3 py-2.5 text-sm font-medium border-b-2 transition-colors duration-150 -mb-px ${
+                className={`relative flex items-center gap-2 px-3 py-2.5 text-sm font-medium transition-colors duration-150 ${
                   isActive
-                    ? 'border-primary text-primary'
-                    : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
+                    ? 'text-primary'
+                    : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200'
                 }`}
               >
                 {tab.icon}
                 {tab.label}
+                {isActive && (
+                  <motion.div
+                    layoutId="activeAnalyticsTab"
+                    className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary"
+                    transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                  />
+                )}
               </button>
             );
           })}
@@ -224,7 +234,7 @@ export const AnalyticsPage: React.FC = () => {
       </header>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto p-6 scrollbar-hide">
+      <div className="flex-1 overflow-y-auto bg-gray-50/30 dark:bg-black/10 p-6 scrollbar-hide">
         {renderContent()}
       </div>
     </div>
@@ -233,10 +243,10 @@ export const AnalyticsPage: React.FC = () => {
 
 const SelectEntityPrompt: React.FC<{ entity: string }> = ({ entity }) => (
   <div className="flex flex-col items-center justify-center py-20 text-center">
-    <div className="w-16 h-16 rounded-full bg-gray-100 dark:bg-white/5 flex items-center justify-center mb-4 text-gray-300 dark:text-gray-600">
+    <div className="w-16 h-16 rounded-xl bg-gray-100 dark:bg-white/10 flex items-center justify-center mb-4 text-gray-300 dark:text-gray-600">
       <BarChart3 size={28} />
     </div>
-    <h3 className="text-lg font-bold text-gray-900 dark:text-text-primary-dark">
+    <h3 className="text-lg font-bold text-gray-900 dark:text-white">
       Select a {entity}
     </h3>
     <p className="mt-2 max-w-sm text-sm text-gray-400">

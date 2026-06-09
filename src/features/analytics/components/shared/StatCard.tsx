@@ -13,8 +13,8 @@ interface StatCardProps {
 
 export const StatCard: React.FC<StatCardProps> = ({ label, value, icon, trend, direction, suffix }) => {
   const trendColor =
-    direction === 'up' ? 'text-green-500 bg-green-500/10' :
-    direction === 'down' ? 'text-red-500 bg-red-500/10' :
+    direction === 'up' ? 'text-green-500 bg-green-500/10 dark:bg-green-500/15' :
+    direction === 'down' ? 'text-red-500 bg-red-500/10 dark:bg-red-500/15' :
     'text-gray-400 bg-gray-400/10';
 
   const TrendIcon = direction === 'up' ? ArrowUpRight : direction === 'down' ? ArrowDownRight : Minus;
@@ -22,7 +22,7 @@ export const StatCard: React.FC<StatCardProps> = ({ label, value, icon, trend, d
   return (
     <div className="bg-white dark:bg-card-dark p-5 rounded-xl border border-gray-200 dark:border-border-dark shadow-sm">
       <div className="flex items-center justify-between mb-3">
-        <div className="p-2 rounded-lg bg-primary/10 text-primary">
+        <div className="shrink-0 p-2 rounded-lg bg-primary/10 text-primary">
           {icon}
         </div>
         {trend !== undefined && direction && (
@@ -33,7 +33,7 @@ export const StatCard: React.FC<StatCardProps> = ({ label, value, icon, trend, d
         )}
       </div>
       <div className="space-y-1">
-        <h3 className="text-2xl font-bold text-gray-900 dark:text-text-primary-dark">
+        <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
           {value}{suffix && <span className="text-sm font-medium text-gray-400 ml-1">{suffix}</span>}
         </h3>
         <p className="text-[10px] text-gray-400 uppercase tracking-[0.16em] font-bold">{label}</p>

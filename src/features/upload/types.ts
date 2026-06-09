@@ -1,4 +1,4 @@
-export type UploadKind = 'workspace-logo' | 'avatar' | 'attachment' | 'video';
+export type UploadKind = 'workspace-logo' | 'avatar' | 'attachment' | 'video' | 'document';
 
 export type UploadStatus = 'idle' | 'preparing' | 'uploading' | 'uploaded' | 'failed';
 
@@ -7,6 +7,8 @@ export const uploadKindAccept: Record<UploadKind, string> = {
   avatar: 'image/*',
   attachment: 'image/*,video/*',
   video: 'video/*',
+  document:
+    '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.md,.csv,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/plain,text/markdown,text/csv',
 };
 
 export interface UploadProgress {

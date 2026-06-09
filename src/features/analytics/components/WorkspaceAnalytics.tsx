@@ -188,12 +188,9 @@ export const WorkspaceAnalytics: React.FC<WorkspaceAnalyticsProps> = ({ period, 
   return (
     <div className="space-y-8">
       {/* ── Header ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-text-primary-dark">Workspace Analytics</h1>
-        <div className="flex items-center gap-3">
-          <PeriodSelector value={period} onChange={onPeriodChange} />
-          <ExportButton scope="workspace" params={{ period }} />
-        </div>
+      <div className="flex items-center justify-end gap-3">
+        <PeriodSelector value={period} onChange={onPeriodChange} />
+        <ExportButton scope="workspace" params={{ period }} />
       </div>
 
       {/* ── Summary Cards ── */}
@@ -355,7 +352,7 @@ export const WorkspaceAnalytics: React.FC<WorkspaceAnalyticsProps> = ({ period, 
       <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-border-dark dark:bg-card-dark">
         <table className="w-full">
           <thead>
-            <tr className="bg-gray-50/60 dark:bg-black/10">
+            <tr className="bg-gray-50/60 dark:bg-black/20">
               <th className="px-6 py-4 text-left text-[10px] font-bold uppercase tracking-wider text-gray-400">Team</th>
               <th className="px-6 py-4 text-left text-[10px] font-bold uppercase tracking-wider text-gray-400">Members</th>
               <th className="px-6 py-4 text-left text-[10px] font-bold uppercase tracking-wider text-gray-400">Completed</th>
@@ -405,7 +402,7 @@ export const WorkspaceAnalytics: React.FC<WorkspaceAnalyticsProps> = ({ period, 
       <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-border-dark dark:bg-card-dark">
         <table className="w-full">
           <thead>
-            <tr className="bg-gray-50/60 dark:bg-black/10">
+            <tr className="bg-gray-50/60 dark:bg-black/20">
               <th className="px-6 py-4 text-left text-[10px] font-bold uppercase tracking-wider text-gray-400">Contributor</th>
               <th className="px-6 py-4 text-left text-[10px] font-bold uppercase tracking-wider text-gray-400">Assigned</th>
               <th className="px-6 py-4 text-left text-[10px] font-bold uppercase tracking-wider text-gray-400">Completed</th>
@@ -470,7 +467,7 @@ export const WorkspaceAnalytics: React.FC<WorkspaceAnalyticsProps> = ({ period, 
       <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-border-dark dark:bg-card-dark">
         <table className="w-full">
           <thead>
-            <tr className="bg-gray-50/60 dark:bg-black/10">
+            <tr className="bg-gray-50/60 dark:bg-black/20">
               <th className="px-6 py-4 text-left text-[10px] font-bold uppercase tracking-wider text-gray-400">ID</th>
               <th className="px-6 py-4 text-left text-[10px] font-bold uppercase tracking-wider text-gray-400">Title</th>
               <th className="px-6 py-4 text-left text-[10px] font-bold uppercase tracking-wider text-gray-400">Status</th>
