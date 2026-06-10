@@ -13,5 +13,4 @@ export type ModalType =
   | 'create-team'
   | 'create-department'
   | 'invite-member'
-  | 'generate-api-key'
   | null;

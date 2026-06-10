@@ -5,8 +5,6 @@ import { CreateIssueModal } from '../../features/issues/components/CreateIssueMo
 import { CreateCycleModal } from './CreateCycleModal';
 import { CreateTeamModal } from './CreateTeamModal';
 import { InviteMemberModal } from './InviteMemberModal';
-import { GenerateApiKeyModal } from './GenerateApiKeyModal';
-
 import { CreateDepartmentModal } from './CreateDepartmentModal';
 
 export const ModalManager: React.FC = () => {
@@ -22,7 +20,6 @@ export const ModalManager: React.FC = () => {
       {activeModal === 'create-team' && <CreateTeamModal />}
       {activeModal === 'create-department' && <CreateDepartmentModal />}
       {activeModal === 'invite-member' && <InviteMemberModal />}
-      {activeModal === 'generate-api-key' && <GenerateApiKeyModal />}
     </>
   );
 };

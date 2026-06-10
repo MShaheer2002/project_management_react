@@ -225,9 +225,16 @@ export interface Cycle {
 export interface ApiKey {
   id: string;
   name: string;
-  key: string;
+  keyPrefix: string;
   createdAt: string;
-  lastUsedAt?: string;
+  lastUsedAt: string | null;
+  expiresAt: string | null;
+  isExpired: boolean;
+  createdBy: {
+    id: string;
+    name: string;
+    email: string;
+  };
 }
 
 export type { Toast, ModalType } from '@shared/types/common';

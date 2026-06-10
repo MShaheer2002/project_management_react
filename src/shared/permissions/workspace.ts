@@ -52,3 +52,6 @@ export const canDeleteIssues = (role: WorkspaceRoleInput): boolean =>
 
 export const canManageTemplates = (role: WorkspaceRoleInput): boolean =>
   canManageDocuments(role);
+
+export const canManageApiKeys = (role: WorkspaceRoleInput): boolean =>
+  role === 'owner' || role === 'admin';
