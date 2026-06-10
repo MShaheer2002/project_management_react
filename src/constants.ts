@@ -7,7 +7,6 @@ export { MOCK_PROJECTS } from '@mocks/projects';
 export { MOCK_ISSUES } from '@mocks/issues';
 export { MOCK_NOTIFICATIONS } from '@mocks/notifications';
 export { MOCK_ACTIVITIES } from '@mocks/activities';
-export { MOCK_INTEGRATIONS } from '@mocks/integrations';
 export { MOCK_CYCLES } from '@mocks/cycles';
 export { MOCK_ORGANIZATIONS } from '@mocks/organizations';
 export { PRIORITY_COLORS } from '@shared/constants/priorities';

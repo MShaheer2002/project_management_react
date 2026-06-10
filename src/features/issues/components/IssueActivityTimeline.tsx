@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
-import { Activity, AtSign, Clock3, History, Loader2, MessageSquare, Plus, Users } from 'lucide-react';
+import { Activity, AtSign, Clock3, GitBranch, GitCommit, GitPullRequest, History, Loader2, MessageSquare, Plus, Users } from 'lucide-react';
 import { STATUS_LABELS } from '@/constants';
+import { GITHUB_ACTIVITY_TYPES } from '@features/integrations';
 import { useIssueActivity } from '../hooks/useIssueData';
 import type { Status } from '@/types';
 
@@ -105,6 +106,9 @@ const getActivityMessage = (item: {
   return item.message;
 };
 
+const isGitHubActivity = (type: string) =>
+  (GITHUB_ACTIVITY_TYPES as readonly string[]).includes(type);
+
 const getActivityIcon = (type: string) => {
   switch (type) {
     case 'ISSUE_CREATED':
@@ -124,6 +128,18 @@ const getActivityIcon = (type: string) => {
     case 'WORKSPACE_MEMBER_JOINED':
     case 'WORKSPACE_MEMBER_REMOVED':
       return <Users size={10} className="text-purple-500" />;
+    case 'GITHUB_BRANCH_LINKED':
+      return <GitBranch size={10} className="text-green-500" />;
+    case 'GITHUB_COMMIT_LINKED':
+      return <GitCommit size={10} className="text-gray-500" />;
+    case 'GITHUB_PR_OPENED':
+      return <GitPullRequest size={10} className="text-yellow-500" />;
+    case 'GITHUB_PR_MERGED':
+      return <GitPullRequest size={10} className="text-green-500" />;
+    case 'GITHUB_PR_CLOSED':
+      return <GitPullRequest size={10} className="text-gray-500" />;
+    case 'GITHUB_PR_REVIEW':
+      return <GitPullRequest size={10} className="text-purple-500" />;
     default:
       return <Activity size={10} className="text-gray-400" />;
   }
@@ -172,7 +188,7 @@ export const IssueActivityTimeline: React.FC<IssueActivityTimelineProps> = ({ is
 
             return (
               <div key={item.id} className="group relative flex gap-3">
-                <div className="absolute left-3.5 top-2 z-10 h-2 w-2 -translate-x-1/2 rounded-full border-4 border-white bg-primary dark:border-bg-dark" />
+                <div className={`absolute left-3.5 top-2 z-10 h-2 w-2 -translate-x-1/2 rounded-full border-4 border-white dark:border-bg-dark ${isGitHubActivity(item.type) ? 'bg-gray-600' : 'bg-primary'}`} />
 
                 <div className="flex flex-1 gap-2.5 pl-7">
                   {item.actor?.avatar ? (
@@ -182,11 +198,16 @@ export const IssueActivityTimeline: React.FC<IssueActivityTimelineProps> = ({ is
                   )}
                   <div className="flex-1 space-y-0.5">
                     <div className="flex items-center justify-between gap-2">
-                      <div />
+                      {isGitHubActivity(item.type) && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-1.5 py-0.5 text-[9px] font-bold text-gray-500 dark:bg-gray-800 dark:text-gray-400">
+                          {getActivityIcon(item.type)}
+                          GitHub
+                        </span>
+                      )}
                     </div>
                     <p className="text-[13px] leading-5 text-text-secondary-light dark:text-text-secondary-dark">
                       {getActivityMessage(item)}
-                      <span className="text-gray-500"> {' '}• {relativeTime(item.createdAt)}</span>
+                      <span className="text-gray-500"> {' '}&middot; {relativeTime(item.createdAt)}</span>
                     </p>
                   </div>
                 </div>

@@ -6,6 +6,7 @@ export {
   canDeleteIssues,
   canManageDocuments,
   canManageDepartment,
+  canManageIntegrations,
   canManageProject,
   canManageRoadmap,
   canManageTemplates,

@@ -4,6 +4,9 @@ import {
   AtSign,
   Clock3,
   Filter,
+  GitBranch,
+  GitCommit,
+  GitPullRequest,
   History,
   Loader2,
   MessageSquare,
@@ -11,6 +14,7 @@ import {
   Search,
   Users,
 } from 'lucide-react';
+import { GITHUB_ACTIVITY_TYPES } from '@features/integrations';
 import { useActivityFeed } from '../hooks/useActivityData';
 import type { ActivityItem, ActivityScope, ListActivityInput } from '../types';
 
@@ -49,6 +53,9 @@ const labelFromType = (type: string) =>
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ');
 
+const isGitHubActivity = (type: string) =>
+  (GITHUB_ACTIVITY_TYPES as readonly string[]).includes(type);
+
 const getActivityIcon = (type: string) => {
   switch (type) {
     case 'ISSUE_CREATED':
@@ -68,6 +75,18 @@ const getActivityIcon = (type: string) => {
     case 'WORKSPACE_MEMBER_JOINED':
     case 'WORKSPACE_MEMBER_REMOVED':
       return <Users size={13} className="text-purple-500" />;
+    case 'GITHUB_BRANCH_LINKED':
+      return <GitBranch size={13} className="text-green-500" />;
+    case 'GITHUB_COMMIT_LINKED':
+      return <GitCommit size={13} className="text-gray-500" />;
+    case 'GITHUB_PR_OPENED':
+      return <GitPullRequest size={13} className="text-yellow-500" />;
+    case 'GITHUB_PR_MERGED':
+      return <GitPullRequest size={13} className="text-green-500" />;
+    case 'GITHUB_PR_CLOSED':
+      return <GitPullRequest size={13} className="text-gray-500" />;
+    case 'GITHUB_PR_REVIEW':
+      return <GitPullRequest size={13} className="text-purple-500" />;
     default:
       return <Activity size={13} className="text-gray-400" />;
   }
@@ -186,7 +205,7 @@ export const ActivityTimeline: React.FC<ActivityTimelineProps> = ({
                   const actorName = item.actor?.name || 'System';
                   return (
                     <div key={item.id} className="group relative flex gap-5">
-                      <div className="absolute left-4 top-2 z-10 h-2 w-2 -translate-x-1/2 rounded-full border-4 border-white bg-primary dark:border-bg-dark" />
+                      <div className={`absolute left-4 top-2 z-10 h-2 w-2 -translate-x-1/2 rounded-full border-4 border-white dark:border-bg-dark ${isGitHubActivity(item.type) ? 'bg-gray-600' : 'bg-primary'}`} />
 
                       <div className="flex flex-1 gap-3 pl-8">
                         {item.actor?.avatar ? (

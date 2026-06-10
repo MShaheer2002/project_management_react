@@ -55,3 +55,6 @@ export const canManageTemplates = (role: WorkspaceRoleInput): boolean =>
 
 export const canManageApiKeys = (role: WorkspaceRoleInput): boolean =>
   role === 'owner' || role === 'admin';
+
+export const canManageIntegrations = (role: WorkspaceRoleInput): boolean =>
+  role === 'owner' || role === 'admin';
