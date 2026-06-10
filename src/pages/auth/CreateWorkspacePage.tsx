@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useUser } from '@clerk/clerk-react';
 import { motion } from 'motion/react';
-import { Building, Globe, CheckCircle2, AlertCircle, Loader2, Check } from 'lucide-react';
+import { ArrowLeft, Building, Globe, CheckCircle2, AlertCircle, Loader2, Check } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/app/stores/useAuthStore';
 import { useToastStore } from '@/app/stores/useToastStore';
-import { workspaceService } from '@/features/workspace';
+import { workspaceService, workspaceQueryKeys } from '@/features/workspace';
+import { sidebarQueryKeys } from '@features/sidebar';
 import { Logo, FormInput, SubmitButton, AuthFooter } from './shared';
 
 /**
@@ -39,11 +41,16 @@ const TEAM_SIZES = [
 
 export const CreateWorkspacePage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const queryClient = useQueryClient();
   const { isLoaded, isSignedIn } = useUser();
   const showToast = useToastStore((s) => s.showToast);
   const setWorkspace = useAuthStore((s) => s.setWorkspace);
   const workspace = useAuthStore((s) => s.workspace);
   const authSyncStatus = useAuthStore((s) => s.authSyncStatus);
+
+  // When ?new=true is present, user is intentionally creating an additional workspace
+  const isAddingNew = searchParams.get('new') === 'true';
 
   // ── Form state ──
   const [orgName, setOrgName] = useState('');
@@ -66,10 +73,12 @@ export const CreateWorkspacePage: React.FC = () => {
       return;
     }
 
-    if (authSyncStatus === 'ready' && workspace) {
+    // Only redirect to dashboard if user already has a workspace AND is not
+    // intentionally creating an additional one (via ?new=true from the switcher)
+    if (authSyncStatus === 'ready' && workspace && !isAddingNew) {
       navigate('/dashboard', { replace: true });
     }
-  }, [authSyncStatus, isLoaded, isSignedIn, navigate, workspace]);
+  }, [authSyncStatus, isLoaded, isSignedIn, navigate, workspace, isAddingNew]);
 
   /**
    * Auto-generate slug from org name.
@@ -193,6 +202,10 @@ export const CreateWorkspacePage: React.FC = () => {
         defaultTeamId: workspace.defaultTeamId,
       });
 
+      // Invalidate workspace list so the switcher sees the new workspace
+      queryClient.invalidateQueries({ queryKey: workspaceQueryKeys.list() });
+      queryClient.invalidateQueries({ queryKey: sidebarQueryKeys.all });
+
       showToast('Workspace created!', 'success', 'Welcome to Linearis');
       console.log('[Workspace] Redirecting to /dashboard');
       navigate('/dashboard');
@@ -274,32 +287,45 @@ export const CreateWorkspacePage: React.FC = () => {
     );
   }
 
-  if (!isSignedIn || workspace) {
+  if (!isSignedIn || (workspace && !isAddingNew)) {
     return null;
   }
 
   return (
     <div className="min-h-screen flex flex-col bg-white dark:bg-bg-dark selection:bg-primary/30">
-      {/* ── Top bar with progress stepper ── */}
+      {/* ── Top bar ── */}
       <div className="px-5 sm:px-8 py-5 flex items-center justify-between">
-        <Logo />
-        {/* Progress: Account ✓ → Verify ✓ → Workspace (active) */}
-        <div className="hidden sm:flex items-center gap-2">
-          {['Account', 'Verify', 'Workspace'].map((step, i) => (
-            <React.Fragment key={step}>
-              {i > 0 && <div className="w-8 h-0.5 rounded-full bg-primary" />}
-              <div className="flex items-center gap-1.5">
-                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                  i < 2 ? 'bg-primary text-white'
-                    : 'bg-primary text-white ring-4 ring-primary/20'
-                }`}>
-                  {i < 2 ? <CheckCircle2 size={12} /> : 3}
+        {isAddingNew ? (
+          <button
+            type="button"
+            onClick={() => navigate('/select-workspace')}
+            className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+          >
+            <ArrowLeft size={16} />
+            <span className="font-medium">Back</span>
+          </button>
+        ) : (
+          <Logo />
+        )}
+        {/* Progress stepper — only during onboarding, not when adding a new workspace */}
+        {!isAddingNew && (
+          <div className="hidden sm:flex items-center gap-2">
+            {['Account', 'Verify', 'Workspace'].map((step, i) => (
+              <React.Fragment key={step}>
+                {i > 0 && <div className="w-8 h-0.5 rounded-full bg-primary" />}
+                <div className="flex items-center gap-1.5">
+                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                    i < 2 ? 'bg-primary text-white'
+                      : 'bg-primary text-white ring-4 ring-primary/20'
+                  }`}>
+                    {i < 2 ? <CheckCircle2 size={12} /> : 3}
+                  </div>
+                  <span className="text-xs font-medium text-gray-700 dark:text-gray-200">{step}</span>
                 </div>
-                <span className="text-xs font-medium text-gray-700 dark:text-gray-200">{step}</span>
-              </div>
-            </React.Fragment>
-          ))}
-        </div>
+              </React.Fragment>
+            ))}
+          </div>
+        )}
         <div className="w-24" />
       </div>
 
@@ -322,8 +348,12 @@ export const CreateWorkspacePage: React.FC = () => {
                 <Building size={36} className="text-primary" />
               </motion.div>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-bold dark:text-white tracking-tight">Create your workspace</h1>
-            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">This is your team's home on Linearis.</p>
+            <h1 className="text-2xl sm:text-3xl font-bold dark:text-white tracking-tight">
+              {isAddingNew ? 'New workspace' : 'Create your workspace'}
+            </h1>
+            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+              {isAddingNew ? 'Set up another workspace for a different team or project.' : "This is your team's home on Linearis."}
+            </p>
           </div>
 
           {/* ── Form ── */}

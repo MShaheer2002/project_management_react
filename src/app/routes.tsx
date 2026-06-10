@@ -12,6 +12,7 @@ import {
   SignupPage,
   VerifyEmailPage,
   CreateWorkspacePage,
+  SelectWorkspacePage,
   InvitePage,
   ForgotPasswordPage,
   ResetPasswordPage,
@@ -119,6 +120,7 @@ export const AppRoutes: React.FC = () => {
        */}
       <Route path="/email-verification" element={<VerifyEmailPage />} />
       <Route path="/org-creation" element={<CreateWorkspacePage />} />
+      <Route path="/select-workspace" element={<SelectWorkspacePage />} />
       <Route path="/invite" element={<InvitePage />} />
 
       {/*

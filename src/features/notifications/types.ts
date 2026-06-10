@@ -8,6 +8,7 @@ export type NotificationType =
   | 'PROJECT_MEMBER'
   | 'TEAM_MEMBER'
   | 'WORKSPACE_INVITE'
+  | 'WORKSPACE_INVITATION'
   | 'ISSUE_DUE_SOON'
   | 'ISSUE_OVERDUE';
 

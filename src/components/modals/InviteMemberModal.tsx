@@ -68,21 +68,25 @@ export const InviteMemberModal: React.FC = () => {
     if (!trimmedEmail || !teamId || !canInviteMembers) return;
 
     try {
-      await sendInvitation.mutateAsync({
+      const result = await sendInvitation.mutateAsync({
         email: trimmedEmail,
         role,
         teamId,
         departmentId: departmentId || undefined,
       });
-      showToast(`Invitation sent to ${trimmedEmail}`, 'success', 'Invite sent');
+      if (result.existingUser) {
+        showToast(`Invitation sent to ${trimmedEmail}. They'll receive an in-app notification.`, 'success', 'Invite sent');
+      } else {
+        showToast(`Invitation sent to ${trimmedEmail}. They'll need to create an account first.`, 'success', 'Invite sent');
+      }
       handleClose();
     } catch (error) {
       const apiError = error as ApiAxiosError;
       const code = apiError.response?.data?.error?.code;
       const message = apiError.response?.data?.error?.message;
 
-      if (code === 'MEMBER_ALREADY_EXISTS') {
-        showToast('This user is already a member.', 'error', 'Invite failed');
+      if (code === 'MEMBER_ALREADY_EXISTS' || code === 'ALREADY_MEMBER') {
+        showToast('This user is already a member of this workspace.', 'error', 'Invite failed');
         return;
       }
       if (code === 'NOT_FOUND') {

@@ -50,12 +50,23 @@ export const InvitePage: React.FC = () => {
       } catch (err) {
         const apiError = err as ApiAxiosError;
         const code = apiError.response?.data?.error?.code;
-        if (code === 'NOT_FOUND') {
-          setError('This invitation is no longer valid.');
-        } else if (code === 'CONFLICT') {
-          setError(apiError.response?.data?.error?.message || 'This invitation has already been used or expired.');
-        } else {
-          setError(apiError.response?.data?.error?.message || 'Could not load this invitation.');
+        const message = apiError.response?.data?.error?.message;
+
+        switch (code) {
+          case 'INVITATION_NOT_FOUND':
+            setError('This invitation is no longer valid.');
+            break;
+          case 'INVITATION_EXPIRED':
+            setError('This invitation has expired. Ask the workspace admin to send a new one.');
+            break;
+          case 'INVITATION_REVOKED':
+            setError('This invitation has been cancelled by the workspace admin.');
+            break;
+          case 'INVITATION_ALREADY_ACCEPTED':
+            setError('This invitation has already been accepted.');
+            break;
+          default:
+            setError(message || 'Could not load this invitation.');
         }
       } finally {
         if (!cancelled) setIsResolving(false);
@@ -87,12 +98,11 @@ export const InvitePage: React.FC = () => {
       const accepted = await workspaceService.acceptInvitation(token);
       window.localStorage.removeItem(PENDING_INVITE_TOKEN_KEY);
       setWorkspace({
-        id: accepted.workspaceId,
-        name: accepted.workspaceName,
-        slug: accepted.workspaceSlug,
-        logo: accepted.workspaceLogo || undefined,
+        id: accepted.workspace.id,
+        name: accepted.workspace.name,
+        slug: accepted.workspace.slug,
+        logo: accepted.workspace.logo || undefined,
         role: accepted.role.toLowerCase() as 'owner' | 'admin' | 'member' | 'guest',
-        defaultTeamId: accepted.defaultTeamId,
       });
       showToast("You're now a member of this workspace.", 'success', 'Invitation accepted');
       navigate('/dashboard', { replace: true });
@@ -101,16 +111,27 @@ export const InvitePage: React.FC = () => {
       const code = apiError.response?.data?.error?.code;
       const message = apiError.response?.data?.error?.message;
 
-      if (code === 'FORBIDDEN' || code === 'EMAIL_MISMATCH') {
-        setError(`This invitation was sent to ${invite.invitedEmail}. Please sign in with that email.`);
-      } else if (code === 'MEMBER_ALREADY_EXISTS') {
-        setError("You're already a member of this workspace.");
-      } else if (code === 'NOT_FOUND') {
-        setError('This invitation is no longer valid.');
-      } else if (code === 'CONFLICT') {
-        setError(message || 'This invitation has already been used or expired.');
-      } else {
-        setError(message || 'Could not accept this invitation.');
+      switch (code) {
+        case 'INVITATION_EMAIL_MISMATCH':
+          setError(`This invitation was sent to ${invite.invitedEmail}. Please sign in with that email.`);
+          break;
+        case 'ALREADY_MEMBER':
+          setError("You're already a member of this workspace.");
+          break;
+        case 'INVITATION_NOT_FOUND':
+          setError('This invitation is no longer valid.');
+          break;
+        case 'INVITATION_EXPIRED':
+          setError('This invitation has expired. Ask the workspace admin to send a new one.');
+          break;
+        case 'INVITATION_REVOKED':
+          setError('This invitation has been cancelled.');
+          break;
+        case 'INVITATION_ALREADY_ACCEPTED':
+          setError('This invitation has already been accepted.');
+          break;
+        default:
+          setError(message || 'Could not accept this invitation.');
       }
     } finally {
       setIsAccepting(false);

@@ -1,6 +1,7 @@
 export { workspaceService } from './services/workspaceService';
 export { useSendInvitation } from './hooks/useSendInvitation';
 export { useWorkspaceDetails, useWorkspaces, workspaceQueryKeys } from './hooks/useWorkspaceDetails';
+export { useWorkspaceSwitch } from './hooks/useWorkspaceSwitch';
 export {
   useDeleteWorkspace,
   useRemoveMember,
@@ -14,6 +15,8 @@ export {
   useWorkspaceMemberOptions,
   useWorkspaceMembers,
 } from './hooks/useWorkspaceMembers';
+export { WorkspaceSwitcher } from './components/WorkspaceSwitcher';
+export type { WorkspaceMenuItem } from './components/WorkspaceSwitcher';
 export type {
   CreateWorkspaceInput,
   InvitationResponse,

@@ -36,7 +36,8 @@ const ONBOARDING_EXEMPT_PATHS = [
   '/reset-password',
   '/sso-callback',
   '/invite',
-  '/org-creation',  // Already on onboarding — don't redirect in a loop
+  '/org-creation',         // Already on onboarding — don't redirect in a loop
+  '/select-workspace',     // Workspace picker — user is choosing which workspace to enter
 ];
 
 const setDevJwt = (token: string | null) => {
@@ -182,10 +183,30 @@ export const AuthSync: React.FC<{ children: React.ReactNode }> = ({ children }) 
           const match = persistedWorkspace
             ? backendWorkspaces.find((ws) => ws.id === persistedWorkspace.id)
             : null;
-          const active = match || backendWorkspaces[0];
-          console.log('[AuthSync] Active workspace:', active.name, '| Role:', active.role);
-          setDevWorkspaceId(active.id);
-          if (!cancelled) setAuth(backendUser, active);
+
+          if (match) {
+            // Persisted workspace still valid — use it
+            console.log('[AuthSync] Active workspace:', match.name, '| Role:', match.role);
+            setDevWorkspaceId(match.id);
+            if (!cancelled) setAuth(backendUser, match);
+          } else if (backendWorkspaces.length === 1) {
+            // Only one workspace — auto-select it
+            const active = backendWorkspaces[0];
+            console.log('[AuthSync] Single workspace, auto-selecting:', active.name);
+            setDevWorkspaceId(active.id);
+            if (!cancelled) setAuth(backendUser, active);
+          } else {
+            // Multiple workspaces but no persisted preference — let user choose.
+            // Temporarily set first workspace so AuthGuard doesn't redirect to /org-creation,
+            // then navigate to the picker page where user picks the one they want.
+            const fallback = backendWorkspaces[0];
+            console.log('[AuthSync] Multiple workspaces, no preference — showing picker (temp:', fallback.name, ')');
+            setDevWorkspaceId(fallback.id);
+            if (!cancelled) setAuth(backendUser, fallback);
+            if (!isExemptPage) {
+              if (!cancelled) navigate('/select-workspace', { replace: true });
+            }
+          }
         } else {
           // ❌ User has ZERO workspaces — MUST create one before using the app
           console.log('[AuthSync] User has no workspaces (confirmed by backend)');

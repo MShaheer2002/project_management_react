@@ -19,6 +19,8 @@ export interface WorkspaceResponse {
   role: string;           // "OWNER" | "ADMIN" | "MEMBER" | "GUEST"
   defaultTeamId?: string; // Auto-created team ID (returned on POST /workspaces)
   teamSize?: string;      // "SMALL" | "MEDIUM" | "LARGE" | "ENTERPRISE"
+  unreadNotifications?: number; // Per-workspace unread count (from GET /workspaces)
+  joinedAt?: string;            // When user joined this workspace
   createdAt?: string;
 }
 
@@ -49,6 +51,7 @@ export interface InvitationResponse {
   teamId: string;
   departmentId?: string | null;
   status?: string;
+  existingUser?: boolean; // True if invitee already has a platform account
   createdAt?: string;
 }
 
@@ -157,12 +160,13 @@ export interface InvitationResolveResponse {
 }
 
 export interface InvitationAcceptResponse {
-  workspaceId: string;
-  workspaceName: string;
-  workspaceSlug: string;
-  workspaceLogo?: string | null;
+  workspace: {
+    id: string;
+    name: string;
+    slug: string;
+    logo: string | null;
+  };
   role: string;
-  defaultTeamId?: string;
   alreadyAccepted?: boolean;
 }
 

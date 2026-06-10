@@ -33,6 +33,7 @@ import { useAuth } from '@clerk/clerk-react';
 import { useAuthStore } from '@/app/stores/useAuthStore';
 import { useApp } from '../AppContext';
 import { useSidebarData, type SidebarPermissions, type SidebarTeam } from '@features/sidebar';
+import { useWorkspaces } from '@features/workspace';
 
 const focusMinimal = 'outline-none focus:outline-none focus-visible:outline-none focus-visible:ring-0';
 
@@ -210,6 +211,17 @@ export const Sidebar: React.FC = () => {
     else setTheme('light');
   };
 
+  const { data: allWorkspaces } = useWorkspaces();
+
+  const handleSwitchWorkspace = () => {
+    setIsWorkspaceMenuOpen(false);
+    if (allWorkspaces && allWorkspaces.length > 1) {
+      navigate('/select-workspace');
+    } else {
+      navigate('/org-creation?new=true');
+    }
+  };
+
   const workspaceMenuItems: Array<{
     label?: string;
     icon?: React.ReactNode;
@@ -238,7 +250,6 @@ export const Sidebar: React.FC = () => {
       },
     },
     {
-
       label: 'Download desktop app',
       icon: <LayoutDashboard size={14} />,
       badge: 'Soon',
@@ -247,10 +258,7 @@ export const Sidebar: React.FC = () => {
     {
       label: 'Switch workspace',
       icon: <RotateCcw size={14} />,
-      onClick: () => {
-        showToast('Workspace switching placeholder', 'info');
-        setIsWorkspaceMenuOpen(false);
-      },
+      onClick: handleSwitchWorkspace,
     },
     { type: 'divider' },
     {

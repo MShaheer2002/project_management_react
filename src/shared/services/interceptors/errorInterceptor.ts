@@ -48,12 +48,11 @@ export function attachErrorInterceptor(instance: AxiosInstance) {
 
         case 403:
           if (errorCode === 'NOT_WORKSPACE_MEMBER') {
-            // User was removed from workspace — clear stored workspace and refetch
-            // Per workspace_integration.md §9: Global 403 Handler
+            // User was removed from workspace — clear stored workspace and redirect
             console.warn('[ErrorInterceptor] NOT_WORKSPACE_MEMBER — clearing workspace, redirecting to onboarding');
             useAuthStore.getState().setAuth(
               useAuthStore.getState().currentUser!,
-              null // clear workspace
+              null
             );
             if (typeof window !== 'undefined') {
               window.location.href = '/org-creation';
@@ -61,6 +60,21 @@ export function attachErrorInterceptor(instance: AxiosInstance) {
           } else if (errorCode !== 'USER_NOT_SYNCED' && !skipGlobalErrorToast) {
             showToast("You don't have permission to perform this action.", 'error', 'Access denied');
           }
+          break;
+
+        case 404:
+          if (errorCode === 'WORKSPACE_NOT_FOUND') {
+            // Workspace was deleted — clear stored workspace and redirect
+            console.warn('[ErrorInterceptor] WORKSPACE_NOT_FOUND — workspace deleted, redirecting to onboarding');
+            useAuthStore.getState().setAuth(
+              useAuthStore.getState().currentUser!,
+              null
+            );
+            if (typeof window !== 'undefined') {
+              window.location.href = '/org-creation';
+            }
+          }
+          // Don't toast generic 404s — let pages handle "not found" UI
           break;
 
         case 409:
