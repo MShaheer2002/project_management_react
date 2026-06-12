@@ -181,7 +181,7 @@ export const IssueSystemParametersPanel: React.FC<IssueSystemParametersPanelProp
       ...dependency,
       issue: issueOptionMap.get(dependency.issueId) ?? null,
     }))
-    .filter((item) => item.issue);
+    .filter((item): item is typeof item & { issue: NonNullable<typeof item.issue> } => item.issue !== null);
 
   const filteredParentIssues = parentOptions.filter((issue) => issue.id !== parentIssueId);
 

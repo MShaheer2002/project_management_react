@@ -21,6 +21,7 @@ import {
   useDisconnectIntegration,
   integrationQueryKeys,
   GitHubSettingsPanel,
+  SlackSettingsPanel,
   PROVIDER_META,
 } from '@features/integrations';
 import type { IntegrationItem, IntegrationProvider } from '@features/integrations';
@@ -63,6 +64,7 @@ export const IntegrationsPage: React.FC = () => {
 
   const [search, setSearch] = useState('');
   const [showGitHubSettings, setShowGitHubSettings] = useState(false);
+  const [showSlackSettings, setShowSlackSettings] = useState(false);
   const [disconnectingProvider, setDisconnectingProvider] =
     useState<IntegrationProvider | null>(null);
 
@@ -137,14 +139,15 @@ export const IntegrationsPage: React.FC = () => {
         window.location.href = result.authUrl;
       } catch (err) {
         const code = (err as ApiAxiosError).response?.data?.error?.code;
-        if (code === 'GITHUB_NOT_CONFIGURED') {
+        const providerName = PROVIDER_META[provider]?.name ?? provider;
+        if (code === 'GITHUB_NOT_CONFIGURED' || code === 'SLACK_NOT_CONFIGURED') {
           showToast(
-            'GitHub integration is not configured on this server',
+            `${providerName} integration is not configured on this server`,
             'error',
           );
         } else {
           const message = (err as ApiAxiosError).response?.data?.error?.message;
-          showToast(message || 'Failed to start connection', 'error');
+          showToast(message || `Failed to connect ${providerName}`, 'error');
         }
       }
     },
@@ -157,9 +160,13 @@ export const IntegrationsPage: React.FC = () => {
     setDisconnectingProvider(null);
   }, [disconnectingProvider, disconnectIntegration]);
 
-  // Find the GitHub integration item for the settings panel
+  // Find integration items for settings panels
   const githubIntegration = useMemo(
     () => integrations.find((i) => i.provider === 'github') ?? null,
+    [integrations],
+  );
+  const slackIntegration = useMemo(
+    () => integrations.find((i) => i.provider === 'slack') ?? null,
     [integrations],
   );
 
@@ -273,10 +280,13 @@ export const IntegrationsPage: React.FC = () => {
               )}
 
               <div className="flex items-center justify-end gap-2">
-                {integration.connected && integration.id === 'github' && isManager && (
+                {integration.connected && (integration.id === 'github' || integration.id === 'slack') && isManager && (
                   <button
                     type="button"
-                    onClick={() => setShowGitHubSettings(true)}
+                    onClick={() => {
+                      if (integration.id === 'github') setShowGitHubSettings(true);
+                      if (integration.id === 'slack') setShowSlackSettings(true);
+                    }}
                     className="px-3 py-1.5 rounded-md border border-gray-200 dark:border-border-dark text-xs font-semibold hover:bg-gray-50 dark:hover:bg-white/5 transition-colors flex items-center gap-1.5"
                   >
                     <Settings size={12} />
@@ -350,21 +360,41 @@ export const IntegrationsPage: React.FC = () => {
               Are you sure? This will:
             </p>
             <ul className="mt-2 space-y-1 text-sm text-gray-500 dark:text-gray-400">
-              <li className="flex items-start gap-2">
-                <span className="mt-0.5 shrink-0">&bull;</span>
-                Stop tracking branches, commits, and PRs on your issues
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="mt-0.5 shrink-0">&bull;</span>
-                Remove auto-status updates on PR merge
-              </li>
+              {disconnectingProvider === 'github' && (
+                <>
+                  <li className="flex items-start gap-2">
+                    <span className="mt-0.5 shrink-0">&bull;</span>
+                    Stop tracking branches, commits, and PRs on your issues
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="mt-0.5 shrink-0">&bull;</span>
+                    Remove auto-status updates on PR merge
+                  </li>
+                </>
+              )}
+              {disconnectingProvider === 'slack' && (
+                <>
+                  <li className="flex items-start gap-2">
+                    <span className="mt-0.5 shrink-0">&bull;</span>
+                    Stop sending notifications to your Slack channels
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="mt-0.5 shrink-0">&bull;</span>
+                    Disable slash commands and direct message alerts
+                  </li>
+                </>
+              )}
               <li className="flex items-start gap-2">
                 <span className="mt-0.5 shrink-0">&bull;</span>
                 Remove all settings for this workspace
               </li>
             </ul>
             <p className="mt-3 text-xs text-gray-400">
-              Your repositories and data will not be affected.
+              {disconnectingProvider === 'github'
+                ? 'Your repositories and data will not be affected.'
+                : disconnectingProvider === 'slack'
+                  ? 'Your Slack workspace and channels will not be affected.'
+                  : 'Your external data will not be affected.'}
             </p>
             <div className="mt-6 flex justify-end gap-3">
               <button
@@ -395,6 +425,13 @@ export const IntegrationsPage: React.FC = () => {
         open={showGitHubSettings}
         onClose={() => setShowGitHubSettings(false)}
         integration={githubIntegration}
+      />
+
+      {/* Slack settings slide-over */}
+      <SlackSettingsPanel
+        open={showSlackSettings}
+        onClose={() => setShowSlackSettings(false)}
+        integration={slackIntegration}
       />
     </div>
   );

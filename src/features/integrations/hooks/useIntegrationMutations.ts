@@ -3,7 +3,7 @@ import { useAuthStore } from '@/app/stores/useAuthStore';
 import { useToastStore } from '@/app/stores/useToastStore';
 import { integrationService } from '../services/integrationService';
 import { integrationQueryKeys } from './useIntegrationData';
-import type { UpdateGitHubSettingsInput } from '../types';
+import type { UpdateIntegrationSettingsInput } from '../types';
 import type { ApiAxiosError } from '@shared/services/types';
 
 export const useConnectIntegration = () => {
@@ -46,11 +46,14 @@ export const useUpdateIntegrationSettings = () => {
       settings,
     }: {
       provider: string;
-      settings: UpdateGitHubSettingsInput;
+      settings: UpdateIntegrationSettingsInput;
     }) => integrationService.updateSettings(provider, settings),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({
         queryKey: integrationQueryKeys.list(workspaceId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: integrationQueryKeys.settings(workspaceId, variables.provider),
       });
       showToast('Settings updated', 'success');
     },

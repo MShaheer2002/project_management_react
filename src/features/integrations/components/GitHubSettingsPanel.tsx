@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Loader2, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
+import { useIntegrationSettings } from '../hooks/useIntegrationData';
 import { useUpdateIntegrationSettings } from '../hooks/useIntegrationMutations';
 import type { GitHubSettings, IntegrationItem } from '../types';
 
@@ -72,12 +73,18 @@ export const GitHubSettingsPanel: React.FC<GitHubSettingsPanelProps> = ({
 }) => {
   const [settings, setSettings] = useState<GitHubSettings>(DEFAULT_SETTINGS);
   const updateSettings = useUpdateIntegrationSettings();
+  const settingsQuery = useIntegrationSettings<Partial<GitHubSettings>>('github', {
+    enabled: open,
+  });
 
+  // Load saved settings when panel opens, reset when it closes
   useEffect(() => {
-    if (open) {
+    if (open && settingsQuery.data) {
+      setSettings({ ...DEFAULT_SETTINGS, ...settingsQuery.data });
+    } else if (!open) {
       setSettings(DEFAULT_SETTINGS);
     }
-  }, [open]);
+  }, [open, settingsQuery.data]);
 
   const handleToggle = useCallback(
     (key: keyof GitHubSettings, value: boolean) => {

@@ -3,8 +3,8 @@ import type { ApiResponse } from '@shared/services/types';
 import type {
   IntegrationItem,
   GitHubConnectResponse,
-  GitHubSettings,
-  UpdateGitHubSettingsInput,
+  SlackChannel,
+  UpdateIntegrationSettingsInput,
 } from '../types';
 import type { AxiosRequestConfig } from 'axios';
 
@@ -38,12 +38,30 @@ export const integrationService = {
     } as AxiosRequestConfig & { skipGlobalErrorToast: boolean });
   },
 
-  /** PATCH /integrations/:provider/settings — Update provider settings */
-  updateSettings: async (
+  /** GET /integrations/:provider/settings — Fetch saved provider settings */
+  getSettings: async <T = Record<string, unknown>>(
     provider: string,
-    settings: UpdateGitHubSettingsInput,
-  ): Promise<GitHubSettings> => {
-    const { data } = await privateApi.patch<ApiResponse<GitHubSettings>>(
+  ): Promise<T> => {
+    const { data } = await privateApi.get<ApiResponse<T>>(
+      `/integrations/${provider}/settings`,
+    );
+    return data.data;
+  },
+
+  /** GET /integrations/slack/channels — List available Slack channels */
+  listSlackChannels: async (): Promise<SlackChannel[]> => {
+    const { data } = await privateApi.get<ApiResponse<SlackChannel[]>>(
+      '/integrations/slack/channels',
+    );
+    return data.data;
+  },
+
+  /** PATCH /integrations/:provider/settings — Update provider settings */
+  updateSettings: async <T = Record<string, unknown>>(
+    provider: string,
+    settings: UpdateIntegrationSettingsInput,
+  ): Promise<T> => {
+    const { data } = await privateApi.patch<ApiResponse<T>>(
       `/integrations/${provider}/settings`,
       settings,
     );

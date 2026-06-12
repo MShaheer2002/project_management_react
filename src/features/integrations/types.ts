@@ -28,6 +28,60 @@ export interface GitHubSettings {
 
 export type UpdateGitHubSettingsInput = Partial<GitHubSettings>;
 
+/** A single channel mapping (id + display name) */
+export interface SlackChannelMapping {
+  channelId: string;
+  channelName: string;
+}
+
+/** Channel routing config stored in the integration */
+export interface SlackChannelRouting {
+  projects: Record<string, SlackChannelMapping[]>;
+  teams: Record<string, SlackChannelMapping[]>;
+  urgent: SlackChannelMapping | null;
+}
+
+export interface SlackSettings {
+  // Channel notifications
+  notifyOnIssueCreatedUrgent: boolean;
+  notifyOnIssueCompleted: boolean;
+  notifyOnIssueAssigned: boolean;
+  notifyOnStatusChange: boolean;
+  notifyOnCycleStarted: boolean;
+  notifyOnCycleCompleted: boolean;
+  notifyOnProjectCompleted: boolean;
+  // Direct messages
+  dmOnAssigned: boolean;
+  dmOnMentioned: boolean;
+  dmOnPrActivity: boolean;
+  dmOnDueDateReminder: boolean;
+  dmOnAllStatusChanges: boolean;
+  // Slash commands
+  slashCreate: boolean;
+  slashStatus: boolean;
+  slashMyIssues: boolean;
+  slashCycle: boolean;
+  // Channel config
+  defaultChannelId: string | null;
+  defaultChannelName: string | null;
+  // Channel routing
+  channelRouting: SlackChannelRouting | null;
+}
+
+export type UpdateSlackSettingsInput = Partial<SlackSettings>;
+
+/** Slack channel returned by GET /integrations/slack/channels */
+export interface SlackChannel {
+  id: string;
+  name: string;
+  memberCount: number;
+}
+
+/** Union of all provider settings for the generic updateSettings service */
+export type UpdateIntegrationSettingsInput =
+  | UpdateGitHubSettingsInput
+  | UpdateSlackSettingsInput;
+
 /** Static provider display metadata — not from API */
 export interface ProviderMeta {
   id: IntegrationProvider;
@@ -52,7 +106,7 @@ export const PROVIDER_META: Record<IntegrationProvider, ProviderMeta> = {
     description:
       'Get issue updates in your channels. Create issues with slash commands.',
     logo: 'https://cdn-icons-png.flaticon.com/512/3800/3800024.png',
-    available: false,
+    available: true,
   },
   discord: {
     id: 'discord',
