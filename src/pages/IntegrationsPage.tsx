@@ -17,11 +17,16 @@ import { useToastStore } from '@/app/stores/useToastStore';
 import { canManageIntegrations } from '@shared/permissions';
 import {
   useIntegrations,
-  useConnectIntegration,
+  useConnectGitHub,
+  useConnectSlack,
   useDisconnectIntegration,
   integrationQueryKeys,
   GitHubSettingsPanel,
   SlackSettingsPanel,
+  DiscordSettingsPanel,
+  DiscordConnectModal,
+  FigmaSettingsPanel,
+  FigmaConnectModal,
   PROVIDER_META,
 } from '@features/integrations';
 import type { IntegrationItem, IntegrationProvider } from '@features/integrations';
@@ -65,11 +70,16 @@ export const IntegrationsPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [showGitHubSettings, setShowGitHubSettings] = useState(false);
   const [showSlackSettings, setShowSlackSettings] = useState(false);
+  const [showDiscordSettings, setShowDiscordSettings] = useState(false);
+  const [showDiscordConnect, setShowDiscordConnect] = useState(false);
+  const [showFigmaSettings, setShowFigmaSettings] = useState(false);
+  const [showFigmaConnect, setShowFigmaConnect] = useState(false);
   const [disconnectingProvider, setDisconnectingProvider] =
     useState<IntegrationProvider | null>(null);
 
   const { data: integrations = [], isLoading, isError, refetch } = useIntegrations();
-  const connectIntegration = useConnectIntegration();
+  const connectGitHub = useConnectGitHub();
+  const connectSlack = useConnectSlack();
   const disconnectIntegration = useDisconnectIntegration();
 
   // Handle OAuth callback redirect params
@@ -134,24 +144,34 @@ export const IntegrationsPage: React.FC = () => {
         return;
       }
 
+      // Discord uses inline webhook form, not OAuth
+      if (provider === 'discord') {
+        setShowDiscordConnect(true);
+        return;
+      }
+
+      // Figma uses inline token form, not OAuth
+      if (provider === 'figma') {
+        setShowFigmaConnect(true);
+        return;
+      }
+
+      const providerName = PROVIDER_META[provider]?.name ?? provider;
       try {
-        const result = await connectIntegration.mutateAsync(provider);
+        const connectFn = provider === 'github' ? connectGitHub : connectSlack;
+        const result = await connectFn.mutateAsync();
         window.location.href = result.authUrl;
       } catch (err) {
-        const code = (err as ApiAxiosError).response?.data?.error?.code;
-        const providerName = PROVIDER_META[provider]?.name ?? provider;
+        const apiErr = err as ApiAxiosError;
+        const code = apiErr.response?.data?.error?.code;
         if (code === 'GITHUB_NOT_CONFIGURED' || code === 'SLACK_NOT_CONFIGURED') {
-          showToast(
-            `${providerName} integration is not configured on this server`,
-            'error',
-          );
+          showToast(`${providerName} integration is not configured on this server`, 'error');
         } else {
-          const message = (err as ApiAxiosError).response?.data?.error?.message;
-          showToast(message || `Failed to connect ${providerName}`, 'error');
+          showToast(apiErr.response?.data?.error?.message || `Failed to connect ${providerName}`, 'error');
         }
       }
     },
-    [connectIntegration, showToast],
+    [connectGitHub, connectSlack, showToast],
   );
 
   const confirmDisconnect = useCallback(() => {
@@ -167,6 +187,14 @@ export const IntegrationsPage: React.FC = () => {
   );
   const slackIntegration = useMemo(
     () => integrations.find((i) => i.provider === 'slack') ?? null,
+    [integrations],
+  );
+  const discordIntegration = useMemo(
+    () => integrations.find((i) => i.provider === 'discord') ?? null,
+    [integrations],
+  );
+  const figmaIntegration = useMemo(
+    () => integrations.find((i) => i.provider === 'figma') ?? null,
     [integrations],
   );
 
@@ -280,12 +308,14 @@ export const IntegrationsPage: React.FC = () => {
               )}
 
               <div className="flex items-center justify-end gap-2">
-                {integration.connected && (integration.id === 'github' || integration.id === 'slack') && isManager && (
+                {integration.connected && (integration.id === 'github' || integration.id === 'slack' || integration.id === 'discord' || integration.id === 'figma') && isManager && (
                   <button
                     type="button"
                     onClick={() => {
                       if (integration.id === 'github') setShowGitHubSettings(true);
                       if (integration.id === 'slack') setShowSlackSettings(true);
+                      if (integration.id === 'discord') setShowDiscordSettings(true);
+                      if (integration.id === 'figma') setShowFigmaSettings(true);
                     }}
                     className="px-3 py-1.5 rounded-md border border-gray-200 dark:border-border-dark text-xs font-semibold hover:bg-gray-50 dark:hover:bg-white/5 transition-colors flex items-center gap-1.5"
                   >
@@ -306,10 +336,10 @@ export const IntegrationsPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => handleConnect(integration.id)}
-                    disabled={connectIntegration.isPending}
+                    disabled={connectGitHub.isPending || connectSlack.isPending}
                     className="px-4 py-1.5 rounded-md bg-primary text-white text-xs font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-1.5"
                   >
-                    {connectIntegration.isPending && (
+                    {(connectGitHub.isPending || connectSlack.isPending) && (
                       <Loader2 size={12} className="animate-spin" />
                     )}
                     Connect
@@ -384,6 +414,34 @@ export const IntegrationsPage: React.FC = () => {
                   </li>
                 </>
               )}
+              {disconnectingProvider === 'discord' && (
+                <>
+                  <li className="flex items-start gap-2">
+                    <span className="mt-0.5 shrink-0">&bull;</span>
+                    Stop all notifications to Discord channels
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="mt-0.5 shrink-0">&bull;</span>
+                    Remove all webhook URL configurations
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="mt-0.5 shrink-0">&bull;</span>
+                    Remove all project/team channel mappings
+                  </li>
+                </>
+              )}
+              {disconnectingProvider === 'figma' && (
+                <>
+                  <li className="flex items-start gap-2">
+                    <span className="mt-0.5 shrink-0">&bull;</span>
+                    Remove design previews from all issues
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="mt-0.5 shrink-0">&bull;</span>
+                    Remove your Figma access token
+                  </li>
+                </>
+              )}
               <li className="flex items-start gap-2">
                 <span className="mt-0.5 shrink-0">&bull;</span>
                 Remove all settings for this workspace
@@ -394,7 +452,11 @@ export const IntegrationsPage: React.FC = () => {
                 ? 'Your repositories and data will not be affected.'
                 : disconnectingProvider === 'slack'
                   ? 'Your Slack workspace and channels will not be affected.'
-                  : 'Your external data will not be affected.'}
+                  : disconnectingProvider === 'discord'
+                    ? 'Your Discord server and webhooks will not be affected. You can reconnect anytime.'
+                    : disconnectingProvider === 'figma'
+                      ? 'Your Figma files and designs will not be affected. You can reconnect anytime.'
+                      : 'Your external data will not be affected.'}
             </p>
             <div className="mt-6 flex justify-end gap-3">
               <button
@@ -432,6 +494,38 @@ export const IntegrationsPage: React.FC = () => {
         open={showSlackSettings}
         onClose={() => setShowSlackSettings(false)}
         integration={slackIntegration}
+      />
+
+      {/* Discord connect modal */}
+      <DiscordConnectModal
+        open={showDiscordConnect}
+        onClose={() => setShowDiscordConnect(false)}
+        onConnected={() =>
+          showToast('Discord connected successfully', 'success', 'Integration connected')
+        }
+      />
+
+      {/* Discord settings slide-over */}
+      <DiscordSettingsPanel
+        open={showDiscordSettings}
+        onClose={() => setShowDiscordSettings(false)}
+        integration={discordIntegration}
+      />
+
+      {/* Figma connect modal */}
+      <FigmaConnectModal
+        open={showFigmaConnect}
+        onClose={() => setShowFigmaConnect(false)}
+        onConnected={() =>
+          showToast('Figma connected successfully', 'success', 'Integration connected')
+        }
+      />
+
+      {/* Figma settings slide-over */}
+      <FigmaSettingsPanel
+        open={showFigmaSettings}
+        onClose={() => setShowFigmaSettings(false)}
+        integration={figmaIntegration}
       />
     </div>
   );

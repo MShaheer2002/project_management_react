@@ -44,7 +44,7 @@ import {
   useUpdateIssue,
   useUpdateIssueStatus,
 } from '@features/issues';
-import { IssueGitHubActivity } from '@features/integrations';
+import { IssueGitHubActivity, IssueFigmaDesigns } from '@features/integrations';
 import type { IssueAttachment, IssueType, Priority, Status } from '@/types';
 
 const TypeBadge: React.FC<{ type: IssueType }> = ({ type }) => {
@@ -609,6 +609,15 @@ export const IssueDetailPage: React.FC = () => {
             </div>
 
             <IssueGitHubActivity issueId={issueResourceId} />
+
+            <IssueFigmaDesigns
+              description={issue.description}
+              figmaUrls={
+                issue.integrationRefs
+                  ?.filter((ref) => ref.provider === 'figma' && ref.url)
+                  .map((ref) => ref.url!) ?? undefined
+              }
+            />
 
             <div className="space-y-6 pt-10">
               <div className="flex gap-8 border-b border-gray-100 dark:border-border-dark">

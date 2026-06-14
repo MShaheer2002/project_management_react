@@ -1,4 +1,8 @@
-/** Backend integration status returned by GET /integrations */
+// ── Shared ──────────────────────────────────────────────────────
+
+export type IntegrationProvider = 'github' | 'slack' | 'discord' | 'figma';
+
+/** Returned by GET /integrations */
 export interface IntegrationItem {
   provider: IntegrationProvider;
   connected: boolean;
@@ -8,79 +12,8 @@ export interface IntegrationItem {
     name: string;
     email: string;
   } | null;
+  providerMeta: Record<string, unknown> | null;
 }
-
-export type IntegrationProvider = 'github' | 'slack' | 'discord' | 'figma';
-
-export interface GitHubConnectResponse {
-  authUrl: string;
-}
-
-export interface GitHubSettings {
-  autoCompleteOnMerge: boolean;
-  autoMoveToReviewOnPr: boolean;
-  notifyOnPrOpen: boolean;
-  notifyOnPrReview: boolean;
-  notifyOnPrMerge: boolean;
-  showCommits: boolean;
-  showBranches: boolean;
-}
-
-export type UpdateGitHubSettingsInput = Partial<GitHubSettings>;
-
-/** A single channel mapping (id + display name) */
-export interface SlackChannelMapping {
-  channelId: string;
-  channelName: string;
-}
-
-/** Channel routing config stored in the integration */
-export interface SlackChannelRouting {
-  projects: Record<string, SlackChannelMapping[]>;
-  teams: Record<string, SlackChannelMapping[]>;
-  urgent: SlackChannelMapping | null;
-}
-
-export interface SlackSettings {
-  // Channel notifications
-  notifyOnIssueCreatedUrgent: boolean;
-  notifyOnIssueCompleted: boolean;
-  notifyOnIssueAssigned: boolean;
-  notifyOnStatusChange: boolean;
-  notifyOnCycleStarted: boolean;
-  notifyOnCycleCompleted: boolean;
-  notifyOnProjectCompleted: boolean;
-  // Direct messages
-  dmOnAssigned: boolean;
-  dmOnMentioned: boolean;
-  dmOnPrActivity: boolean;
-  dmOnDueDateReminder: boolean;
-  dmOnAllStatusChanges: boolean;
-  // Slash commands
-  slashCreate: boolean;
-  slashStatus: boolean;
-  slashMyIssues: boolean;
-  slashCycle: boolean;
-  // Channel config
-  defaultChannelId: string | null;
-  defaultChannelName: string | null;
-  // Channel routing
-  channelRouting: SlackChannelRouting | null;
-}
-
-export type UpdateSlackSettingsInput = Partial<SlackSettings>;
-
-/** Slack channel returned by GET /integrations/slack/channels */
-export interface SlackChannel {
-  id: string;
-  name: string;
-  memberCount: number;
-}
-
-/** Union of all provider settings for the generic updateSettings service */
-export type UpdateIntegrationSettingsInput =
-  | UpdateGitHubSettingsInput
-  | UpdateSlackSettingsInput;
 
 /** Static provider display metadata — not from API */
 export interface ProviderMeta {
@@ -111,18 +44,42 @@ export const PROVIDER_META: Record<IntegrationProvider, ProviderMeta> = {
   discord: {
     id: 'discord',
     name: 'Discord',
-    description: 'Post workspace events to your Discord channels.',
+    description:
+      'Post issue and project updates to your Discord channels via webhook.',
     logo: 'https://cdn-icons-png.flaticon.com/512/5968/5968756.png',
-    available: false,
+    available: true,
   },
   figma: {
     id: 'figma',
     name: 'Figma',
-    description: 'Link design files to issues and projects.',
+    description:
+      'Link design files to issues. See thumbnails and metadata inline.',
     logo: 'https://cdn-icons-png.flaticon.com/512/5968/5968705.png',
-    available: false,
+    available: true,
   },
 };
+
+// ── GitHub ──────────────────────────────────────────────────────
+
+export interface GitHubSettings {
+  autoCompleteOnMerge: boolean;
+  autoMoveToReviewOnPr: boolean;
+  notifyOnPrOpen: boolean;
+  notifyOnPrReview: boolean;
+  notifyOnPrMerge: boolean;
+  showCommits: boolean;
+  showBranches: boolean;
+}
+
+export interface GitHubSettingsResponse {
+  settings: GitHubSettings;
+  githubUser: { login: string; id: number; avatarUrl: string } | null;
+  repos: string[];
+}
+
+export interface GitHubConnectResponse {
+  authUrl: string;
+}
 
 /** GitHub activity types present in the activity feed */
 export const GITHUB_ACTIVITY_TYPES = [
@@ -159,3 +116,132 @@ export interface GitHubActivityMetadata {
   fromStatus?: string;
   toStatus?: string;
 }
+
+// ── Slack ───────────────────────────────────────────────────────
+
+export interface SlackSettings {
+  notifyOnIssueCreatedUrgent: boolean;
+  notifyOnIssueCompleted: boolean;
+  notifyOnIssueAssigned: boolean;
+  notifyOnCycleStarted: boolean;
+  notifyOnCycleCompleted: boolean;
+  dmOnAssignment: boolean;
+  dmOnMention: boolean;
+  dmOnDueDateApproaching: boolean;
+  slashCommandsEnabled: boolean;
+}
+
+export type ChannelScope = 'default' | 'project' | 'team' | 'urgent';
+
+export interface SlackChannelMapping {
+  id: string;
+  channelId: string;
+  channelName: string;
+  scope: ChannelScope;
+  scopeId: string | null;
+}
+
+export interface AddSlackChannelInput {
+  channelId: string;
+  channelName: string;
+  scope: ChannelScope;
+  scopeId?: string;
+}
+
+export interface SlackAvailableChannel {
+  id: string;
+  name: string;
+  isPrivate: boolean;
+  memberCount: number;
+}
+
+export interface SlackSettingsResponse {
+  settings: SlackSettings;
+  channels: SlackChannelMapping[];
+  team: { id: string; name: string } | null;
+}
+
+// ── Discord ────────────────────────────────────────────────────
+
+export interface DiscordSettings {
+  notifyOnIssueCreatedUrgent: boolean;
+  notifyOnIssueCompleted: boolean;
+  notifyOnIssueAssigned: boolean;
+  notifyOnStatusChange: boolean;
+  notifyOnCycleStarted: boolean;
+  notifyOnCycleCompleted: boolean;
+  notifyOnProjectCompleted: boolean;
+}
+
+export interface DiscordWebhookMapping {
+  id: string;
+  url: string;
+  label: string;
+  scope: ChannelScope;
+  scopeId: string | null;
+}
+
+export interface AddDiscordWebhookInput {
+  url: string;
+  label: string;
+  scope: ChannelScope;
+  scopeId?: string;
+}
+
+export interface ConnectDiscordInput {
+  webhookUrl: string;
+  label?: string;
+}
+
+export interface ConnectDiscordResponse {
+  provider: 'discord';
+  label: string;
+}
+
+export interface DiscordSettingsResponse {
+  settings: DiscordSettings;
+  webhooks: DiscordWebhookMapping[];
+}
+
+/** Validates Discord webhook URL */
+export const DISCORD_WEBHOOK_REGEX =
+  /^https:\/\/(?:discord\.com|discordapp\.com|discordptb\.com)\/api\/webhooks\/\d+\/.+$/;
+
+// ── Figma ──────────────────────────────────────────────────────
+
+export interface FigmaSettings {
+  showThumbnails: boolean;
+  showLastModified: boolean;
+}
+
+export interface FigmaSettingsResponse {
+  settings: FigmaSettings;
+  figmaUser: { handle: string; email: string } | null;
+}
+
+export interface FigmaPreview {
+  fileKey: string;
+  name: string;
+  thumbnailUrl: string;
+  lastModified: string;
+  version?: string;
+  editorType?: string;
+  nodeId?: string | null;
+  url: string;
+}
+
+export interface ConnectFigmaInput {
+  accessToken: string;
+}
+
+export interface ConnectFigmaResponse {
+  provider: 'figma';
+  figmaUser: { handle: string; email: string };
+}
+
+/** Detects Figma file/design/proto/board URLs */
+export const FIGMA_URL_REGEX =
+  /https?:\/\/(www\.)?figma\.com\/(file|design|proto|board)\/[a-zA-Z0-9]+/g;
+
+export const isFigmaUrl = (url: string): boolean =>
+  /^https?:\/\/(www\.)?figma\.com\/(file|design|proto|board)\/[a-zA-Z0-9]+/.test(url);

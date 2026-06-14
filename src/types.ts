@@ -36,7 +36,7 @@ export interface IssueDependency {
 
 export interface IssueIntegrationRef {
   id: string;
-  provider: 'github' | 'jira' | 'slack' | 'notion' | 'custom';
+  provider: 'github' | 'jira' | 'slack' | 'notion' | 'figma' | 'discord' | 'custom';
   label?: string;
   externalId?: string;
   url?: string;

@@ -20,7 +20,13 @@ const isGitHubType = (type: string): type is GitHubActivityType =>
   (GITHUB_ACTIVITY_TYPES as readonly string[]).includes(type);
 
 const asGitHubMeta = (metadata?: Record<string, unknown>): GitHubActivityMetadata | null => {
-  if (!metadata || metadata.provider !== 'github') return null;
+  if (
+    !metadata ||
+    metadata.provider !== 'github' ||
+    typeof metadata.repo !== 'string' ||
+    typeof metadata.entityId !== 'string'
+  )
+    return null;
   return metadata as unknown as GitHubActivityMetadata;
 };
 
