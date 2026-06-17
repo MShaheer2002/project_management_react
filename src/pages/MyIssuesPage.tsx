@@ -14,7 +14,9 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/app/stores/useAuthStore';
 import { useApp } from '../AppContext';
-import { PRIORITY_COLORS, STATUS_LABELS, ISSUE_TYPE_CONFIG } from '../constants';
+import { PRIORITY_COLORS, ISSUE_TYPE_CONFIG } from '../constants';
+import { getStatusLabel, isStatusFinal } from '@shared/constants/statuses';
+import { useWorkspaceStatuses } from '@shared/hooks/useWorkspaceStatuses';
 import { Issue, IssueType, Status } from '../types';
 import { KanbanBoard } from '../components/board/KanbanBoard';
 import { useIssuesDirectory, useUpdateAnyIssueStatus } from '@/features/issues';
@@ -33,6 +35,7 @@ const TypeBadge: React.FC<{ type: IssueType }> = ({ type }) => {
 
 export const MyIssuesPage: React.FC = () => {
   const currentUser = useAuthStore((s) => s.currentUser);
+  const workspaceStatuses = useWorkspaceStatuses();
   const { setSelectedIssueId, showToast } = useApp();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'assigned' | 'created' | 'completed'>('assigned');
@@ -41,13 +44,14 @@ export const MyIssuesPage: React.FC = () => {
   const [typeFilter, setTypeFilter] = useState<IssueType | 'all'>('all');
   const deferredSearch = useDeferredValue(search);
 
+  const finalStatusKeys = workspaceStatuses.filter((s) => s.isFinal).map((s) => s.key);
   const issuesQuery = useIssuesDirectory(
     {
       q: deferredSearch.trim() || undefined,
       type: typeFilter === 'all' ? undefined : typeFilter,
       assigneeId: activeTab === 'assigned' || activeTab === 'completed' ? currentUser?.id : undefined,
       creatorId: activeTab === 'created' ? currentUser?.id : undefined,
-      status: activeTab === 'completed' ? 'done' : undefined,
+      status: activeTab === 'completed' ? (finalStatusKeys[0] ?? 'done') : undefined,
       sort: 'updatedAt:desc',
       limit: 30,
     },
@@ -67,15 +71,15 @@ export const MyIssuesPage: React.FC = () => {
 
   const myIssues = useMemo(() => {
     if (activeTab === 'assigned') {
-      return allIssues.filter((issue) => issue.status !== 'done');
+      return allIssues.filter((issue) => !isStatusFinal(workspaceStatuses, issue.status));
     }
     return allIssues;
-  }, [activeTab, allIssues]);
+  }, [activeTab, allIssues, workspaceStatuses]);
 
   const handleIssueUpdate = async (issueId: string, newStatus: Status) => {
     try {
       await updateAnyIssueStatus.mutateAsync({ issueId, status: newStatus });
-      showToast(`Issue moved to ${STATUS_LABELS[newStatus]}.`, 'success');
+      showToast(`Issue moved to ${getStatusLabel(workspaceStatuses, newStatus)}.`, 'success');
       return true;
     } catch {
       showToast('Failed to update issue status.', 'error');
@@ -105,7 +109,7 @@ export const MyIssuesPage: React.FC = () => {
                     <span>•</span>
                     <span>{issue.project?.name || 'No Project'}</span>
                     <span>•</span>
-                    <span>{STATUS_LABELS[issue.status]}</span>
+                    <span>{getStatusLabel(workspaceStatuses, issue.status)}</span>
                     {(issue.subtaskStats?.total || issue.subtasks?.length) ? (
                       <>
                         <span>•</span>

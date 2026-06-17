@@ -40,6 +40,40 @@ export interface ListDocumentsInput {
   cursor?: string;
   limit?: number;
   sort?: DocumentSort;
+  folderId?: string | null;
+}
+
+export interface DocumentFolder {
+  id: string;
+  name: string;
+  parentId: string | null;
+  childCount: number;
+  documentCount: number;
+  createdBy: { id: string; name: string; email: string };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FolderBreadcrumb {
+  id: string;
+  name: string;
+}
+
+export interface CreateFolderInput {
+  name: string;
+  parentId?: string | null;
+}
+
+export interface RenameFolderInput {
+  name: string;
+}
+
+export interface MoveFolderInput {
+  parentId: string | null;
+}
+
+export interface MoveDocumentInput {
+  folderId: string | null;
 }
 
 export interface UpdateDocumentInput {

@@ -7,8 +7,6 @@ import type {
   IssueTemplate,
   TemplateActivationConflictDetails,
   TemplateActivationResult,
-  TemplateApplyDraft,
-  TemplateDefaultConflictDetails,
   TemplateDefaultsResponse,
   TemplateDraftInput,
   TemplateListInput,
@@ -36,7 +34,6 @@ type RawTemplateDefaultsResponse = ApiResponse<TemplateDefaultsResponse> | Templ
 
 type RawTemplateActivationResponse = ApiResponse<TemplateActivationResult> | TemplateActivationResult;
 
-type RawTemplateApplyResponse = ApiResponse<TemplateApplyDraft> | TemplateApplyDraft;
 
 type RawTemplateActivationConflictError = {
   success: false;
@@ -44,15 +41,6 @@ type RawTemplateActivationConflictError = {
     code: 'TEMPLATE_ALREADY_ACTIVE' | 'TEMPLATE_ACTIVATION_CONFLICT';
     message: string;
     details?: TemplateActivationConflictDetails;
-  };
-};
-
-type RawTemplateDefaultConflictError = {
-  success: false;
-  error: {
-    code: 'TEMPLATE_DEFAULT_CONFLICT';
-    message: string;
-    details?: TemplateDefaultConflictDetails;
   };
 };
 
@@ -73,9 +61,6 @@ const normalizeTemplate = (template: RawTemplate): IssueTemplate => ({
   }),
   customCategory: template.customCategory ?? null,
   customStatus: template.customStatus ?? null,
-  scopeType: template.scopeType ?? 'WORKSPACE',
-  scopeId: template.scopeId ?? null,
-  isDefault: template.isDefault ?? false,
   defaultAssigneeId: template.defaultAssigneeId ?? null,
   defaultEstimate: template.defaultEstimate ?? null,
   defaultDueDateOffset: template.defaultDueDateOffset ?? null,
@@ -124,14 +109,11 @@ const normalizeDefaults = (data: RawTemplateDefaultsResponse): TemplateDefaultsR
 const normalizeActivationResult = (data: RawTemplateActivationResponse): TemplateActivationResult =>
   unwrapResponse(data as ApiResponse<TemplateActivationResult> | TemplateActivationResult);
 
-const normalizeApplyDraft = (data: RawTemplateApplyResponse): TemplateApplyDraft =>
-  unwrapResponse(data as ApiResponse<TemplateApplyDraft> | TemplateApplyDraft);
 
 const withWorkspaceParams = (input: TemplateListInput = {}) => ({
   ...input,
   category: input.category === 'all' ? undefined : input.category,
   issueType: input.issueType === 'all' ? undefined : input.issueType,
-  scopeType: input.scopeType === 'all' ? undefined : input.scopeType,
   creatorId: input.creatorId === 'all' ? undefined : input.creatorId,
   lifecycle: input.lifecycle === 'all' ? undefined : input.lifecycle,
   isActive: input.isActive === 'all' ? undefined : input.isActive,
@@ -191,15 +173,6 @@ export const templateService = {
     return normalizeTemplate(unwrapResponse(data as ApiResponse<RawTemplate> | RawTemplate));
   },
 
-  apply: async (templateId: string): Promise<TemplateApplyDraft> => {
-    const { data } = await privateApi.post<ApiResponse<TemplateApplyDraft> | TemplateApplyDraft>(
-      `/templates/${templateId}/apply`,
-      {},
-      mutationConfig
-    );
-    return normalizeApplyDraft(data);
-  },
-
   activate: async (templateId: string): Promise<TemplateActivationResult> => {
     const { data } = await privateApi.post<ApiResponse<TemplateActivationResult> | TemplateActivationResult>(
       `/templates/${templateId}/activate`,
@@ -216,15 +189,6 @@ export const templateService = {
       mutationConfig
     );
     return normalizeActivationResult(data);
-  },
-
-  confirmDefault: async (templateId: string): Promise<IssueTemplate> => {
-    const { data } = await privateApi.post<ApiResponse<RawTemplate> | RawTemplate>(
-      `/templates/${templateId}/default/confirm`,
-      {},
-      mutationConfig
-    );
-    return normalizeTemplate(unwrapResponse(data as ApiResponse<RawTemplate> | RawTemplate));
   },
 
   deactivate: async (templateId: string): Promise<TemplateActivationResult> => {
@@ -254,14 +218,6 @@ export const templateService = {
     const candidate = isAxiosError<RawTemplateActivationConflictError>(error) ? error.response?.data : (error as RawTemplateActivationConflictError | undefined);
     if (!candidate?.error) return null;
     if (candidate.error.code !== 'TEMPLATE_ALREADY_ACTIVE' && candidate.error.code !== 'TEMPLATE_ACTIVATION_CONFLICT') return null;
-    return candidate.error.details ? { ...candidate.error.details, message: candidate.error.message } : null;
-  },
-
-  inspectDefaultError: (error: unknown): TemplateDefaultConflictDetails | null => {
-    const candidate = isAxiosError<RawTemplateDefaultConflictError>(error)
-      ? error.response?.data
-      : (error as RawTemplateDefaultConflictError | undefined);
-    if (!candidate?.error || candidate.error.code !== 'TEMPLATE_DEFAULT_CONFLICT') return null;
     return candidate.error.details ? { ...candidate.error.details, message: candidate.error.message } : null;
   },
 };

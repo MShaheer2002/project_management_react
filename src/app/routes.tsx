@@ -45,6 +45,11 @@ import { CreateIssuePage } from '@/pages/CreateIssuePage';
 import { TemplatesPage } from '@features/templates';
 import { IssueDetailPage } from '@/pages/IssueDetailPage';
 
+const CreateIssuePageKeyed: React.FC = () => {
+  const workspaceId = useAuthStore((s) => s.workspace?.id);
+  return <CreateIssuePage key={workspaceId ?? 'none'} />;
+};
+
 const RootPage: React.FC = () => {
   const { isSignedIn, isLoaded } = useUser();
   const workspace = useAuthStore((s) => s.workspace);
@@ -135,7 +140,7 @@ export const AppRoutes: React.FC = () => {
           <Route path="/inbox" element={<NotificationsPage />} />
           <Route path="/issues/my" element={<MyIssuesPage />} />
           <Route path="/issues" element={<IssuesPage />} />
-          <Route path="/issues/create" element={<CreateIssuePage />} />
+          <Route path="/issues/create" element={<CreateIssuePageKeyed />} />
           <Route path="/issues/:issueId" element={<IssueDetailPage />} />
           <Route path="/projects" element={<ProjectsPage />} />
           <Route path="/projects/:id" element={<ProjectDetailPage />} />

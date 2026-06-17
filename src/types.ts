@@ -1,5 +1,13 @@
 export type Priority = 'low' | 'medium' | 'high' | 'urgent';
-export type Status = 'backlog' | 'todo' | 'in-progress' | 'review' | 'done';
+export type Status = string;
+
+export interface WorkspaceStatus {
+  key: string;
+  label: string;
+  color: string;
+  order: number;
+  isFinal: boolean;
+}
 export type UserRole = 'owner' | 'admin' | 'member' | 'guest';
 export type IssueType = 'task' | 'bug' | 'issue';
 export type Severity = 'low' | 'medium' | 'high';

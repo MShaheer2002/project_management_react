@@ -1,9 +1,10 @@
 import React from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { Plus, CheckCircle2, Clock, AlertCircle } from 'lucide-react';
+import { Plus, CheckCircle2 } from 'lucide-react';
 import { Issue, Status } from '../../types';
-import { STATUS_LABELS } from '../../constants';
+import { getStatusLabel, getStatusColor } from '@shared/constants/statuses';
+import { useWorkspaceStatuses } from '@shared/hooks/useWorkspaceStatuses';
 import { BoardCard } from './BoardCard';
 
 interface BoardColumnProps {
@@ -12,26 +13,38 @@ interface BoardColumnProps {
   onIssueClick: (id: string) => void;
   onNewIssue: () => void;
   hideNewIssueButton?: boolean;
+  statusLabel?: string;
+  statusColor?: string;
+  isFinal?: boolean;
 }
 
-const StatusIcon: React.FC<{ status: Status }> = ({ status }) => {
-  switch (status) {
-    case 'done': return <CheckCircle2 size={14} className="text-green-500" />;
-    case 'in-progress': return <Clock size={14} className="text-blue-500" />;
-    case 'review': return <Clock size={14} className="text-purple-500" />;
-    case 'todo': return <div className="w-3.5 h-3.5 rounded-full border-2 border-gray-400" />;
-    case 'backlog': return <div className="w-3.5 h-3.5 rounded-full border-2 border-dashed border-gray-400" />;
-    default: return null;
+const StatusIcon: React.FC<{ color: string; isFinal: boolean }> = ({ color, isFinal }) => {
+  if (isFinal) {
+    return <CheckCircle2 size={14} style={{ color }} />;
   }
+  return (
+    <div
+      className="w-3.5 h-3.5 rounded-full border-2"
+      style={{ borderColor: color }}
+    />
+  );
 };
 
-export const BoardColumn: React.FC<BoardColumnProps> = ({ 
-  id, 
-  issues, 
-  onIssueClick, 
+export const BoardColumn: React.FC<BoardColumnProps> = ({
+  id,
+  issues,
+  onIssueClick,
   onNewIssue,
-  hideNewIssueButton = false
+  hideNewIssueButton = false,
+  statusLabel: statusLabelProp,
+  statusColor: statusColorProp,
+  isFinal: isFinalProp,
 }) => {
+  const workspaceStatuses = useWorkspaceStatuses();
+  const label = statusLabelProp ?? getStatusLabel(workspaceStatuses, id);
+  const color = statusColorProp ?? getStatusColor(workspaceStatuses, id);
+  const isFinal = isFinalProp ?? workspaceStatuses.find((s) => s.key === id)?.isFinal ?? false;
+
   const { setNodeRef, isOver } = useDroppable({
     id,
     data: {
@@ -44,14 +57,14 @@ export const BoardColumn: React.FC<BoardColumnProps> = ({
     <div className="w-80 flex flex-col gap-4 h-full">
       <div className="flex items-center justify-between px-2 shrink-0">
         <div className="flex items-center gap-2">
-          <StatusIcon status={id} />
-          <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400">{STATUS_LABELS[id]}</h3>
+          <StatusIcon color={color} isFinal={isFinal} />
+          <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400">{label}</h3>
           <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-200 dark:bg-gray-800 text-gray-500 tabular-nums">
             {issues.length}
           </span>
         </div>
         {!hideNewIssueButton && (
-          <button 
+          <button
             onClick={onNewIssue}
             className="p-1 rounded hover:bg-gray-200 dark:hover:bg-white/10 text-gray-400 transition-colors"
           >
@@ -59,8 +72,8 @@ export const BoardColumn: React.FC<BoardColumnProps> = ({
           </button>
         )}
       </div>
-      
-      <div 
+
+      <div
         ref={setNodeRef}
         className={`flex-1 space-y-3 overflow-y-auto pr-2 scrollbar-hide rounded-xl transition-colors duration-200 ${
           isOver ? 'bg-primary/5 ring-2 ring-primary/20 ring-inset' : ''
@@ -71,7 +84,7 @@ export const BoardColumn: React.FC<BoardColumnProps> = ({
             <BoardCard key={issue.id} issue={issue} onClick={onIssueClick} />
           ))}
         </SortableContext>
-        
+
         {issues.length === 0 && (
           <div className="h-24 flex flex-col items-center justify-center border-2 border-dashed border-gray-200 dark:border-border-dark rounded-xl text-gray-400 text-xs gap-2">
             <p>Drop items here</p>

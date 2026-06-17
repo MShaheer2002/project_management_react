@@ -11,4 +11,5 @@ export type CreateDocumentInput = {
   name: string;
   description?: string | null;
   file: DocumentFileRef;
+  folderId?: string | null;
 };

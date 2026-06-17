@@ -1,8 +1,5 @@
 import React, { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  BadgeInfo,
-  Building2,
   AlertTriangle,
   ArrowLeft,
   Bug,
@@ -19,29 +16,21 @@ import {
   Plus,
   Search,
   Send,
+  ShieldCheck,
   Sparkles,
   Tag,
   Trash2,
   User,
-  LayoutGrid,
-  MapPinned,
-  ShieldCheck,
   Zap,
 } from 'lucide-react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '@/app/stores/useAuthStore';
 import { useApp } from '@/AppContext';
-import { Modal } from '@/components/modals/Modal';
 import { ISSUE_TYPE_CONFIG } from '@shared/constants';
 import { canManageTemplates } from '@shared/permissions';
 import type { IssueType, Priority, Severity, Status } from '@/types';
-import { useProjectOptions } from '@features/projects';
-import { useTeamOptions } from '@features/team';
 import {
-  useApplyTemplate,
   useActivateTemplate,
-  useActiveTemplates,
-  useConfirmDefaultTemplate,
   useConfirmActivateTemplate,
   useCreateTemplate,
   useDeleteTemplate,
@@ -53,19 +42,15 @@ import {
   useTemplateDetail,
   useTemplates,
   useUpdateTemplate,
-  templateQueryKeys,
 } from '../hooks/useTemplateData';
 import { templateService } from '../services/templateService';
 import type {
   IssueTemplate,
   TemplateActivationConflictDetails,
-  TemplateApplyDraft,
   TemplateAssigneeType,
-  TemplateDefaultConflictDetails,
   TemplateCategory,
   TemplateCategoryMode,
   TemplateDraftInput,
-  TemplateScopeType,
   TemplateSort,
 } from '../types';
 
@@ -97,46 +82,6 @@ const formatDisplayLabel = (value: string) =>
     .replace(/\s+/g, ' ')
     .replace(/\b\w/g, (char) => char.toUpperCase());
 
-const scopeOptions: Array<{ value: TemplateScopeType; label: string; description: string; icon: React.ReactNode }> = [
-  {
-    value: 'WORKSPACE',
-    label: 'Workspace default',
-    description: 'Global template available across the workspace.',
-    icon: <LayoutGrid size={16} />,
-  },
-  {
-    value: 'TEAM',
-    label: 'Team template',
-    description: 'Scoped to a single team and its work stream.',
-    icon: <Building2 size={16} />,
-  },
-  {
-    value: 'PROJECT',
-    label: 'Project template',
-    description: 'Scoped to a specific project and its context.',
-    icon: <MapPinned size={16} />,
-  },
-];
-
-const scopeLabelText: Record<TemplateScopeType, string> = {
-  WORKSPACE: 'Workspace',
-  TEAM: 'Team',
-  PROJECT: 'Project',
-};
-
-const getScopeLabel = (template: Pick<IssueTemplate, 'scopeType' | 'scopeId'>, teamName?: string, projectName?: string) => {
-  if (template.scopeType === 'WORKSPACE') return 'Workspace';
-  if (template.scopeType === 'TEAM') return teamName ?? template.scopeId ?? 'Team';
-  return projectName ?? template.scopeId ?? 'Project';
-};
-
-type TemplateAppliedState = {
-  templateId: string;
-  appliedByCurrentUser: true;
-  appliedAt: string;
-  appliedDraft?: TemplateApplyDraft | null;
-} | null;
-
 const createEmptyDraft = (): TemplateDraftInput => ({
   name: '',
   description: '',
@@ -159,9 +104,6 @@ const createEmptyDraft = (): TemplateDraftInput => ({
   labelOptions: [],
   checklistItems: [],
   defaultSeverity: null,
-  scopeType: 'WORKSPACE',
-  scopeId: null,
-  isDefault: false,
   stepsToReproduceTemplate: '',
   expectedBehaviorTemplate: '',
   actualBehaviorTemplate: '',
@@ -182,8 +124,6 @@ const serializeTemplateDraft = (draft: TemplateDraftInput): TemplateDraftInput =
   ...draft,
   customCategory: draft.category === 'Custom' ? normalizeOptionalText(draft.customCategory) : null,
   customStatus: normalizeOptionalText(draft.customStatus),
-  scopeId: draft.scopeType === 'WORKSPACE' ? null : normalizeOptionalText(draft.scopeId) ?? null,
-  isDefault: draft.scopeType === 'WORKSPACE' ? Boolean(draft.isDefault) : false,
   defaultAssigneeId: draft.defaultAssigneeType === 'SPECIFIC_USER' ? draft.defaultAssigneeId ?? null : null,
   stepsToReproduceTemplate: normalizeOptionalText(draft.stepsToReproduceTemplate),
   expectedBehaviorTemplate: normalizeOptionalText(draft.expectedBehaviorTemplate),
@@ -234,9 +174,6 @@ const templateToDraft = (template: IssueTemplate): TemplateDraftInput => ({
   labelOptions: template.labelOptions,
   checklistItems: template.checklistItems,
   defaultSeverity: template.defaultSeverity ?? null,
-  scopeType: template.scopeType,
-  scopeId: template.scopeId,
-  isDefault: template.isDefault,
   stepsToReproduceTemplate: template.stepsToReproduceTemplate ?? '',
   expectedBehaviorTemplate: template.expectedBehaviorTemplate ?? '',
   actualBehaviorTemplate: template.actualBehaviorTemplate ?? '',
@@ -275,82 +212,40 @@ const TypeBadge: React.FC<{ type: IssueType }> = ({ type }) => {
 
 const TemplateCard: React.FC<{
   template: IssueTemplate;
-  scopeLabel: string;
   canManage: boolean;
   onDelete: (template: IssueTemplate) => void;
   onDuplicate: (template: IssueTemplate) => void;
-}> = ({ template, scopeLabel, canManage, onDelete, onDuplicate }) => {
+}> = ({ template, canManage, onDelete, onDuplicate }) => {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
 
   return (
     <div className="group relative rounded-xl border border-gray-200 bg-white/70 p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/40 dark:border-border-dark dark:bg-card-dark">
       <button onClick={() => navigate(`/templates/${template.id}`)} className="w-full text-left">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-              <FileText size={19} />
-            </div>
-            <div className="min-w-0">
-              <h2 className="truncate text-sm font-bold tracking-tight">{template.name}</h2>
-              <p className="mt-0.5 text-[11px] text-gray-400">Updated {formatDate(template.updatedAt)}</p>
-            </div>
+        <div className="flex items-start gap-3 pr-8">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            <FileText size={19} />
           </div>
-            <span
-              className={`shrink-0 rounded-full border px-2 py-1 text-[10px] font-bold uppercase tracking-[0.16em] ${
-                template.category === 'Custom' ? customCategoryTone : categoryTone[template.category]
-              }`}
-            >
-              {template.category === 'Custom' ? template.customCategory || 'Custom' : template.category}
-            </span>
+          <div className="min-w-0 flex-1">
+            <h2 className="truncate text-sm font-bold tracking-tight">{template.name}</h2>
+            <p className="mt-0.5 text-[11px] text-gray-400">Updated {formatDate(template.updatedAt)}</p>
           </div>
+        </div>
 
-        <p className="mt-3 flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.18em] text-gray-400">
-          <span className="inline-flex items-center gap-1 rounded-full border border-gray-200 px-2 py-1 dark:border-border-dark">
-            <MapPinned size={11} />
-            {scopeLabel}
-          </span>
-          {template.isDefault && (
-            <span className="inline-flex items-center gap-1 rounded-full border border-primary/20 bg-primary/10 px-2 py-1 text-primary">
-              <ShieldCheck size={11} />
-              Default
-            </span>
-          )}
-        </p>
+        <p className="mt-3 min-h-[36px] text-sm leading-6 text-gray-500 dark:text-gray-400 line-clamp-2">{template.description}</p>
 
-        <p className="mt-3 min-h-[42px] text-sm leading-6 text-gray-500 dark:text-gray-400">{template.description}</p>
-
-        <div className="mt-4 flex flex-wrap items-center gap-2">
+        <div className="mt-3 flex flex-wrap items-center gap-1.5">
           <TypeBadge type={template.issueType} />
           <span className="rounded-full bg-gray-100 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-gray-500 dark:bg-white/5 dark:text-gray-400">
             {formatDisplayLabel(String(template.defaultPriority))}
           </span>
           {template.isActive && <span className="rounded-full bg-primary/10 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-primary">Active</span>}
-          {template.defaultLabelIds.slice(0, 2).map((label) => (
-            <span key={label} className="rounded-full border border-gray-200 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-gray-400 dark:border-border-dark">
-              {label}
-            </span>
-          ))}
         </div>
 
-        <div className="mt-5 grid grid-cols-3 gap-3 border-t border-gray-100 pt-4 dark:border-border-dark/70">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-gray-400">Used</p>
-            <p className="mt-1 text-sm font-semibold text-gray-700 dark:text-gray-200">{template.usageCount}</p>
-          </div>
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-gray-400">Checklist</p>
-            <p className="mt-1 text-sm font-semibold text-gray-700 dark:text-gray-200">{template.checklistItems.length}</p>
-          </div>
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-gray-400">Assignee</p>
-            <p className="mt-1 truncate text-sm font-semibold text-gray-700 dark:text-gray-200">{assigneeText[template.defaultAssigneeType]}</p>
-          </div>
-        </div>
       </button>
 
       {canManage && (
-        <div className="absolute right-4 top-4">
+        <div className="absolute right-3 top-3">
           <button
             onClick={(event) => {
               event.stopPropagation();
@@ -386,29 +281,16 @@ const TemplatesListView: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState(searchParams.get('q') ?? '');
   const deferredSearch = useDeferredValue(search);
-  const category = (searchParams.get('category') as TemplateCategoryMode | 'all' | null) ?? 'all';
   const issueType = (searchParams.get('type') as IssueType | 'all' | null) ?? 'all';
-  const scopeType = (searchParams.get('scopeType') as TemplateScopeType | 'all' | null) ?? 'all';
-  const scopeId = searchParams.get('scopeId') ?? 'all';
-  const creatorId = searchParams.get('creator') ?? 'all';
-  const sort = (searchParams.get('sort') as TemplateSort | null) ?? 'updatedAt:desc';
 
   const listInput = useMemo(
-    () => ({ q: deferredSearch.trim() || undefined, category, issueType, scopeType, scopeId: scopeId === 'all' ? undefined : scopeId, creatorId, sort }),
-    [category, creatorId, deferredSearch, issueType, scopeId, scopeType, sort]
+    () => ({ q: deferredSearch.trim() || undefined, issueType }),
+    [deferredSearch, issueType]
   );
   const templatesQuery = useTemplates(listInput);
   const templates = templatesQuery.data ?? [];
-  const creatorsQuery = useTemplateCreators();
-  const teamOptionsQuery = useTeamOptions({ sort: 'name:asc', limit: 100 });
-  const projectOptionsQuery = useProjectOptions({ sort: 'name:asc', limit: 100 });
   const deleteTemplate = useDeleteTemplate();
   const duplicateTemplate = useDuplicateTemplate();
-  const defaultsQuery = useTemplateDefaults();
-  const teams = useMemo(() => teamOptionsQuery.data?.pages.flatMap((page) => page.items) ?? [], [teamOptionsQuery.data]);
-  const projects = useMemo(() => projectOptionsQuery.data?.pages.flatMap((page) => page.items) ?? [], [projectOptionsQuery.data]);
-  const teamById = useMemo(() => new Map(teams.map((team) => [team.id, team])), [teams]);
-  const projectById = useMemo(() => new Map(projects.map((project) => [project.id, project])), [projects]);
 
   useEffect(() => {
     const next = new URLSearchParams(searchParams);
@@ -420,32 +302,10 @@ const TemplatesListView: React.FC = () => {
 
   const updateParam = (key: string, value: string) => {
     const next = new URLSearchParams(searchParams);
-    if (key === 'scopeType' && value === 'all') {
-      next.delete('scopeType');
-      next.delete('scopeId');
-      setSearchParams(next);
-      return;
-    }
-    if (key === 'scopeType') {
-      next.set('scopeType', value);
-      next.delete('scopeId');
-      setSearchParams(next);
-      return;
-    }
-    if (value === 'all' || value === 'updatedAt:desc') next.delete(key);
+    if (value === 'all') next.delete(key);
     else next.set(key, value);
     setSearchParams(next);
   };
-
-  const scopeOptionsList = useMemo(() => {
-    if (scopeType === 'TEAM') {
-      return teams.map((team) => ({ id: team.id, name: team.name }));
-    }
-    if (scopeType === 'PROJECT') {
-      return projects.map((project) => ({ id: project.id, name: project.name }));
-    }
-    return [];
-  }, [projects, scopeType, teams]);
 
   const handleDelete = async (template: IssueTemplate) => {
     if (!window.confirm(`Delete ${template.name}? Existing issues created from this template will not change.`)) return;
@@ -473,7 +333,7 @@ const TemplatesListView: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex shrink-0 items-center gap-2 overflow-x-auto pb-1">
+          <div className="flex shrink-0 items-center gap-2">
             <div className="relative min-w-[190px]">
               <Search size={13} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
@@ -483,37 +343,9 @@ const TemplatesListView: React.FC = () => {
                 className="w-full rounded-lg border border-gray-200 bg-white py-1.5 pl-9 pr-3 text-sm outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-border-dark dark:bg-white/5"
               />
             </div>
-            <select value={category} onChange={(event) => updateParam('category', event.target.value)} className="min-w-[128px] rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium outline-none dark:border-border-dark dark:bg-white/5">
-              <option value="all">All categories</option>
-              {(defaultsQuery.data?.categoryOptions ?? []).map((item) => <option key={item} value={item}>{item}</option>)}
-              <option value="Custom">Custom</option>
-            </select>
             <select value={issueType} onChange={(event) => updateParam('type', event.target.value)} className="min-w-[112px] rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium outline-none dark:border-border-dark dark:bg-white/5">
               <option value="all">All types</option>
               {issueTypeOptions.map((item) => <option key={item} value={item}>{ISSUE_TYPE_CONFIG[item].label}</option>)}
-            </select>
-            <select value={scopeType} onChange={(event) => updateParam('scopeType', event.target.value)} className="min-w-[128px] rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium outline-none dark:border-border-dark dark:bg-white/5">
-              <option value="all">All scopes</option>
-              <option value="WORKSPACE">Workspace</option>
-              <option value="TEAM">Team</option>
-              <option value="PROJECT">Project</option>
-            </select>
-            {scopeType !== 'all' && scopeType !== 'WORKSPACE' && (
-              <select value={scopeId} onChange={(event) => updateParam('scopeId', event.target.value)} className="min-w-[160px] rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium outline-none dark:border-border-dark dark:bg-white/5">
-                <option value="all">All {scopeLabelText[scopeType].toLowerCase()}s</option>
-                {scopeOptionsList.map((item) => (
-                  <option key={item.id} value={item.id}>{item.name}</option>
-                ))}
-              </select>
-            )}
-            <select value={creatorId} onChange={(event) => updateParam('creator', event.target.value)} className="min-w-[128px] rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium outline-none dark:border-border-dark dark:bg-white/5">
-              <option value="all">All creators</option>
-              {(creatorsQuery.data ?? []).map((creator) => <option key={creator.id} value={creator.id}>{creator.name}</option>)}
-            </select>
-            <select value={sort} onChange={(event) => updateParam('sort', event.target.value)} className="min-w-[128px] rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium outline-none dark:border-border-dark dark:bg-white/5">
-              <option value="updatedAt:desc">Recently updated</option>
-              <option value="usageCount:desc">Most used</option>
-              <option value="name:asc">Name</option>
             </select>
             {canManage && (
               <Link to="/templates/new" className="inline-flex min-w-fit items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-primary px-3.5 py-1.5 text-sm font-bold text-white shadow-lg shadow-primary/20 transition-all hover:bg-primary/90">
@@ -549,11 +381,6 @@ const TemplatesListView: React.FC = () => {
                 <p className="mt-2 text-lg font-bold">{new Set(templates.map((template) => template.issueType)).size}</p>
                 <p className="mt-1 text-xs text-gray-400">Issue, task, and bug templates</p>
               </div>
-              <div className="rounded-xl border border-gray-200 bg-white/70 p-4 dark:border-border-dark dark:bg-transparent">
-                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-400">Scope coverage</p>
-                <p className="mt-2 text-lg font-bold">{new Set(templates.map((template) => template.scopeType)).size} scopes</p>
-                <p className="mt-1 text-xs text-gray-400">Workspace, team, and project templates</p>
-              </div>
             </div>
 
             <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
@@ -561,11 +388,6 @@ const TemplatesListView: React.FC = () => {
                 <TemplateCard
                   key={template.id}
                   template={template}
-                  scopeLabel={getScopeLabel(
-                    template,
-                    template.scopeType === 'TEAM' ? teamById.get(template.scopeId ?? '')?.name : undefined,
-                    template.scopeType === 'PROJECT' ? projectById.get(template.scopeId ?? '')?.name : undefined
-                  )}
                   canManage={canManage}
                   onDelete={handleDelete}
                   onDuplicate={handleDuplicate}
@@ -585,17 +407,13 @@ const TemplateFormView: React.FC<{ mode: 'create' | 'edit'; template?: IssueTemp
   const role = useAuthStore((state) => state.workspace?.role);
   const canManage = canManageTemplates(role);
   const usersQuery = useTemplateAssignableUsers();
-  const teamOptionsQuery = useTeamOptions({ sort: 'name:asc', limit: 100 });
-  const projectOptionsQuery = useProjectOptions({ sort: 'name:asc', limit: 100 });
   const defaultsQuery = useTemplateDefaults();
   const createTemplate = useCreateTemplate();
   const updateTemplate = useUpdateTemplate(template?.id);
-  const confirmDefaultTemplate = useConfirmDefaultTemplate();
   const [draft, setDraft] = useState<TemplateDraftInput>(template ? templateToDraft(template) : createEmptyDraft());
   const [checklistInput, setChecklistInput] = useState('');
   const [labelDraft, setLabelDraft] = useState('');
   const [priorityDraft, setPriorityDraft] = useState('');
-  const [scopeSearch, setScopeSearch] = useState('');
   const [showLabelComposer, setShowLabelComposer] = useState(false);
   const [categoryMenuOpen, setCategoryMenuOpen] = useState(false);
   const [priorityMenuOpen, setPriorityMenuOpen] = useState(false);
@@ -603,48 +421,15 @@ const TemplateFormView: React.FC<{ mode: 'create' | 'edit'; template?: IssueTemp
   const [showCategoryComposer, setShowCategoryComposer] = useState(false);
   const [showStatusComposer, setShowStatusComposer] = useState(false);
   const [showPriorityComposer, setShowPriorityComposer] = useState(false);
-  const [scopePickerType, setScopePickerType] = useState<TemplateScopeType | null>(null);
-  const [defaultConflict, setDefaultConflict] = useState<TemplateDefaultConflictDetails | null>(null);
   const categoryMenuRef = useRef<HTMLDivElement>(null);
   const priorityMenuRef = useRef<HTMLLabelElement>(null);
   const statusMenuRef = useRef<HTMLDivElement>(null);
-  const deferredScopeSearch = useDeferredValue(scopeSearch);
-
-  const teams = useMemo(() => teamOptionsQuery.data?.pages.flatMap((page) => page.items) ?? [], [teamOptionsQuery.data]);
-  const projects = useMemo(() => projectOptionsQuery.data?.pages.flatMap((page) => page.items) ?? [], [projectOptionsQuery.data]);
-  const teamById = useMemo(() => new Map(teams.map((team) => [team.id, team])), [teams]);
-  const projectById = useMemo(() => new Map(projects.map((project) => [project.id, project])), [projects]);
-  const scopeItems = useMemo(() => {
-    if (scopePickerType === 'TEAM') {
-      return teams
-        .filter((team) => team.name.toLowerCase().includes(deferredScopeSearch.trim().toLowerCase()))
-        .map((team) => ({ id: team.id, name: team.name, meta: team.departmentId ? 'Department attached' : 'Standalone team' }));
-    }
-    if (scopePickerType === 'PROJECT') {
-      return projects
-        .filter((project) => project.name.toLowerCase().includes(deferredScopeSearch.trim().toLowerCase()))
-        .map((project) => ({
-          id: project.id,
-          name: project.name,
-          meta: `Team: ${teamById.get(project.teamId)?.name ?? project.teamId}`,
-        }));
-    }
-    return [];
-  }, [deferredScopeSearch, projects, scopePickerType, teamById, teams]);
-  const selectedScopeName =
-    draft.scopeType === 'WORKSPACE'
-      ? 'Workspace default'
-      : draft.scopeType === 'TEAM'
-        ? teamById.get(draft.scopeId ?? '')?.name ?? draft.scopeId ?? 'Select team'
-        : projectById.get(draft.scopeId ?? '')?.name ?? draft.scopeId ?? 'Select project';
-  const isWorkspaceScope = draft.scopeType === 'WORKSPACE';
 
   useEffect(() => {
     if (template) {
       const nextDraft = templateToDraft(template);
       setDraft(nextDraft);
-      setShowStatusComposer(Boolean(nextDraft.customStatus.trim()));
-      setScopeSearch('');
+      setShowStatusComposer(Boolean(nextDraft.customStatus?.trim()));
     } else if (defaultsQuery.data) {
       setDraft((current) => ({
         ...current,
@@ -661,8 +446,6 @@ const TemplateFormView: React.FC<{ mode: 'create' | 'edit'; template?: IssueTemp
   useDismissOnOutsideClick([statusMenuRef], () => setStatusMenuOpen(false), statusMenuOpen);
 
   const isSaving = createTemplate.isPending || updateTemplate.isPending;
-  const isConfirmingDefault = confirmDefaultTemplate.isPending;
-  const isTemplateScopeDialogOpen = Boolean(scopePickerType);
 
   if (!canManage) {
     return <AccessDeniedView />;
@@ -670,30 +453,6 @@ const TemplateFormView: React.FC<{ mode: 'create' | 'edit'; template?: IssueTemp
 
   const updateDraft = <K extends keyof TemplateDraftInput>(key: K, value: TemplateDraftInput[K]) => {
     setDraft((current) => ({ ...current, [key]: value }));
-  };
-
-  const changeScopeType = (scopeType: TemplateScopeType) => {
-    setDraft((current) => ({
-      ...current,
-      scopeType,
-      scopeId: scopeType === 'WORKSPACE' ? null : null,
-      isDefault: scopeType === 'WORKSPACE' ? current.isDefault : false,
-    }));
-    if (scopeType === 'TEAM' || scopeType === 'PROJECT') {
-      setScopePickerType(scopeType);
-      setScopeSearch('');
-    }
-  };
-
-  const openScopePicker = (scopeType: TemplateScopeType) => {
-    setScopePickerType(scopeType);
-    setScopeSearch('');
-  };
-
-  const selectScopeTarget = (scopeId: string) => {
-    setDraft((current) => ({ ...current, scopeId }));
-    setScopePickerType(null);
-    setScopeSearch('');
   };
 
   const toggleLabel = (label: string) => {
@@ -730,24 +489,16 @@ const TemplateFormView: React.FC<{ mode: 'create' | 'edit'; template?: IssueTemp
     if (!draft.name.trim()) return showToast('Template name is required.', 'error');
     if (!draft.description.trim()) return showToast('Template description is required.', 'error');
     if (!draft.contentTemplate.trim()) return showToast('Content template is required.', 'error');
-    if (draft.category === 'Custom' && !draft.customCategory.trim()) return showToast('Custom category is required when category is Custom.', 'error');
+    if (draft.category === 'Custom' && !(draft.customCategory ?? '').trim()) return showToast('Custom category is required when category is Custom.', 'error');
     if (draft.issueType === 'issue' && !draft.acceptanceCriteriaTemplate?.trim()) return showToast('Acceptance criteria template is required for issue templates.', 'error');
     if (draft.defaultAssigneeType === 'SPECIFIC_USER' && !draft.defaultAssigneeId) return showToast('Select a specific assignee.', 'error');
-    if (draft.scopeType === 'TEAM' && !draft.scopeId?.trim()) return showToast('Choose a team for this template scope.', 'error');
-    if (draft.scopeType === 'PROJECT' && !draft.scopeId?.trim()) return showToast('Choose a project for this template scope.', 'error');
-    if (draft.scopeType !== 'WORKSPACE' && draft.isDefault) return showToast('Only workspace templates can be marked as default.', 'error');
 
     const payload = serializeTemplateDraft(draft);
     try {
       const saved = mode === 'create' ? await createTemplate.mutateAsync(payload) : await updateTemplate.mutateAsync(payload);
       showToast(mode === 'create' ? 'Template created.' : 'Template updated.', 'success');
       navigate(`/templates/${saved.id}`);
-    } catch (error) {
-      const conflict = templateService.inspectDefaultError(error);
-      if (conflict) {
-        setDefaultConflict(conflict);
-        return;
-      }
+    } catch {
       showToast('Failed to save template.', 'error');
     }
   };
@@ -797,89 +548,6 @@ const TemplateFormView: React.FC<{ mode: 'create' | 'edit'; template?: IssueTemp
                   <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.18em] text-gray-400">Description</span>
                   <input value={draft.description} onChange={(event) => updateDraft('description', event.target.value)} placeholder="What is this template for?" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-primary dark:border-border-dark dark:bg-white/5" />
                 </label>
-              </div>
-            </section>
-
-            <section className="rounded-xl border border-gray-200 bg-white/70 p-5 dark:border-border-dark dark:bg-transparent">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <h2 className="text-sm font-bold">Scope and default</h2>
-                  <p className="mt-1 text-xs text-gray-400">Assign the template to workspace, team, or project. Only workspace templates can be default templates.</p>
-                </div>
-                <span className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-primary">
-                  <BadgeInfo size={12} />
-                  {scopeLabelText[draft.scopeType]}
-                </span>
-              </div>
-              <div className="mt-5 grid gap-3 md:grid-cols-3">
-                {scopeOptions.map((option) => {
-                  const selected = draft.scopeType === option.value;
-                  return (
-                    <button
-                      key={option.value}
-                      type="button"
-                      onClick={() => changeScopeType(option.value)}
-                      className={`rounded-2xl border p-4 text-left transition-all ${
-                        selected
-                          ? 'border-primary/40 bg-primary/5 shadow-sm shadow-primary/5'
-                          : 'border-gray-200 bg-white hover:border-primary/30 dark:border-border-dark dark:bg-white/5'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${selected ? 'bg-primary/10 text-primary' : 'bg-gray-100 text-gray-400 dark:bg-white/5'}`}>
-                          {option.icon}
-                        </div>
-                        {selected && <ShieldCheck size={16} className="text-primary" />}
-                      </div>
-                      <h3 className="mt-4 text-sm font-bold">{option.label}</h3>
-                      <p className="mt-1 text-xs leading-5 text-gray-400">{option.description}</p>
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div className="mt-5 rounded-2xl border border-gray-200 bg-gray-50/70 p-4 dark:border-border-dark dark:bg-white/5">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-400">Target</p>
-                    <h3 className="mt-1 text-sm font-bold">{selectedScopeName}</h3>
-                    <p className="mt-1 text-xs text-gray-400">
-                      {draft.scopeType === 'WORKSPACE'
-                        ? 'Available across the workspace.'
-                        : `Pick the ${draft.scopeType === 'TEAM' ? 'team' : 'project'} that should own this template.`}
-                    </p>
-                  </div>
-                  {draft.scopeType !== 'WORKSPACE' && (
-                    <button
-                      type="button"
-                      onClick={() => openScopePicker(draft.scopeType)}
-                      className="rounded-lg border border-primary/20 bg-white px-3 py-2 text-xs font-bold uppercase tracking-[0.16em] text-primary transition-colors hover:bg-primary/5 dark:bg-transparent"
-                    >
-                      {draft.scopeId ? 'Change target' : `Choose ${draft.scopeType.toLowerCase()}`}
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              <div className="mt-4 flex flex-wrap items-center gap-3">
-                <button
-                  type="button"
-                  disabled={!isWorkspaceScope}
-                  onClick={() => updateDraft('isDefault', !draft.isDefault)}
-                  className={`inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-bold uppercase tracking-[0.18em] transition-all ${
-                    isWorkspaceScope
-                      ? draft.isDefault
-                        ? 'border-primary bg-primary/10 text-primary'
-                        : 'border-gray-200 bg-white text-gray-500 hover:border-primary/30 dark:border-border-dark dark:bg-white/5'
-                      : 'cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400 dark:border-border-dark dark:bg-white/5'
-                  }`}
-                >
-                  <ShieldCheck size={13} />
-                  {draft.isDefault ? 'Workspace default enabled' : 'Mark as workspace default'}
-                </button>
-                {!isWorkspaceScope && (
-                  <span className="text-xs text-amber-500">Default is available only for workspace templates.</span>
-                )}
               </div>
             </section>
 
@@ -996,10 +664,6 @@ const TemplateFormView: React.FC<{ mode: 'create' | 'edit'; template?: IssueTemp
           <aside className="space-y-5 xl:sticky xl:top-5 xl:self-start">
             <section className="rounded-xl border border-gray-200 bg-white/70 p-5 dark:border-border-dark dark:bg-transparent">
               <h2 className="text-sm font-bold">Default metadata</h2>
-              <div className="mt-4 space-y-2 rounded-2xl border border-gray-200 bg-gray-50/70 p-4 text-sm dark:border-border-dark dark:bg-white/5">
-                <DetailRow icon={<LayoutGrid size={15} />} label="Scope" value={selectedScopeName} />
-                <DetailRow icon={<ShieldCheck size={15} />} label="Default" value={draft.isDefault && isWorkspaceScope ? 'Enabled' : 'Disabled'} />
-              </div>
               <div className="mt-5 space-y-4">
                 <label className="block">
                   <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.18em] text-gray-400">Category</span>
@@ -1010,7 +674,7 @@ const TemplateFormView: React.FC<{ mode: 'create' | 'edit'; template?: IssueTemp
                       className="flex w-full items-center justify-between rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none transition-colors hover:border-primary dark:border-border-dark dark:bg-white/5"
                     >
                       <span className="truncate">
-                        {draft.category === 'Custom' ? draft.customCategory.trim() || 'Custom category' : draft.category}
+                        {draft.category === 'Custom' ? (draft.customCategory ?? '').trim() || 'Custom category' : draft.category}
                       </span>
                       <ChevronDown size={14} className="text-gray-400" />
                     </button>
@@ -1240,7 +904,7 @@ const TemplateFormView: React.FC<{ mode: 'create' | 'edit'; template?: IssueTemp
                 <div className="grid grid-cols-2 gap-3">
                   <label className="block">
                     <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.18em] text-gray-400">Estimate</span>
-                    <input type="number" min={0} value={draft.defaultEstimate ?? ''} onChange={(event) => updateDraft('defaultEstimate', event.target.value ? Number(event.target.value) : null)} className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none dark:border-border-dark dark:bg-white/5" />
+                    <input type="number" min={1} max={5} value={draft.defaultEstimate ?? ''} onChange={(event) => updateDraft('defaultEstimate', event.target.value ? Math.min(5, Math.max(1, Number(event.target.value))) : null)} placeholder="1-5" className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none dark:border-border-dark dark:bg-white/5" />
                   </label>
                   <label className="block">
                     <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.18em] text-gray-400">Due offset</span>
@@ -1342,7 +1006,7 @@ const TemplateFormView: React.FC<{ mode: 'create' | 'edit'; template?: IssueTemp
                     <div className="mt-4 flex items-center gap-2">
                       <input
                         autoFocus
-                        value={draft.customStatus}
+                        value={draft.customStatus ?? ''}
                         onChange={(event) => updateDraft('customStatus', event.target.value)}
                         placeholder="Ready for review, Launch pending, etc."
                         className="flex-1 rounded-xl border border-white/10 bg-[#0C0E14] px-3 py-2.5 text-sm text-gray-100 outline-none focus:border-primary"
@@ -1350,7 +1014,7 @@ const TemplateFormView: React.FC<{ mode: 'create' | 'edit'; template?: IssueTemp
                       <button
                         type="button"
                         onClick={() => {
-                          if (!draft.customStatus.trim()) return;
+                          if (!draft.customStatus?.trim()) return;
                           const value = draft.customStatus.trim();
                           setDraft((current) => ({
                             ...current,
@@ -1400,7 +1064,7 @@ const TemplateFormView: React.FC<{ mode: 'create' | 'edit'; template?: IssueTemp
                     <div className="mt-4 flex items-center gap-2">
                       <input
                         autoFocus
-                        value={draft.customCategory}
+                        value={draft.customCategory ?? ''}
                         onChange={(event) => {
                           updateDraft('category', 'Custom');
                           updateDraft('customCategory', event.target.value);
@@ -1411,8 +1075,8 @@ const TemplateFormView: React.FC<{ mode: 'create' | 'edit'; template?: IssueTemp
                       <button
                         type="button"
                         onClick={() => {
-                          if (!draft.customCategory.trim()) return;
-                          const value = draft.customCategory.trim();
+                          if (!(draft.customCategory ?? '').trim()) return;
+                          const value = (draft.customCategory ?? '').trim();
                           updateDraft('category', 'Custom');
                           setDraft((current) => ({
                             ...current,
@@ -1491,123 +1155,6 @@ const TemplateFormView: React.FC<{ mode: 'create' | 'edit'; template?: IssueTemp
               </div>
             )}
 
-            <Modal
-              isOpen={isTemplateScopeDialogOpen}
-              onClose={() => {
-                setScopePickerType(null);
-                setScopeSearch('');
-              }}
-              title={`Choose ${scopePickerType === 'TEAM' ? 'team' : 'project'} scope`}
-              maxWidth="max-w-2xl"
-            >
-              <div className="space-y-4">
-                <div className="rounded-2xl border border-gray-200 bg-gray-50/80 p-4 dark:border-border-dark dark:bg-white/5">
-                  <p className="text-sm font-semibold text-gray-700 dark:text-gray-100">
-                    {scopePickerType === 'TEAM'
-                      ? 'Select the team that should own this template.'
-                      : 'Select the project that should own this template.'}
-                  </p>
-                  <p className="mt-1 text-xs text-gray-400">
-                    The template will only appear in the scope you choose here.
-                  </p>
-                </div>
-
-                <div className="relative">
-                  <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <input
-                    value={scopeSearch}
-                    onChange={(event) => setScopeSearch(event.target.value)}
-                    placeholder={`Search ${scopePickerType === 'TEAM' ? 'teams' : 'projects'}`}
-                    className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-9 pr-3 text-sm outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-border-dark dark:bg-white/5"
-                  />
-                </div>
-
-                <div className="max-h-[52vh] space-y-2 overflow-y-auto pr-1">
-                  {scopeItems.length === 0 ? (
-                    <div className="rounded-2xl border border-dashed border-gray-200 bg-white/70 px-4 py-10 text-center text-sm text-gray-400 dark:border-border-dark dark:bg-transparent">
-                      No {scopePickerType === 'TEAM' ? 'teams' : 'projects'} match your search.
-                    </div>
-                  ) : (
-                    scopeItems.map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => selectScopeTarget(item.id)}
-                        className={`w-full rounded-2xl border px-4 py-3 text-left transition-all ${
-                          draft.scopeId === item.id
-                            ? 'border-primary/40 bg-primary/5 shadow-sm shadow-primary/5'
-                            : 'border-gray-200 bg-white hover:border-primary/30 dark:border-border-dark dark:bg-white/5'
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="min-w-0">
-                            <h3 className="truncate text-sm font-bold">{item.name}</h3>
-                            <p className="mt-1 text-xs text-gray-400">{item.meta}</p>
-                          </div>
-                          {draft.scopeId === item.id && <ShieldCheck size={16} className="shrink-0 text-primary" />}
-                        </div>
-                      </button>
-                    ))
-                  )}
-                </div>
-              </div>
-            </Modal>
-
-            <Modal
-              isOpen={Boolean(defaultConflict)}
-              onClose={() => setDefaultConflict(null)}
-              title="Confirm workspace default swap"
-              maxWidth="max-w-lg"
-            >
-              {defaultConflict && (
-                <div className="space-y-4">
-                  <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4">
-                    <p className="text-sm font-semibold text-gray-700 dark:text-gray-100">
-                      Do you want to make this template default and revert the previous one?
-                    </p>
-                    <p className="mt-2 text-xs leading-6 text-gray-400">
-                      A default template already exists for <span className="font-semibold text-gray-700 dark:text-gray-100">{defaultConflict.issueType}</span>.
-                    </p>
-                  </div>
-
-                  <div className="space-y-2 rounded-2xl border border-gray-200 bg-gray-50/70 p-4 dark:border-border-dark dark:bg-white/5">
-                    <p className="text-xs font-bold uppercase tracking-[0.16em] text-gray-400">Current default</p>
-                    <p className="font-semibold text-gray-700 dark:text-gray-100">{defaultConflict.currentDefault.name}</p>
-                    <p className="text-xs font-bold uppercase tracking-[0.16em] text-gray-400">Candidate</p>
-                    <p className="font-semibold text-gray-700 dark:text-gray-100">{defaultConflict.candidateTemplate.name}</p>
-                  </div>
-
-                  <div className="flex items-center justify-end gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setDefaultConflict(null)}
-                      className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition-colors hover:border-primary/30 hover:text-primary dark:border-border-dark"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      disabled={isConfirmingDefault}
-                      onClick={async () => {
-                        if (!defaultConflict) return;
-                        try {
-                          const confirmed = await confirmDefaultTemplate.mutateAsync(defaultConflict.candidateTemplate.id);
-                          setDefaultConflict(null);
-                          showToast('Workspace default template updated.', 'success');
-                          navigate(`/templates/${confirmed.id}`);
-                        } catch {
-                          showToast('Failed to confirm default template.', 'error');
-                        }
-                      }}
-                      className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white shadow-lg shadow-primary/20 disabled:opacity-60"
-                    >
-                      {isConfirmingDefault ? <Loader2 size={15} className="animate-spin" /> : <ShieldCheck size={15} />}
-                      Confirm swap
-                    </button>
-                  </div>
-                </div>
-              )}
-            </Modal>
           </aside>
         </div>
       </div>
@@ -1620,46 +1167,15 @@ const TemplateDetailView: React.FC<{ templateId: string }> = ({ templateId }) =>
   const { showToast } = useApp();
   const role = useAuthStore((state) => state.workspace?.role);
   const workspaceId = useAuthStore((state) => state.workspace?.id);
-  const currentUserId = useAuthStore((state) => state.currentUser?.id);
   const canManage = canManageTemplates(role);
   const templateQuery = useTemplateDetail(templateId);
-  const queryClient = useQueryClient();
-  const activeTemplatesQuery = useActiveTemplates(
-    templateQuery.data
-      ? {
-          issueType: templateQuery.data.issueType,
-          teamId: templateQuery.data.scopeType === 'TEAM' ? templateQuery.data.scopeId ?? undefined : undefined,
-          projectId: templateQuery.data.scopeType === 'PROJECT' ? templateQuery.data.scopeId ?? undefined : undefined,
-        }
-      : {}
-  );
-  const teamOptionsQuery = useTeamOptions({ sort: 'name:asc', limit: 100 });
-  const projectOptionsQuery = useProjectOptions({ sort: 'name:asc', limit: 100 });
   const deleteTemplate = useDeleteTemplate();
   const duplicateTemplate = useDuplicateTemplate();
   const activateTemplate = useActivateTemplate();
   const confirmActivateTemplate = useConfirmActivateTemplate();
   const deactivateTemplate = useDeactivateTemplate();
-  const teams = useMemo(() => teamOptionsQuery.data?.pages.flatMap((page) => page.items) ?? [], [teamOptionsQuery.data]);
-  const projects = useMemo(() => projectOptionsQuery.data?.pages.flatMap((page) => page.items) ?? [], [projectOptionsQuery.data]);
-  const teamById = useMemo(() => new Map(teams.map((team) => [team.id, team])), [teams]);
-  const projectById = useMemo(() => new Map(projects.map((project) => [project.id, project])), [projects]);
   const template = templateQuery.data;
-  const activeTemplates = activeTemplatesQuery.data ?? [];
-  const appliedStateQuery = useQuery<TemplateAppliedState>({
-    queryKey: templateQueryKeys.applied(workspaceId, currentUserId, templateId),
-    queryFn: async () => queryClient.getQueryData<TemplateAppliedState>(templateQueryKeys.applied(workspaceId, currentUserId, templateId)) ?? null,
-    enabled: Boolean(workspaceId && currentUserId && templateId),
-    staleTime: Infinity,
-    gcTime: Infinity,
-  });
-  const isActiveInScope = Boolean(
-    template &&
-      (template.isActive ||
-        template.appliedByCurrentUser ||
-        appliedStateQuery.data?.appliedByCurrentUser ||
-        activeTemplates.some((item) => item.id === template.id))
-  );
+  const isActiveInScope = Boolean(template?.isActive);
   const [activationConflict, setActivationConflict] = useState<TemplateActivationConflictDetails | null>(null);
 
   const handleActivate = async () => {
@@ -1715,12 +1231,6 @@ const TemplateDetailView: React.FC<{ templateId: string }> = ({ templateId }) =>
 
   if (templateQuery.isLoading) return <div className="flex h-full items-center justify-center text-sm text-gray-400"><Loader2 size={18} className="mr-2 animate-spin" /> Loading template...</div>;
   if (!template) return <NotFoundView />;
-  const scopeName =
-    template.scopeType === 'WORKSPACE'
-      ? 'Workspace'
-      : template.scopeType === 'TEAM'
-        ? teamById.get(template.scopeId ?? '')?.name ?? template.scopeId ?? 'Team'
-        : projectById.get(template.scopeId ?? '')?.name ?? template.scopeId ?? 'Project';
 
   return (
     <div className="flex h-full flex-col bg-gray-50/30 dark:bg-transparent">
@@ -1741,7 +1251,6 @@ const TemplateDetailView: React.FC<{ templateId: string }> = ({ templateId }) =>
               </div>
             </div>
             <div className="flex items-center gap-2">
-            <Link to="/templates" className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-4 py-2 text-sm font-semibold dark:border-border-dark"><ArrowLeft size={15} /> Back</Link>
             {isActiveInScope ? (
               <span className="inline-flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-sm font-bold text-emerald-400">
                 <ShieldCheck size={15} />
@@ -1783,7 +1292,6 @@ const TemplateDetailView: React.FC<{ templateId: string }> = ({ templateId }) =>
                 <TypeBadge type={template.issueType} />
                 <span className="rounded-full bg-gray-100 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-gray-500 dark:bg-white/5 dark:text-gray-400">{formatDisplayLabel(String(template.defaultPriority))}</span>
                 {template.isActive && <span className="rounded-full bg-primary/10 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-primary">Active</span>}
-                {template.isDefault && <span className="rounded-full bg-emerald-500/10 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-400">Default</span>}
               </div>
               <h2 className="mt-5 text-sm font-bold">Generated issue title</h2>
               <p className="mt-2 rounded-xl border border-gray-200 bg-gray-50/70 p-4 text-sm font-semibold dark:border-border-dark dark:bg-white/5">{template.titleTemplate}</p>
@@ -1831,8 +1339,6 @@ const TemplateDetailView: React.FC<{ templateId: string }> = ({ templateId }) =>
             <section className="rounded-xl border border-gray-200 bg-white/70 p-5 dark:border-border-dark dark:bg-transparent">
               <h2 className="text-sm font-bold">Defaults</h2>
               <div className="mt-4 space-y-3 text-sm">
-                <DetailRow icon={<LayoutGrid size={15} />} label="Scope" value={scopeName} />
-                <DetailRow icon={<ShieldCheck size={15} />} label="Default" value={template.isDefault ? 'Workspace default' : 'No'} />
                 <DetailRow icon={<User size={15} />} label="Assignee" value={assigneeText[template.defaultAssigneeType]} />
                 <DetailRow icon={<Hash size={15} />} label="Status" value={getTemplateStatusLabel(template.defaultStatus, template.customStatus)} />
                 {template.issueType === 'bug' && <DetailRow icon={<Bug size={15} />} label="Severity" value={formatDisplayLabel(String(template.defaultSeverity ?? 'medium'))} />}
@@ -1903,76 +1409,53 @@ const TemplateDetailView: React.FC<{ templateId: string }> = ({ templateId }) =>
 
 const ApplyTemplateView: React.FC<{ templateId: string }> = ({ templateId }) => {
   const navigate = useNavigate();
-  const { showToast } = useApp();
   const templateQuery = useTemplateDetail(templateId);
-  const teamOptionsQuery = useTeamOptions({ sort: 'name:asc', limit: 100 });
-  const projectOptionsQuery = useProjectOptions({ sort: 'name:asc', limit: 100 });
-  const applyTemplate = useApplyTemplate();
   const [draftTitle, setDraftTitle] = useState('');
   const [draftDescription, setDraftDescription] = useState('');
-  const [appliedDraft, setAppliedDraft] = useState<TemplateApplyDraft | null>(null);
-  const [hasApplied, setHasApplied] = useState(false);
   const template = templateQuery.data;
-  const teams = useMemo(() => teamOptionsQuery.data?.pages.flatMap((page) => page.items) ?? [], [teamOptionsQuery.data]);
-  const projects = useMemo(() => projectOptionsQuery.data?.pages.flatMap((page) => page.items) ?? [], [projectOptionsQuery.data]);
-  const teamById = useMemo(() => new Map(teams.map((team) => [team.id, team])), [teams]);
-  const projectById = useMemo(() => new Map(projects.map((project) => [project.id, project])), [projects]);
 
   useEffect(() => {
-    if (!template || hasApplied) return;
-    applyTemplate.mutateAsync(template.id).then((draft) => {
-      setDraftTitle(draft.title);
-      setDraftDescription(draft.description);
-      setAppliedDraft(draft);
-      setHasApplied(true);
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [template?.id]);
+    if (!template) return;
+    setDraftTitle(template.titleTemplate || '');
+    setDraftDescription(template.contentTemplate || '');
+  }, [template]);
 
-  if (templateQuery.isLoading || applyTemplate.isPending || !hasApplied) {
-    return <div className="flex h-full items-center justify-center text-sm text-gray-400"><Loader2 size={18} className="mr-2 animate-spin" /> Preparing issue draft...</div>;
+  if (templateQuery.isLoading) {
+    return <div className="flex h-full items-center justify-center text-sm text-gray-400"><Loader2 size={18} className="mr-2 animate-spin" /> Loading template...</div>;
   }
   if (!template) return <NotFoundView />;
-  const scopeName =
-    template.scopeType === 'WORKSPACE'
-      ? 'Workspace'
-      : template.scopeType === 'TEAM'
-        ? teamById.get(template.scopeId ?? '')?.name ?? template.scopeId ?? 'Team'
-        : projectById.get(template.scopeId ?? '')?.name ?? template.scopeId ?? 'Project';
 
   const createIssue = () => {
     const dueDate =
-      appliedDraft?.dueDateOffset && appliedDraft.dueDateOffset > 0
-        ? new Date(Date.now() + appliedDraft.dueDateOffset * 86400000).toISOString().slice(0, 10)
+      template.defaultDueDateOffset && template.defaultDueDateOffset > 0
+        ? new Date(Date.now() + template.defaultDueDateOffset * 86400000).toISOString().slice(0, 10)
         : '';
     const issueDraft = {
       title: draftTitle,
       description: draftDescription,
-      type: appliedDraft?.issueType ?? template.issueType,
-      templateId: appliedDraft?.templateId ?? template.id,
-      priority: appliedDraft?.priority ?? template.defaultPriority,
-      status: appliedDraft?.status ?? template.defaultStatus,
-      customStatus: appliedDraft?.customStatus ?? template.customStatus ?? '',
-      assigneeId: appliedDraft?.assigneeId ?? undefined,
+      type: template.issueType,
+      templateId: template.id,
+      priority: template.defaultPriority,
+      status: template.defaultStatus,
+      assigneeId: template.defaultAssigneeType === 'SPECIFIC_USER' ? template.defaultAssigneeId ?? undefined : undefined,
       dueDate,
       dueTime: '12:00',
-      estimate: appliedDraft?.estimate ? String(appliedDraft.estimate) : '',
-      selectedLabelIds: appliedDraft?.labels ?? template.defaultLabelIds,
-      subtasks: (appliedDraft?.subtasks ?? template.checklistItems).map((title, index) => ({
+      estimate: template.defaultEstimate ? String(template.defaultEstimate) : '',
+      selectedLabelIds: template.defaultLabelIds,
+      subtasks: template.checklistItems.map((title, index) => ({
         id: `template-subtask-${index}`,
         title,
         completed: false,
         order: index,
       })),
-      stepsToReproduce: appliedDraft?.stepsToReproduce ?? '',
-      expectedBehavior: appliedDraft?.expectedBehavior ?? '',
-      actualBehavior: appliedDraft?.actualBehavior ?? '',
-      severity: appliedDraft?.severity ?? template.defaultSeverity ?? 'medium',
-      acceptanceCriteria: appliedDraft?.acceptanceCriteria ?? '',
-      relatedIssues: appliedDraft?.relatedIssueKeys ?? '',
-      notes: appliedDraft?.notes ?? '',
+      stepsToReproduce: template.stepsToReproduceTemplate ?? '',
+      expectedBehavior: template.expectedBehaviorTemplate ?? '',
+      actualBehavior: template.actualBehaviorTemplate ?? '',
+      severity: template.defaultSeverity ?? 'medium',
+      acceptanceCriteria: template.acceptanceCriteriaTemplate ?? '',
+      relatedIssues: template.relatedIssueKeysTemplate ?? '',
+      notes: template.notesTemplate ?? '',
     };
-    showToast('Template applied to issue draft.', 'success');
     navigate('/issues/create', { state: { issueDraft } });
   };
 
@@ -1989,7 +1472,7 @@ const ApplyTemplateView: React.FC<{ templateId: string }> = ({ templateId }) => 
               <span className="font-medium text-gray-700 dark:text-gray-200">Apply</span>
             </div>
             <h1 className="mt-3 text-xl font-bold tracking-tight">Review issue draft</h1>
-            <p className="mt-1 text-sm text-gray-400">Applying a template prepares a draft. Nothing is created until the user confirms.</p>
+            <p className="mt-1 text-sm text-gray-400">Review the draft before creating the issue.</p>
           </div>
           <button onClick={createIssue} className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white shadow-lg shadow-primary/20"><Send size={16} /> Continue to Create Issue</button>
         </div>
@@ -2008,45 +1491,43 @@ const ApplyTemplateView: React.FC<{ templateId: string }> = ({ templateId }) => 
           </main>
           <aside className="space-y-5 xl:sticky xl:top-5 xl:self-start">
             <section className="rounded-xl border border-gray-200 bg-white/70 p-5 dark:border-border-dark dark:bg-transparent">
-              <h2 className="text-sm font-bold">Applied defaults</h2>
+              <h2 className="text-sm font-bold">Defaults</h2>
               <div className="mt-4 space-y-3 text-sm">
-                <DetailRow icon={<FileText size={15} />} label="Template" value={template.name} />
-                <DetailRow icon={<LayoutGrid size={15} />} label="Scope" value={scopeName} />
-                <DetailRow icon={<ShieldCheck size={15} />} label="Default" value={template.isDefault ? 'Workspace default' : 'No'} />
                 <DetailRow icon={<Flag size={15} />} label="Priority" value={formatDisplayLabel(String(template.defaultPriority))} />
-                <DetailRow icon={<Hash size={15} />} label="Status" value={getTemplateStatusLabel(appliedDraft?.status ?? template.defaultStatus, appliedDraft?.customStatus ?? template.customStatus)} />
+                <DetailRow icon={<Hash size={15} />} label="Status" value={getTemplateStatusLabel(template.defaultStatus, template.customStatus)} />
                 <DetailRow icon={<User size={15} />} label="Assignee" value={assigneeText[template.defaultAssigneeType]} />
-                {template.issueType === 'bug' && <DetailRow icon={<Bug size={15} />} label="Severity" value={formatDisplayLabel(String(appliedDraft?.severity ?? template.defaultSeverity ?? 'medium'))} />}
+                {template.issueType === 'bug' && <DetailRow icon={<Bug size={15} />} label="Severity" value={formatDisplayLabel(String(template.defaultSeverity ?? 'medium'))} />}
                 <DetailRow icon={<Layers size={15} />} label="Estimate" value={template.defaultEstimate ? `${template.defaultEstimate} points` : 'None'} />
-                <DetailRow icon={<Tag size={15} />} label="Labels" value={template.defaultLabelIds.join(', ') || 'None'} />
               </div>
             </section>
             {template.issueType === 'bug' && (
               <section className="rounded-xl border border-gray-200 bg-white/70 p-5 dark:border-border-dark dark:bg-transparent">
-                <h2 className="text-sm font-bold">Bug draft fields</h2>
+                <h2 className="text-sm font-bold">Bug fields</h2>
                 <div className="mt-4 space-y-3">
-                  <TemplateFieldPreview title="Steps" value={appliedDraft?.stepsToReproduce} />
-                  <TemplateFieldPreview title="Expected" value={appliedDraft?.expectedBehavior} />
-                  <TemplateFieldPreview title="Actual" value={appliedDraft?.actualBehavior} />
+                  <TemplateFieldPreview title="Steps" value={template.stepsToReproduceTemplate} />
+                  <TemplateFieldPreview title="Expected" value={template.expectedBehaviorTemplate} />
+                  <TemplateFieldPreview title="Actual" value={template.actualBehaviorTemplate} />
                 </div>
               </section>
             )}
             {template.issueType === 'issue' && (
               <section className="rounded-xl border border-gray-200 bg-white/70 p-5 dark:border-border-dark dark:bg-transparent">
-                <h2 className="text-sm font-bold">Issue draft fields</h2>
+                <h2 className="text-sm font-bold">Issue fields</h2>
                 <div className="mt-4 space-y-3">
-                  <TemplateFieldPreview title="Acceptance criteria" value={appliedDraft?.acceptanceCriteria} />
-                  <TemplateFieldPreview title="Related issues" value={appliedDraft?.relatedIssueKeys} />
-                  <TemplateFieldPreview title="Notes" value={appliedDraft?.notes} />
+                  <TemplateFieldPreview title="Acceptance criteria" value={template.acceptanceCriteriaTemplate} />
+                  <TemplateFieldPreview title="Related issues" value={template.relatedIssueKeysTemplate} />
+                  <TemplateFieldPreview title="Notes" value={template.notesTemplate} />
                 </div>
               </section>
             )}
-            <section className="rounded-xl border border-gray-200 bg-white/70 p-5 dark:border-border-dark dark:bg-transparent">
-              <h2 className="text-sm font-bold">Generated subtasks</h2>
-              <div className="mt-4 space-y-2">
-                {template.checklistItems.map((item) => <div key={item} className="text-sm text-gray-400">- {item}</div>)}
-              </div>
-            </section>
+            {template.checklistItems.length > 0 && (
+              <section className="rounded-xl border border-gray-200 bg-white/70 p-5 dark:border-border-dark dark:bg-transparent">
+                <h2 className="text-sm font-bold">Subtasks</h2>
+                <div className="mt-4 space-y-2">
+                  {template.checklistItems.map((item) => <div key={item} className="text-sm text-gray-400">- {item}</div>)}
+                </div>
+              </section>
+            )}
           </aside>
         </div>
       </div>

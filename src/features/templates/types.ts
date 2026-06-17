@@ -13,7 +13,6 @@ export type TemplateCategory =
 export type TemplateCategoryMode = TemplateCategory | 'Custom';
 
 export type TemplateAssigneeType = 'UNASSIGNED' | 'CREATOR' | 'SPECIFIC_USER';
-export type TemplateScopeType = 'WORKSPACE' | 'TEAM' | 'PROJECT';
 export type TemplateSort = 'updatedAt:desc' | 'updatedAt:asc' | 'usageCount:desc' | 'usageCount:asc' | 'name:asc';
 
 export interface TemplateCreator {
@@ -28,11 +27,6 @@ export interface TemplateDefaultsResponse {
   priorityOptions: string[];
   statusOptions: string[];
   labelOptions: string[];
-}
-
-export interface TemplateScope {
-  scopeType: TemplateScopeType;
-  scopeId: string | null;
 }
 
 export type TemplateLifecycle = 'ACTIVE' | 'INACTIVE' | 'ARCHIVED';
@@ -51,21 +45,6 @@ export interface TemplateActivationConflictDetails {
   message?: string;
 }
 
-export interface TemplateDefaultConflictDetails {
-  issueType: IssueType;
-  currentDefault: {
-    id: string;
-    name: string;
-  };
-  candidateTemplate: {
-    id: string;
-    name: string;
-  };
-  scopeType: 'WORKSPACE';
-  requiresConfirmation: true;
-  message?: string;
-}
-
 export interface IssueTemplate {
   id: string;
   workspaceId: string;
@@ -75,9 +54,6 @@ export interface IssueTemplate {
   customCategory?: string | null;
   categoryOptions: string[];
   issueType: IssueType;
-  scopeType: TemplateScopeType;
-  scopeId: string | null;
-  isDefault: boolean;
   titleTemplate: string;
   contentTemplate: string;
   defaultPriority: Priority;
@@ -119,8 +95,6 @@ export interface TemplateListInput {
   q?: string;
   category?: TemplateCategoryMode | 'all';
   issueType?: IssueType | 'all';
-  scopeType?: TemplateScopeType | 'all';
-  scopeId?: string;
   creatorId?: string | 'all';
   sort?: TemplateSort;
   lifecycle?: TemplateLifecycle | 'all';
@@ -136,9 +110,6 @@ export interface TemplateDraftInput {
   customCategory?: string | null;
   categoryOptions: string[];
   issueType: IssueType;
-  scopeType: TemplateScopeType;
-  scopeId?: string | null;
-  isDefault?: boolean;
   titleTemplate: string;
   contentTemplate: string;
   defaultPriority: Priority;
@@ -170,9 +141,6 @@ export interface TemplateApplyDraft {
   title: string;
   description: string;
   issueType: IssueType;
-  scopeType: TemplateScopeType;
-  scopeId: string | null;
-  isDefault: boolean;
   priority: Priority;
   status: Status;
   customStatus?: string | null;

@@ -162,6 +162,7 @@ export const AuthSync: React.FC<{ children: React.ReactNode }> = ({ children }) 
             logo: ws.logo || undefined,
             role: ws.role?.toLowerCase() || 'member',
             defaultTeamId: ws.defaultTeamId || undefined,
+            customStatuses: ws.customStatuses || undefined,
           }));
           console.log('[AuthSync] GET /workspaces returned', backendWorkspaces?.length, 'workspace(s)');
         }

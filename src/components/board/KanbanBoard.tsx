@@ -19,26 +19,30 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { restrictToWindowEdges } from '@dnd-kit/modifiers';
-import { Issue, Status } from '../../types';
+import { Issue, Status, WorkspaceStatus } from '../../types';
 import { BoardColumn } from './BoardColumn';
 import { BoardCard } from './BoardCard';
 import { useApp } from '../../AppContext';
+import { useWorkspaceStatuses } from '@shared/hooks/useWorkspaceStatuses';
 
 interface KanbanBoardProps {
   issues: Issue[];
   onIssueUpdate: (issueId: string, newStatus: Status) => Promise<boolean> | boolean;
   onNewIssue: (status: Status) => void;
   hideNewIssueButton?: boolean;
+  statuses?: WorkspaceStatus[];
 }
 
-const COLUMNS: Status[] = ['backlog', 'todo', 'in-progress', 'review', 'done'];
-
-export const KanbanBoard: React.FC<KanbanBoardProps> = ({ 
-  issues, 
-  onIssueUpdate, 
+export const KanbanBoard: React.FC<KanbanBoardProps> = ({
+  issues,
+  onIssueUpdate,
   onNewIssue,
-  hideNewIssueButton = false
+  hideNewIssueButton = false,
+  statuses: statusesProp,
 }) => {
+  const defaultStatuses = useWorkspaceStatuses();
+  const resolvedStatuses = statusesProp ?? defaultStatuses;
+  const COLUMNS = resolvedStatuses.map((s) => s.key);
   const { setSelectedIssueId } = useApp();
   const [activeIssue, setActiveIssue] = useState<Issue | null>(null);
   const [localIssues, setLocalIssues] = useState<Issue[]>(issues);
@@ -221,16 +225,22 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
     >
       <div className="flex-1 overflow-x-auto p-6 bg-gray-50/30 dark:bg-black/10">
         <div className="flex gap-6 h-full min-w-max">
-          {COLUMNS.map((status) => (
-            <BoardColumn
-              key={status}
-              id={status}
-              issues={localIssues.filter((i) => i.status === status)}
-              onIssueClick={setSelectedIssueId}
-              onNewIssue={() => onNewIssue(status)}
-              hideNewIssueButton={hideNewIssueButton}
-            />
-          ))}
+          {COLUMNS.map((status) => {
+            const statusConfig = resolvedStatuses.find((s) => s.key === status);
+            return (
+              <BoardColumn
+                key={status}
+                id={status}
+                issues={localIssues.filter((i) => i.status === status)}
+                onIssueClick={setSelectedIssueId}
+                onNewIssue={() => onNewIssue(status)}
+                hideNewIssueButton={hideNewIssueButton}
+                statusLabel={statusConfig?.label}
+                statusColor={statusConfig?.color}
+                isFinal={statusConfig?.isFinal}
+              />
+            );
+          })}
         </div>
       </div>
 

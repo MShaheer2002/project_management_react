@@ -22,6 +22,7 @@ export interface WorkspaceResponse {
   unreadNotifications?: number; // Per-workspace unread count (from GET /workspaces)
   joinedAt?: string;            // When user joined this workspace
   createdAt?: string;
+  customStatuses?: Array<{ key: string; label: string; color: string; order: number; isFinal: boolean }>;
 }
 
 export interface CreateWorkspaceInput {
@@ -224,6 +225,16 @@ export const workspaceService = {
 
   delete: async (workspaceId: string): Promise<void> => {
     await privateApi.delete(`/workspaces/${workspaceId}`);
+  },
+
+  getStatuses: async (workspaceId: string): Promise<WorkspaceResponse['customStatuses']> => {
+    const { data } = await privateApi.get<ApiResponse<WorkspaceResponse['customStatuses']>>(`/workspaces/${workspaceId}/statuses`);
+    return data.data;
+  },
+
+  updateStatuses: async (workspaceId: string, statuses: NonNullable<WorkspaceResponse['customStatuses']>): Promise<NonNullable<WorkspaceResponse['customStatuses']>> => {
+    const { data } = await privateApi.put<ApiResponse<NonNullable<WorkspaceResponse['customStatuses']>>>(`/workspaces/${workspaceId}/statuses`, statuses);
+    return data.data;
   },
 
   /**

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import DOMPurify from 'dompurify';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   AlertCircle,
@@ -23,7 +24,9 @@ import {
 import { AnimatePresence, motion } from 'motion/react';
 import { useAuthStore } from '@/app/stores/useAuthStore';
 import { useApp } from '@/AppContext';
-import { PRIORITY_COLORS, STATUS_LABELS, ISSUE_TYPE_CONFIG } from '@/constants';
+import { PRIORITY_COLORS, ISSUE_TYPE_CONFIG } from '@/constants';
+import { getStatusLabel } from '@shared/constants/statuses';
+import { useWorkspaceStatuses } from '@shared/hooks/useWorkspaceStatuses';
 import { canDeleteIssues } from '@shared/permissions';
 import { LabelChip } from '@shared/components/ui/LabelChip';
 import { getApiErrorCode, getApiErrorMessage } from '@shared/services';
@@ -97,23 +100,26 @@ const StatusSelect: React.FC<{
   value: Status;
   disabled?: boolean;
   onChange: (value: Status) => void;
-}> = ({ value, disabled, onChange }) => (
-  <div className="relative group">
-    <select
-      disabled={disabled}
-      value={value}
-      onChange={(event) => onChange(event.target.value as Status)}
-      className="w-full cursor-pointer appearance-none rounded-lg border border-transparent bg-transparent px-2 py-1 text-xs font-medium outline-none transition-all hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60 dark:hover:bg-white/5"
-    >
-      {Object.entries(STATUS_LABELS).map(([status, label]) => (
-        <option key={status} value={status}>
-          {label}
-        </option>
-      ))}
-    </select>
-    <ChevronDown size={12} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 opacity-0 transition-opacity group-hover:opacity-100" />
-  </div>
-);
+}> = ({ value, disabled, onChange }) => {
+  const workspaceStatuses = useWorkspaceStatuses();
+  return (
+    <div className="relative group">
+      <select
+        disabled={disabled}
+        value={value}
+        onChange={(event) => onChange(event.target.value as Status)}
+        className="w-full cursor-pointer appearance-none rounded-lg border border-transparent bg-transparent px-2 py-1 text-xs font-medium outline-none transition-all hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60 dark:hover:bg-white/5"
+      >
+        {workspaceStatuses.map((ws) => (
+          <option key={ws.key} value={ws.key}>
+            {ws.label}
+          </option>
+        ))}
+      </select>
+      <ChevronDown size={12} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 opacity-0 transition-opacity group-hover:opacity-100" />
+    </div>
+  );
+};
 
 const renderRichText = (value: string | undefined, fallback: string) => {
   if (!value?.trim()) {
@@ -123,7 +129,7 @@ const renderRichText = (value: string | undefined, fallback: string) => {
   return (
     <div
       className="text-base leading-relaxed text-gray-700 dark:text-gray-300 [&_a]:text-primary [&_code]:rounded [&_code]:bg-gray-100 [&_code]:px-1 [&_code]:py-0.5 dark:[&_code]:bg-white/10"
-      dangerouslySetInnerHTML={{ __html: value }}
+      dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(value) }}
     />
   );
 };
@@ -159,7 +165,7 @@ export const IssueDetailPage: React.FC = () => {
   const issueQuery = useIssueDetail(issueId);
   const issue = issueQuery.data;
   const errorCode = getApiErrorCode(issueQuery.error);
-  const issueResourceId = issue?.entityId ?? issueId;
+  const issueResourceId = issue?.entityId ?? issueId ?? '';
   const assigneeOptionsQuery = useWorkspaceMemberOptions(
     {
       sort: 'name:asc',
@@ -224,10 +230,12 @@ export const IssueDetailPage: React.FC = () => {
     }
   };
 
+  const workspaceStatuses = useWorkspaceStatuses();
+
   const handleStatusChange = async (nextStatus: Status) => {
     try {
       await updateIssueStatus.mutateAsync(nextStatus);
-      showToast(`Status updated to ${STATUS_LABELS[nextStatus]}.`, 'success');
+      showToast(`Status updated to ${getStatusLabel(workspaceStatuses, nextStatus)}.`, 'success');
     } catch (error) {
       showToast(getApiErrorMessage(error) || 'Failed to update status.', 'error');
     }

@@ -34,6 +34,7 @@ export function useWorkspaceSwitch() {
         logo: workspace.logo,
         role: workspace.role.toLowerCase() as AuthWorkspace['role'],
         defaultTeamId: workspace.defaultTeamId,
+        customStatuses: workspace.customStatuses,
       };
       setWorkspace(authWorkspace);
 
@@ -44,10 +45,18 @@ export function useWorkspaceSwitch() {
         realtimeSocket.connect({ token, workspaceId: workspace.id });
       }
 
-      // 3. Invalidate all queries — stale data from old workspace must not leak
+      // 3. Clear workspace-scoped localStorage drafts
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key?.startsWith('issue_draft:')) keysToRemove.push(key);
+      }
+      keysToRemove.forEach((key) => localStorage.removeItem(key));
+
+      // 4. Invalidate all queries — stale data from old workspace must not leak
       queryClient.invalidateQueries();
 
-      // 4. Navigate to dashboard — deep routes like /projects/abc123 reference
+      // 5. Navigate to dashboard — deep routes like /projects/abc123 reference
       //    entities that don't exist in the new workspace
       navigate('/dashboard', { replace: true });
     },

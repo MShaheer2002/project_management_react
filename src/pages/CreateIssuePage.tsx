@@ -24,8 +24,10 @@ import {
   Sparkles
 } from 'lucide-react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { useAuthStore } from '@/app/stores/useAuthStore';
 import { useApp } from '../AppContext';
-import { STATUS_LABELS, ISSUE_TYPE_CONFIG } from '../constants';
+import { ISSUE_TYPE_CONFIG } from '../constants';
+import { useWorkspaceStatuses } from '@shared/hooks/useWorkspaceStatuses';
 import {
   IssueAttachment,
   IssueDependency,
@@ -41,7 +43,7 @@ import { RichTextEditor } from '../components/RichTextEditor';
 import { LabelChip } from '@shared/components/ui/LabelChip';
 import { getApiFieldErrors, getApiErrorMessage } from '@shared/services';
 import { useDepartmentOptions } from '@features/department';
-import { useActiveTemplates, useApplyTemplate } from '@features/templates';
+import { useActiveTemplates } from '@features/templates';
 import { useProjectOptions } from '@features/projects';
 import { useWorkspaceMemberOptions } from '@features/workspace';
 import {
@@ -130,7 +132,10 @@ export const CreateIssuePage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
-  
+  const workspaceId = useAuthStore((s) => s.workspace?.id);
+  const workspaceStatuses = useWorkspaceStatuses();
+  const draftKey = `issue_draft:${workspaceId ?? 'unknown'}`;
+
   // Form State
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -163,7 +168,6 @@ export const CreateIssuePage: React.FC = () => {
   const [integrationRefs, setIntegrationRefs] = useState<IssueIntegrationRef[]>([]);
   const [attachments, setAttachments] = useState<IssueAttachment[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
-  const [isApplyingTemplate, setIsApplyingTemplate] = useState(false);
   const [lastAutoAppliedType, setLastAutoAppliedType] = useState<IssueType | null>(null);
   
   // UI State
@@ -212,30 +216,12 @@ export const CreateIssuePage: React.FC = () => {
   const departmentOptions = departmentOptionsQuery.data?.pages.flatMap((page) => page.items) ?? [];
   const assigneeOptions = assigneeOptionsQuery.data?.pages.flatMap((page) => page.items) ?? [];
   const labels = labelsQuery.data?.pages.flatMap((page) => page.items) ?? [];
-  const selectedProject = useMemo(() => projectOptions.find((project) => project.id === projectId) ?? null, [projectId, projectOptions]);
   const issueDraftFromRoute = (location.state as { issueDraft?: IssueDraftSnapshot } | null)?.issueDraft ?? null;
-  const activeTemplatesQuery = useActiveTemplates({
-    limit: 100,
-    issueType: type,
-  });
-  const applyTemplate = useApplyTemplate();
+  const activeTemplatesQuery = useActiveTemplates({});
   const activeTemplates = activeTemplatesQuery.data ?? [];
   const effectiveTemplate = useMemo(() => {
-    const templatesForType = activeTemplates.filter((template) => template.issueType === type);
-    if (templatesForType.length === 0) return null;
-
-    const projectTemplate = projectId
-      ? templatesForType.find((template) => template.scopeType === 'PROJECT' && template.scopeId === projectId)
-      : undefined;
-    if (projectTemplate) return projectTemplate;
-
-    const teamTemplate = selectedProject?.teamId
-      ? templatesForType.find((template) => template.scopeType === 'TEAM' && template.scopeId === selectedProject.teamId)
-      : undefined;
-    if (teamTemplate) return teamTemplate;
-
-    return templatesForType.find((template) => template.scopeType === 'WORKSPACE') ?? templatesForType[0] ?? null;
-  }, [activeTemplates, projectId, selectedProject?.teamId, type]);
+    return activeTemplates.find((template) => template.issueType === type) ?? null;
+  }, [activeTemplates, type]);
   const selectedLabels = selectedLabelIds
     .map((id) => labels.find((label) => label.id === id))
     .filter((label): label is IssueLabelRow => Boolean(label));
@@ -297,7 +283,7 @@ export const CreateIssuePage: React.FC = () => {
     const statusParam = searchParams.get('status');
     const projectParam = searchParams.get('projectId');
 
-    if (statusParam && Object.prototype.hasOwnProperty.call(STATUS_LABELS, statusParam)) {
+    if (statusParam && workspaceStatuses.some((s) => s.key === statusParam)) {
       setStatus(statusParam as Status);
     }
 
@@ -306,51 +292,8 @@ export const CreateIssuePage: React.FC = () => {
     }
   }, [searchParams]);
 
-  const handleApplyTemplate = async () => {
-    if (!selectedTemplateId) {
-      showToast('Select a template first.', 'error');
-      return;
-    }
-
-    setIsApplyingTemplate(true);
-    try {
-      const draft = await applyTemplate.mutateAsync(selectedTemplateId);
-      setTitle(draft.title || '');
-      setDescription(draft.description || '');
-      setType(draft.issueType);
-      setPriority(draft.priority);
-      setStatus(draft.status);
-      setAssigneeId(draft.assigneeType === 'SPECIFIC_USER' ? draft.assigneeId ?? undefined : undefined);
-      setEstimate(draft.estimate != null ? String(draft.estimate) : '');
-      setSelectedLabelIds(draft.labels ?? []);
-      setSubtasks((draft.subtasks ?? []).map((item, index) => ({
-        id: `${selectedTemplateId}-${index}-${item.slice(0, 12)}`,
-        title: item,
-        completed: false,
-        order: index,
-        isEditing: false,
-      })));
-      setSeverity(draft.severity ?? 'medium');
-      setStepsToReproduce(draft.stepsToReproduce ?? '');
-      setExpectedBehavior(draft.expectedBehavior ?? '');
-      setActualBehavior(draft.actualBehavior ?? '');
-      setAcceptanceCriteria(draft.acceptanceCriteria ?? '');
-      setRelatedIssues(draft.relatedIssueKeys ?? '');
-      setNotes(draft.notes ?? '');
-
-      if (typeof draft.dueDateOffset === 'number') {
-        setDueDate(addDaysToDateInput(draft.dueDateOffset));
-      }
-
-      showToast('Template applied to the issue draft.', 'success');
-    } catch (error) {
-      showToast(getApiErrorMessage(error) || 'Failed to apply template.', 'error');
-    } finally {
-      setIsApplyingTemplate(false);
-    }
-  };
-
   const resetTemplateDrivenState = (nextType: IssueType) => {
+    lastAppliedRef.current = null;
     setSelectedTemplateId('');
     setLastAutoAppliedType(null);
     setTitle('');
@@ -374,51 +317,43 @@ export const CreateIssuePage: React.FC = () => {
     setAttachments([]);
   };
 
+  const lastAppliedRef = useRef<string | null>(null);
+
   useEffect(() => {
-    if (!effectiveTemplate || isApplyingTemplate) return;
+    if (!effectiveTemplate) return;
 
-    const template = effectiveTemplate;
-    if (selectedTemplateId === template.id && lastAutoAppliedType === type) return;
-    if (selectedTemplateId && selectedTemplateId !== template.id && lastAutoAppliedType === type) return;
+    const key = `${effectiveTemplate.id}:${type}`;
+    if (lastAppliedRef.current === key) return;
+    lastAppliedRef.current = key;
 
-    setSelectedTemplateId(template.id);
+    const t = effectiveTemplate;
+    setSelectedTemplateId(t.id);
     setLastAutoAppliedType(type);
-    void (async () => {
-      try {
-        setIsApplyingTemplate(true);
-        const draft = await applyTemplate.mutateAsync(template.id);
-        setTitle(draft.title || '');
-        setDescription(draft.description || '');
-        setPriority(draft.priority);
-        setStatus(draft.status);
-        setAssigneeId(draft.assigneeType === 'SPECIFIC_USER' ? draft.assigneeId ?? undefined : undefined);
-        setEstimate(draft.estimate != null ? String(draft.estimate) : '');
-        setSelectedLabelIds(draft.labels ?? []);
-        setSubtasks((draft.subtasks ?? []).map((item, index) => ({
-          id: `${template.id}-${index}-${item.slice(0, 12)}`,
-          title: item,
-          completed: false,
-          order: index,
-          isEditing: false,
-        })));
-        setSeverity(draft.severity ?? 'medium');
-        setStepsToReproduce(draft.stepsToReproduce ?? '');
-        setExpectedBehavior(draft.expectedBehavior ?? '');
-        setActualBehavior(draft.actualBehavior ?? '');
-        setAcceptanceCriteria(draft.acceptanceCriteria ?? '');
-        setRelatedIssues(draft.relatedIssueKeys ?? '');
-        setNotes(draft.notes ?? '');
-        if (typeof draft.dueDateOffset === 'number') {
-          setDueDate(addDaysToDateInput(draft.dueDateOffset));
-        }
-        showToast(`Auto-applied ${template.name}.`, 'success');
-      } catch (error) {
-        showToast(getApiErrorMessage(error) || 'Failed to auto-apply template.', 'error');
-      } finally {
-        setIsApplyingTemplate(false);
-      }
-    })();
-  }, [applyTemplate, effectiveTemplate, isApplyingTemplate, lastAutoAppliedType, selectedTemplateId, showToast, type]);
+    setTitle(t.titleTemplate || '');
+    setDescription(t.contentTemplate || '');
+    setPriority(t.defaultPriority);
+    setStatus(t.defaultStatus);
+    setAssigneeId(t.defaultAssigneeType === 'SPECIFIC_USER' ? t.defaultAssigneeId ?? undefined : undefined);
+    setEstimate(t.defaultEstimate != null ? String(t.defaultEstimate) : '');
+    setSelectedLabelIds(t.defaultLabelIds ?? []);
+    setSubtasks((t.checklistItems ?? []).map((item, index) => ({
+      id: `${t.id}-${index}-${item.slice(0, 12)}`,
+      title: item,
+      completed: false,
+      order: index,
+      isEditing: false,
+    })));
+    setSeverity(t.defaultSeverity ?? 'medium');
+    setStepsToReproduce(t.stepsToReproduceTemplate ?? '');
+    setExpectedBehavior(t.expectedBehaviorTemplate ?? '');
+    setActualBehavior(t.actualBehaviorTemplate ?? '');
+    setAcceptanceCriteria(t.acceptanceCriteriaTemplate ?? '');
+    setRelatedIssues(t.relatedIssueKeysTemplate ?? '');
+    setNotes(t.notesTemplate ?? '');
+    if (typeof t.defaultDueDateOffset === 'number') {
+      setDueDate(addDaysToDateInput(t.defaultDueDateOffset));
+    }
+  }, [effectiveTemplate, type]);
 
   // Validation
   const validate = () => {
@@ -554,7 +489,7 @@ export const CreateIssuePage: React.FC = () => {
           ? `Issue created with ${cleanSubtasks.length} subtask${cleanSubtasks.length > 1 ? 's' : ''}`
           : 'Issue created successfully'
       );
-      localStorage.removeItem('issue_draft');
+      localStorage.removeItem(draftKey);
       navigate(`/issues/${createdIssueResourceId}`);
     } catch (error) {
       setIsSubmitting(false);
@@ -599,13 +534,16 @@ export const CreateIssuePage: React.FC = () => {
 
   // Draft Logic
   useEffect(() => {
+    // Clean up legacy unscoped draft key
+    localStorage.removeItem('issue_draft');
+
     if (issueDraftFromRoute) {
       hydrateDraft(issueDraftFromRoute);
-      localStorage.removeItem('issue_draft');
+      localStorage.removeItem(draftKey);
       return;
     }
 
-    const savedDraft = localStorage.getItem('issue_draft');
+    const savedDraft = localStorage.getItem(draftKey);
     if (savedDraft) {
       try {
         hydrateDraft(JSON.parse(savedDraft) as IssueDraftSnapshot);
@@ -646,7 +584,7 @@ export const CreateIssuePage: React.FC = () => {
       integrationRefs,
       attachments,
     };
-    localStorage.setItem('issue_draft', JSON.stringify(draft));
+    localStorage.setItem(draftKey, JSON.stringify(draft));
     setTimeout(() => {
       setIsSaving(false);
       setLastSaved(new Date());
@@ -1042,8 +980,8 @@ export const CreateIssuePage: React.FC = () => {
                           onChange={(e) => setStatus(e.target.value as Status)}
                           className="w-full bg-gray-50 dark:bg-white/5 border border-transparent px-5 py-4 text-sm font-medium rounded-2xl shadow-sm outline-none appearance-none focus:ring-2 focus:ring-primary/20 transition-all group-hover:bg-gray-100 dark:group-hover:bg-white/10"
                         >
-                          {Object.entries(STATUS_LABELS).map(([key, label]) => (
-                            <option key={key} value={key}>{label}</option>
+                          {workspaceStatuses.map((ws) => (
+                            <option key={ws.key} value={ws.key}>{ws.label}</option>
                           ))}
                         </select>
                         <ChevronDown size={14} className="absolute right-5 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-600 pointer-events-none" />

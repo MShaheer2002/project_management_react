@@ -56,6 +56,7 @@ export const useActiveTemplates = (params: Record<string, unknown> = {}) => {
     queryKey: templateQueryKeys.active(workspaceId, params),
     queryFn: () => templateService.getActive(params),
     enabled: Boolean(workspaceId),
+    staleTime: 5 * 60 * 1000,
   });
 };
 
@@ -143,36 +144,6 @@ export const useDuplicateTemplate = () => {
   });
 };
 
-export const useApplyTemplate = () => {
-  const queryClient = useQueryClient();
-  const workspaceId = useAuthStore((s) => s.workspace?.id);
-  const userId = useAuthStore((s) => s.currentUser?.id);
-
-  return useMutation({
-    mutationFn: (templateId: string) => templateService.apply(templateId),
-    onSuccess: (draft) => {
-      if (workspaceId && userId) {
-        const appliedState = {
-          templateId: draft.templateId,
-          appliedByCurrentUser: true,
-          appliedAt: new Date().toISOString(),
-          appliedDraft: draft,
-        };
-        queryClient.setQueryData(templateQueryKeys.applied(workspaceId, userId, draft.templateId), appliedState);
-        queryClient.setQueryData(templateQueryKeys.detail(workspaceId, draft.templateId), (current: unknown) =>
-          current && typeof current === 'object'
-            ? {
-                ...(current as Record<string, unknown>),
-                ...appliedState,
-              }
-            : current
-        );
-      }
-      invalidateTemplates(queryClient, workspaceId);
-    },
-  });
-};
-
 export const useActivateTemplate = () => {
   const queryClient = useQueryClient();
   const workspaceId = useAuthStore((s) => s.workspace?.id);
@@ -203,12 +174,3 @@ export const useDeactivateTemplate = () => {
   });
 };
 
-export const useConfirmDefaultTemplate = () => {
-  const queryClient = useQueryClient();
-  const workspaceId = useAuthStore((s) => s.workspace?.id);
-
-  return useMutation({
-    mutationFn: (templateId: string) => templateService.confirmDefault(templateId),
-    onSuccess: (template) => invalidateTemplates(queryClient, workspaceId, template.id),
-  });
-};

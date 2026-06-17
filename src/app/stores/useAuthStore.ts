@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import type { WorkspaceStatus } from '@/types';
 
 export interface AuthUser {
   id: string;
@@ -15,6 +16,7 @@ export interface AuthWorkspace {
   logo?: string;
   role: 'owner' | 'admin' | 'member' | 'guest';
   defaultTeamId?: string; // Auto-created team — needed for invites, first project/issue creation
+  customStatuses?: WorkspaceStatus[];
 }
 
 export type AuthSyncStatus = 'idle' | 'loading' | 'ready';
