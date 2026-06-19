@@ -19,13 +19,18 @@ export const useUpdateWorkspace = () => {
       return workspaceService.update({ ...input, workspaceId });
     },
     onSuccess: (workspace) => {
+      const current = useAuthStore.getState().workspace;
+      if (!current) return;
+
+      // Merge only fields the API returns — preserve role, customStatuses, defaultTeamId
+      // which are not included in the PATCH response.
+      // Use 'in' check instead of ?? to correctly handle explicit null (e.g., logo cleared)
       setWorkspace({
-        id: workspace.id,
+        ...current,
         name: workspace.name,
         slug: workspace.slug,
         logo: workspace.logo ?? undefined,
-        role: workspace.role.toLowerCase() as 'owner' | 'admin' | 'member' | 'guest',
-        defaultTeamId: workspace.defaultTeamId,
+        uploadPolicy: workspace.uploadPolicy ?? current.uploadPolicy,
       });
       queryClient.invalidateQueries({ queryKey: workspaceQueryKeys.detail(workspaceId) });
       queryClient.invalidateQueries({ queryKey: sidebarQueryKeys.byWorkspace(workspaceId) });

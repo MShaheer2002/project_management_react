@@ -9,6 +9,8 @@ export interface AuthUser {
   avatar?: string;
 }
 
+export type UploadPolicy = 'BOTH' | 'SYSTEM_ONLY' | 'DRIVE_ONLY';
+
 export interface AuthWorkspace {
   id: string;
   name: string;
@@ -17,6 +19,7 @@ export interface AuthWorkspace {
   role: 'owner' | 'admin' | 'member' | 'guest';
   defaultTeamId?: string; // Auto-created team — needed for invites, first project/issue creation
   customStatuses?: WorkspaceStatus[];
+  uploadPolicy?: UploadPolicy; // Controls where members can upload: BOTH (default), SYSTEM_ONLY, DRIVE_ONLY
 }
 
 export type AuthSyncStatus = 'idle' | 'loading' | 'ready';

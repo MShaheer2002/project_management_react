@@ -19,6 +19,7 @@ export interface WorkspaceResponse {
   role: string;           // "OWNER" | "ADMIN" | "MEMBER" | "GUEST"
   defaultTeamId?: string; // Auto-created team ID (returned on POST /workspaces)
   teamSize?: string;      // "SMALL" | "MEDIUM" | "LARGE" | "ENTERPRISE"
+  uploadPolicy?: 'BOTH' | 'SYSTEM_ONLY' | 'DRIVE_ONLY';
   unreadNotifications?: number; // Per-workspace unread count (from GET /workspaces)
   joinedAt?: string;            // When user joined this workspace
   createdAt?: string;
@@ -60,6 +61,7 @@ export interface UpdateWorkspaceInput {
   workspaceId: string;
   name?: string;
   logo?: string | null;
+  uploadPolicy?: 'BOTH' | 'SYSTEM_ONLY' | 'DRIVE_ONLY';
 }
 
 export interface WorkspaceMemberResponse {

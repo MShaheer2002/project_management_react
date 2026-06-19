@@ -4,8 +4,6 @@ import { useQueryClient } from '@tanstack/react-query';
 import {
   CheckCircle2,
   ExternalLink,
-  Filter,
-  Globe,
   Loader2,
   Plus,
   Search,
@@ -31,6 +29,12 @@ import {
 } from '@features/integrations';
 import type { IntegrationItem, IntegrationProvider } from '@features/integrations';
 import type { ApiAxiosError } from '@shared/services/types';
+import {
+  useDriveConnection,
+  useConnectDrive,
+  useDisconnectDrive,
+  driveQueryKeys,
+} from '@features/drive';
 
 const relativeTime = (value: string | null) => {
   if (!value) return '';
@@ -76,11 +80,17 @@ export const IntegrationsPage: React.FC = () => {
   const [showFigmaConnect, setShowFigmaConnect] = useState(false);
   const [disconnectingProvider, setDisconnectingProvider] =
     useState<IntegrationProvider | null>(null);
+  const [disconnectingDrive, setDisconnectingDrive] = useState(false);
 
   const { data: integrations = [], isLoading, isError, refetch } = useIntegrations();
   const connectGitHub = useConnectGitHub();
   const connectSlack = useConnectSlack();
   const disconnectIntegration = useDisconnectIntegration();
+
+  // Drive is user-scoped — separate from workspace integrations
+  const { data: driveConnection, isLoading: isDriveLoading } = useDriveConnection();
+  const connectDrive = useConnectDrive();
+  const disconnectDrive = useDisconnectDrive();
 
   // Handle OAuth callback redirect params
   useEffect(() => {
@@ -96,9 +106,13 @@ export const IntegrationsPage: React.FC = () => {
         'success',
         'Integration connected',
       );
-      queryClient.invalidateQueries({
-        queryKey: integrationQueryKeys.list(workspaceId),
-      });
+      if (provider === 'drive') {
+        queryClient.invalidateQueries({ queryKey: driveQueryKeys.connection() });
+      } else {
+        queryClient.invalidateQueries({
+          queryKey: integrationQueryKeys.list(workspaceId),
+        });
+      }
     } else if (status === 'error') {
       showToast(
         message || `Failed to connect ${provider}`,
@@ -135,7 +149,9 @@ export const IntegrationsPage: React.FC = () => {
     );
   }, [integrations, search]);
 
-  const connectedCount = enrichedIntegrations.filter((i) => i.connected).length;
+  const connectedCount =
+    enrichedIntegrations.filter((i) => i.connected).length +
+    (driveConnection?.connected ? 1 : 0);
 
   const handleConnect = useCallback(
     async (provider: IntegrationProvider) => {
@@ -353,6 +369,105 @@ export const IntegrationsPage: React.FC = () => {
             </div>
           ))}
 
+          {/* Google Drive card — user-scoped, visible to ALL users */}
+          {(!search.trim() || 'google drive'.includes(search.trim().toLowerCase())) && (
+            <div
+              className="bg-white dark:bg-card-dark border border-gray-200 dark:border-border-dark rounded-xl p-6 shadow-sm hover:border-primary/50 transition-all group"
+            >
+              <div className="flex items-start justify-between mb-6">
+                <div className="w-12 h-12 rounded-xl bg-gray-100 dark:bg-white/5 p-2 flex items-center justify-center">
+                  <img
+                    src="https://cdn-icons-png.flaticon.com/512/5968/5968523.png"
+                    alt="Google Drive"
+                    className="w-full h-full object-contain"
+                  />
+                </div>
+                {isDriveLoading ? (
+                  <Loader2 size={14} className="animate-spin text-gray-400" />
+                ) : driveConnection?.connected ? (
+                  <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-green-500/10 text-green-500 text-[10px] font-bold uppercase tracking-wider">
+                    <CheckCircle2 size={12} />
+                    Connected
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-400 text-[10px] font-bold uppercase tracking-wider">
+                    Not Connected
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-2 mb-6">
+                <h3 className="font-bold text-lg flex items-center gap-2">
+                  Google Drive
+                  <ExternalLink
+                    size={14}
+                    className="text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                  />
+                </h3>
+                <p className="text-sm text-gray-400 leading-relaxed">
+                  Upload files to your personal Drive. Linearis stores only links — zero storage cost.
+                </p>
+              </div>
+
+              {/* Connected-by info */}
+              {driveConnection?.connected && driveConnection.email && (
+                <div className="text-[11px] text-gray-400 mb-4">
+                  Connected as {driveConnection.email}
+                  {driveConnection.connectedAt &&
+                    ` \u00B7 ${relativeTime(driveConnection.connectedAt)}`}
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2">
+                {driveConnection?.connected ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          const result = await connectDrive.mutateAsync();
+                          window.location.href = result.authUrl;
+                        } catch (error) {
+                          console.error('[IntegrationsPage] Drive switch account failed:', error);
+                        }
+                      }}
+                      disabled={connectDrive.isPending}
+                      className="px-3 py-1.5 rounded-md border border-gray-200 dark:border-border-dark text-xs font-semibold hover:bg-gray-50 dark:hover:bg-white/5 transition-colors flex items-center gap-1.5"
+                    >
+                      {connectDrive.isPending && <Loader2 size={12} className="animate-spin" />}
+                      Switch Account
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDisconnectingDrive(true)}
+                      disabled={disconnectDrive.isPending}
+                      className="px-4 py-1.5 rounded-md border border-gray-200 dark:border-border-dark text-xs font-semibold hover:bg-red-500 hover:text-white hover:border-red-500 transition-all disabled:opacity-50"
+                    >
+                      Disconnect
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        const result = await connectDrive.mutateAsync();
+                        window.location.href = result.authUrl;
+                      } catch (error) {
+                        console.error('[IntegrationsPage] Drive connect failed:', error);
+                      }
+                    }}
+                    disabled={connectDrive.isPending}
+                    className="px-4 py-1.5 rounded-md bg-primary text-white text-xs font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                  >
+                    {connectDrive.isPending && <Loader2 size={12} className="animate-spin" />}
+                    Connect
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Request Integration card */}
           <div className="bg-gray-50 dark:bg-black/10 border border-dashed border-gray-300 dark:border-border-dark rounded-xl p-6 flex flex-col items-center justify-center text-center space-y-4">
             <div className="w-12 h-12 rounded-xl bg-white dark:bg-white/5 flex items-center justify-center text-gray-400">
@@ -475,6 +590,56 @@ export const IntegrationsPage: React.FC = () => {
                 {disconnectIntegration.isPending && (
                   <Loader2 size={14} className="animate-spin" />
                 )}
+                Disconnect
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Drive disconnect confirmation dialog */}
+      {disconnectingDrive && (
+        <>
+          <div
+            className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
+            onClick={() => setDisconnectingDrive(false)}
+          />
+          <div className="fixed left-1/2 top-1/2 z-50 w-full max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-gray-200 bg-white p-6 shadow-2xl dark:border-border-dark dark:bg-bg-dark">
+            <h3 className="text-lg font-bold">Disconnect Google Drive</h3>
+            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+              Are you sure? This will:
+            </p>
+            <ul className="mt-2 space-y-1 text-sm text-gray-500 dark:text-gray-400">
+              <li className="flex items-start gap-2">
+                <span className="mt-0.5 shrink-0">&bull;</span>
+                Stop new file uploads to your Google Drive
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="mt-0.5 shrink-0">&bull;</span>
+                Revoke Linearis access to your Google account
+              </li>
+            </ul>
+            <p className="mt-3 text-xs text-gray-400">
+              Existing file links will remain accessible. Your Drive files will not be affected.
+            </p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setDisconnectingDrive(false)}
+                className="px-4 py-2 rounded-lg text-sm font-medium text-gray-500 hover:bg-gray-100 dark:hover:bg-white/5 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  disconnectDrive.mutate();
+                  setDisconnectingDrive(false);
+                }}
+                disabled={disconnectDrive.isPending}
+                className="px-4 py-2 rounded-lg bg-red-500 text-sm font-bold text-white hover:bg-red-600 transition-colors disabled:opacity-50 flex items-center gap-2"
+              >
+                {disconnectDrive.isPending && <Loader2 size={14} className="animate-spin" />}
                 Disconnect
               </button>
             </div>

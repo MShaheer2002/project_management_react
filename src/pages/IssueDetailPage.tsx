@@ -530,7 +530,15 @@ export const IssueDetailPage: React.FC = () => {
 
               {isAttachmentComposerOpen && (
                 <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-border-dark dark:bg-card-dark">
-                  <IssueAttachmentsField value={newAttachments} onChange={setNewAttachments} />
+                  <IssueAttachmentsField
+                    value={newAttachments}
+                    onChange={setNewAttachments}
+                    driveFolderContext={{
+                      workspaceName: useAuthStore.getState().workspace?.name,
+                      projectName: issue?.project?.name,
+                      issueIdentifier: issue?.id,
+                    }}
+                  />
                   <div className="mt-4 flex justify-end gap-3 border-t border-gray-100 pt-4 dark:border-border-dark">
                     <button
                       type="button"

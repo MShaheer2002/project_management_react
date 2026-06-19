@@ -14,6 +14,7 @@ import { canManageDocuments } from '@shared/permissions';
 import { useWorkspaceStatuses } from '@shared/hooks/useWorkspaceStatuses';
 import type { WorkspaceStatus } from '@/types';
 import type { ApiAxiosError } from '@shared/services/types';
+import type { UploadPolicy } from '@/app/stores/useAuthStore';
 import { useApp } from '../AppContext';
 import { useAuthStore } from '@/app/stores/useAuthStore';
 
@@ -277,6 +278,57 @@ const WorkflowStatusesEditor: React.FC<{ workspaceId: string; canManage: boolean
   );
 };
 
+/** Dedicated upload policy selector — isolated mutation to avoid racing with "Save Changes" */
+const UploadPolicySection: React.FC<{ workspaceId: string }> = ({ workspaceId }) => {
+  const { showToast } = useApp();
+  const activeWorkspace = useAuthStore((s) => s.workspace);
+  const setWorkspace = useAuthStore((s) => s.setWorkspace);
+
+  const policyMutation = useMutation({
+    mutationFn: (policy: UploadPolicy) =>
+      workspaceService.update({ workspaceId, uploadPolicy: policy }),
+    onMutate: (policy) => {
+      // Optimistic update — instantly reflect in UI
+      const prev = useAuthStore.getState().workspace;
+      if (prev) setWorkspace({ ...prev, uploadPolicy: policy });
+      return { prev };
+    },
+    onError: (_err, _policy, context) => {
+      // Rollback on failure
+      if (context?.prev) setWorkspace(context.prev);
+      showToast('Failed to update upload policy', 'error');
+    },
+    onSuccess: () => {
+      showToast('Upload policy updated', 'success');
+    },
+  });
+
+  return (
+    <SettingsSection title="File Uploads">
+      <SettingsItem
+        label="Upload Policy"
+        description="Control where workspace members can upload file attachments. Members can always view existing attachments regardless of this setting."
+      >
+        <select
+          value={activeWorkspace?.uploadPolicy ?? 'BOTH'}
+          onChange={(e) => policyMutation.mutate(e.target.value as UploadPolicy)}
+          disabled={policyMutation.isPending}
+          className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-border-dark dark:bg-card-dark dark:text-gray-200"
+        >
+          <option value="BOTH">System Storage + Google Drive</option>
+          <option value="SYSTEM_ONLY">System Storage Only</option>
+          <option value="DRIVE_ONLY">Google Drive Only</option>
+        </select>
+      </SettingsItem>
+      {activeWorkspace?.uploadPolicy === 'DRIVE_ONLY' && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700 dark:border-amber-900/30 dark:bg-amber-900/10 dark:text-amber-400">
+          Members without a connected Google Drive will be unable to upload files. They will see a prompt to connect their Drive on the Integrations page.
+        </div>
+      )}
+    </SettingsSection>
+  );
+};
+
 export const SettingsPage: React.FC = () => {
   const { theme, setTheme, showToast } = useApp();
   const navigate = useNavigate();
@@ -473,6 +525,10 @@ export const SettingsPage: React.FC = () => {
 
         {workspace && canManageSettings && (
           <WorkflowStatusesEditor workspaceId={workspace.id} canManage={canManageSettings} />
+        )}
+
+        {workspace && canManageSettings && (
+          <UploadPolicySection workspaceId={workspace.id} />
         )}
 
         {workspace && (

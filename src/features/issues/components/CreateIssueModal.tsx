@@ -254,7 +254,7 @@ export const CreateIssueModal: React.FC = () => {
           </div>
         </div>
 
-        <IssueAttachmentsField value={attachments} onChange={setAttachments} />
+        <IssueAttachmentsField value={attachments} onChange={setAttachments} driveFolderContext={{}} />
 
         <div className="flex items-center gap-3 pt-4 border-t border-gray-100 dark:border-border-dark">
           <button type="button" className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-white/5 text-gray-400 hover:text-primary transition-colors">

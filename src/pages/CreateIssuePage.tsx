@@ -904,7 +904,14 @@ export const CreateIssuePage: React.FC = () => {
               </div>
             </div>
 
-            <IssueAttachmentsField value={attachments} onChange={setAttachments} />
+            <IssueAttachmentsField
+              value={attachments}
+              onChange={setAttachments}
+              driveFolderContext={{
+                workspaceName: useAuthStore.getState().workspace?.name,
+                projectName: projectOptions.find((p) => p.id === projectId)?.name,
+              }}
+            />
           </div>
         </div>
 
