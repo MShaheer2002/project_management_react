@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { 
-  ChevronLeft, 
-  Plus, 
+  ChevronLeft,
+  Loader2,
+  Plus,
   Users,
   Calendar as CalendarIcon, 
   Tag, 
@@ -46,6 +47,8 @@ import { useDepartmentOptions } from '@features/department';
 import { useActiveTemplates } from '@features/templates';
 import { useProjectOptions } from '@features/projects';
 import { useWorkspaceMemberOptions } from '@features/workspace';
+import { AiIssueGenerator } from '@features/ai';
+import type { AiGeneratedIssue } from '@features/ai';
 import {
   IssueLabelRow,
   IssueAttachmentsField,
@@ -622,29 +625,21 @@ export const CreateIssuePage: React.FC = () => {
       className="flex flex-col h-full bg-white dark:bg-bg-dark selection:bg-primary/20 overflow-hidden"
     >
       {/* Precision Header */}
-      <header className="h-14 border-b border-gray-200 dark:border-border-dark flex items-center justify-between px-6 sticky top-0 z-50 bg-white/80 dark:bg-bg-dark/80 backdrop-blur-md">
-        <div className="flex items-center gap-6 flex-1">
-          <button 
+      <header className="border-b border-gray-200 dark:border-border-dark flex items-center justify-between px-6 py-3 sticky top-0 z-50 bg-white/80 dark:bg-bg-dark/80 backdrop-blur-md">
+        <div className="flex items-center gap-4">
+          <button
             onClick={() => navigate(-1)}
             className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-white/5 text-gray-400 dark:text-gray-500 transition-all hover:text-primary active:scale-95"
             title="Cancel and return (Esc)"
           >
             <ChevronLeft size={20} />
           </button>
-          
-          <div className="flex-1 max-w-4xl relative">
-            <input 
-              autoFocus
-              type="text" 
-              placeholder="Issue title" 
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="text-lg font-semibold bg-transparent border-none outline-none w-full placeholder:text-gray-300 dark:placeholder:text-gray-600 transition-all text-gray-900 dark:text-white"
-            />
-          </div>
+          <h1 className="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate max-w-md">
+            {title.trim() || 'New Issue'}
+          </h1>
         </div>
 
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-4">
           <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.15em] text-gray-400">
             {isSaving ? (
               <span className="flex items-center gap-1.5 text-primary">
@@ -659,18 +654,18 @@ export const CreateIssuePage: React.FC = () => {
               <span className="opacity-40">DRAFT</span>
             )}
           </div>
-          
-          <button 
+
+          <button
             onClick={handleCreate}
             disabled={isSubmitting}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white text-sm font-bold hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 disabled:opacity-50 active:scale-95 group"
+            className="flex items-center gap-2 px-5 py-2 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary/90 transition-all disabled:opacity-50 active:scale-[0.98]"
           >
             {isSubmitting ? (
-              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              <Loader2 size={15} className="animate-spin" />
             ) : (
-              <Plus size={18} className="transition-transform duration-300" />
+              <Plus size={15} />
             )}
-            <span>Create Issue</span>
+            <span>Create</span>
           </button>
         </div>
       </header>
@@ -678,10 +673,84 @@ export const CreateIssuePage: React.FC = () => {
       <div className="flex-1 flex overflow-hidden">
         {/* Left Section - Unified Editing Surface */}
         <div className="flex-1 overflow-y-auto scrollbar-hide bg-white dark:bg-bg-dark">
-          <div className="max-w-4xl mx-auto px-10 py-12 space-y-12 pb-32">
-            
+          <div className="max-w-4xl mx-auto px-10 py-8 space-y-10 pb-32">
+
+            {/* AI Issue Creator */}
+            <AiIssueGenerator
+              onGenerated={(data: AiGeneratedIssue) => {
+                // Fill the form with AI-generated data
+                setTitle(data.title);
+                setType(data.type);
+                setPriority(data.priority);
+                setDescription(data.description);
+
+                if (data.suggestedAssigneeId) setAssigneeId(data.suggestedAssigneeId);
+                if (data.suggestedProjectId) setProjectId(data.suggestedProjectId);
+                if (data.templateId) setSelectedTemplateId(data.templateId);
+
+                // Bug-specific fields
+                if (data.stepsToReproduce) setStepsToReproduce(data.stepsToReproduce);
+                if (data.expectedBehavior) setExpectedBehavior(data.expectedBehavior);
+                if (data.actualBehavior) setActualBehavior(data.actualBehavior);
+                if (data.severity) setSeverity(data.severity);
+
+                // Feature-specific fields
+                if (data.acceptanceCriteria) setAcceptanceCriteria(data.acceptanceCriteria);
+                if (data.notes) setNotes(data.notes);
+
+                // Subtasks
+                if (data.subtasks.length > 0) {
+                  setSubtasks(data.subtasks.map((s, i) => ({
+                    id: crypto.randomUUID(),
+                    title: s.title,
+                    order: i,
+                    completed: false,
+                    isEditing: false,
+                  })));
+                }
+
+                // Labels — resolve names to IDs from available workspace labels
+                if (data.suggestedLabels.length > 0 && labels.length > 0) {
+                  const matchedIds: string[] = [];
+                  for (const name of data.suggestedLabels) {
+                    const match = labels.find((l) => l.name.toLowerCase() === name.toLowerCase());
+                    if (match) matchedIds.push(match.id);
+                  }
+                  if (matchedIds.length > 0) setSelectedLabelIds(matchedIds);
+                }
+
+                // Due date
+                if (data.suggestedDueDate) setDueDate(data.suggestedDueDate);
+
+                // Estimate
+                if (data.suggestedEstimate) setEstimate(String(data.suggestedEstimate));
+
+                // Figma URLs → add as integration refs
+                if (data.figmaUrls && data.figmaUrls.length > 0) {
+                  const figmaRefs: IssueIntegrationRef[] = data.figmaUrls.map((url) => ({
+                    id: crypto.randomUUID(),
+                    provider: 'figma' as const,
+                    label: 'Figma Design',
+                    url,
+                  }));
+                  setIntegrationRefs((prev) => [...prev, ...figmaRefs]);
+                }
+              }}
+            />
+
+            {/* Title */}
+            <div>
+              <input
+                type="text"
+                placeholder="Issue title"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                className="w-full bg-transparent text-2xl font-bold outline-none placeholder:text-gray-300 dark:placeholder:text-gray-600 text-gray-900 dark:text-white"
+              />
+            </div>
+
             {/* Type Selector */}
-            <div className="space-y-6">
+            <div className="space-y-4">
               <label className="text-[11px] font-bold uppercase tracking-[0.15em] text-gray-400 dark:text-gray-500 block px-1">Issue Type</label>
               <div className="flex gap-4">
                 {(['task', 'bug', 'issue'] as IssueType[]).map((t) => (
