@@ -193,7 +193,7 @@ export const CreateApiKeyModal: React.FC<CreateApiKeyModalProps> = ({ isOpen, on
             <p className="text-[11px] font-medium text-gray-400 dark:text-gray-500 px-0.5">Example usage</p>
             <div className="p-2.5 bg-gray-900 dark:bg-black/40 rounded-lg overflow-x-auto">
               <code className="font-mono text-[11px] text-gray-400 whitespace-nowrap">
-                curl -H "Authorization: Bearer {createdKey?.slice(0, 20)}..." https://api.linearis.app/issues
+                curl -H "Authorization: Bearer {createdKey?.slice(0, 20)}..." https://api.trussen.app/issues
               </code>
             </div>
           </div>

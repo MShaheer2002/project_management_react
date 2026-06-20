@@ -452,7 +452,7 @@ export const SettingsPage: React.FC = () => {
         <SettingsSection title="Appearance">
           <SettingsItem
             label="Interface Theme"
-            description="Select how Linearis looks to you. Choose a light or dark theme, or mirror your system preferences."
+            description="Select how Trussen looks to you. Choose a light or dark theme, or mirror your system preferences."
           >
             <div className="flex bg-gray-100 dark:bg-white/5 p-1 rounded-xl w-72">
               {[
@@ -517,7 +517,7 @@ export const SettingsPage: React.FC = () => {
                 className="px-3 py-1.5 bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-border-dark rounded-l-md text-sm outline-none w-48 opacity-70"
               />
               <span className="px-3 py-1.5 bg-gray-100 dark:bg-gray-800 border border-l-0 border-gray-200 dark:border-border-dark rounded-r-md text-xs text-gray-400">
-                .linearis.app
+                .trussen.app
               </span>
             </div>
           </SettingsItem>

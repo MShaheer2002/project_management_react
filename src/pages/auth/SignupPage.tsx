@@ -127,7 +127,7 @@ export const SignupPage: React.FC = () => {
                 Start building<br />something great.
               </h2>
               <p className="mt-4 text-white/40 leading-relaxed">
-                Join 10,000+ teams already using Linearis to ship faster.
+                Join 10,000+ teams already using Trussen to ship faster.
               </p>
 
               <div className="mt-10 space-y-5">
@@ -157,7 +157,7 @@ export const SignupPage: React.FC = () => {
             </motion.div>
           </div>
 
-          <p className="text-[10px] text-white/20">&copy; 2025 Linearis Inc.</p>
+          <p className="text-[10px] text-white/20">&copy; 2025 Trussen Inc.</p>
         </div>
       </div>
 

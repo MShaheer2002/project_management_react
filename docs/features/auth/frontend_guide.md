@@ -1,6 +1,6 @@
 # Auth — Frontend Integration Guide (Clerk + Custom UI)
 
-> How the Linearis frontend integrates with Clerk using **custom UI only** — no Clerk prebuilt components.
+> How the Trussen frontend integrates with Clerk using **custom UI only** — no Clerk prebuilt components.
 > This doc is the blueprint. Read it fully before touching code.
 
 ---
@@ -602,4 +602,4 @@ Env vars are injected via `vite.config.ts` `define` — access as `process.env.V
 | Variable                 | Required | Where  | Description                          |
 |--------------------------|----------|--------|--------------------------------------|
 | `CLERK_PUBLISHABLE_KEY`  | Yes      | `.env` | Clerk publishable key (starts with `pk_`) |
-| `BASE_URL`               | Yes      | `.env` | Backend API URL (e.g., `https://api.linearis.app`) |
+| `BASE_URL`               | Yes      | `.env` | Backend API URL (e.g., `https://api.trussen.app`) |

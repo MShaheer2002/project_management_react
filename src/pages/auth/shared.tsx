@@ -10,7 +10,7 @@ export const Logo: React.FC<{ className?: string }> = ({ className = '' }) => {
       <div className="w-9 h-9 bg-primary rounded-xl flex items-center justify-center text-white text-lg font-bold shadow-lg shadow-primary/25">
         L
       </div>
-      <span className="text-lg font-bold tracking-tight dark:text-white">Linearis</span>
+      <span className="text-lg font-bold tracking-tight dark:text-white">Trussen</span>
     </div>
   );
 };
@@ -153,7 +153,7 @@ export const BackLink: React.FC<{ to: string; label?: string }> = ({ to, label =
 /* ─── bottom bar ─── */
 export const AuthFooter: React.FC = () => (
   <div className="px-5 sm:px-8 py-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-gray-400 dark:text-gray-600">
-    <span>&copy; 2025 Linearis Inc.</span>
+    <span>&copy; 2025 Trussen Inc.</span>
     <div className="flex items-center gap-5">
       {['Privacy', 'Terms', 'Help'].map((l) => (
         <span key={l} className="hover:text-primary cursor-pointer transition-colors">{l}</span>

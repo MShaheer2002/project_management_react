@@ -206,7 +206,7 @@ export const CreateWorkspacePage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: workspaceQueryKeys.list() });
       queryClient.invalidateQueries({ queryKey: sidebarQueryKeys.all });
 
-      showToast('Workspace created!', 'success', 'Welcome to Linearis');
+      showToast('Workspace created!', 'success', 'Welcome to Trussen');
       console.log('[Workspace] Redirecting to /dashboard');
       navigate('/dashboard');
     } catch (err: any) {
@@ -267,7 +267,7 @@ export const CreateWorkspacePage: React.FC = () => {
       return (
         <div className="flex items-center gap-1.5 mt-1.5">
           <Check size={13} className="text-green-500 shrink-0" />
-          <span className="text-xs text-green-500">{slug}.linearis.app is available</span>
+          <span className="text-xs text-green-500">{slug}.trussen.app is available</span>
         </div>
       );
     }
@@ -352,7 +352,7 @@ export const CreateWorkspacePage: React.FC = () => {
               {isAddingNew ? 'New workspace' : 'Create your workspace'}
             </h1>
             <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-              {isAddingNew ? 'Set up another workspace for a different team or project.' : "This is your team's home on Linearis."}
+              {isAddingNew ? 'Set up another workspace for a different team or project.' : "This is your team's home on Trussen."}
             </p>
           </div>
 
@@ -367,7 +367,7 @@ export const CreateWorkspacePage: React.FC = () => {
               label="Organization name"
             />
 
-            {/* Workspace URL with .linearis.app suffix + live validation */}
+            {/* Workspace URL with .trussen.app suffix + live validation */}
             <div className="space-y-2">
               <label className="text-[13px] font-medium text-gray-700 dark:text-gray-300">Workspace URL</label>
               <div className="flex group">
@@ -390,7 +390,7 @@ export const CreateWorkspacePage: React.FC = () => {
                   />
                 </div>
                 <span className="inline-flex items-center px-4 py-3 bg-gray-100 dark:bg-white/[0.06] border border-l-0 border-gray-200 dark:border-white/[0.08] rounded-r-xl text-xs text-gray-400 dark:text-gray-500 font-medium whitespace-nowrap">
-                  .linearis.app
+                  .trussen.app
                 </span>
               </div>
               {/* Slug validation status indicator */}

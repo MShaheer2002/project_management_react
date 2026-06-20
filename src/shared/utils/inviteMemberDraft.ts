@@ -1,4 +1,4 @@
-const INVITE_MEMBER_DRAFT_STORAGE_KEY = 'linearis:invite-member:draft';
+const INVITE_MEMBER_DRAFT_STORAGE_KEY = 'trussen:invite-member:draft';
 
 export type InviteMemberDraft = {
   teamId?: string | null;

@@ -96,7 +96,7 @@ export const useAuthStore = create<AuthState>()(
         }),
     }),
     {
-      name: 'linearis-auth',
+      name: 'trussen-auth',
       // Only persist workspace — user is re-synced from Clerk each load
       partialize: (state) => ({ workspace: state.workspace }),
     }

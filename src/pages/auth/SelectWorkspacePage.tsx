@@ -135,7 +135,7 @@ export const SelectWorkspacePage: React.FC = () => {
                         </span>
                         {ws.slug && (
                           <span className="text-[11px] text-gray-400 dark:text-gray-500 truncate">
-                            {ws.slug}.linearis.app
+                            {ws.slug}.trussen.app
                           </span>
                         )}
                       </div>

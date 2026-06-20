@@ -42,15 +42,15 @@ const ONBOARDING_EXEMPT_PATHS = [
 
 const setDevJwt = (token: string | null) => {
   if (!import.meta.env.DEV) return;
-  const devWindow = window as Window & { __LINEARIS_JWT__?: string | null };
-  devWindow.__LINEARIS_JWT__ = token;
+  const devWindow = window as Window & { __TRUSSEN_JWT__?: string | null };
+  devWindow.__TRUSSEN_JWT__ = token;
   console.log('[AuthSync] JWT for Postman:', token);
 };
 
 const setDevWorkspaceId = (workspaceId: string | null) => {
   if (!import.meta.env.DEV) return;
-  const devWindow = window as Window & { __LINEARIS_WORKSPACE_ID__?: string | null };
-  devWindow.__LINEARIS_WORKSPACE_ID__ = workspaceId;
+  const devWindow = window as Window & { __TRUSSEN_WORKSPACE_ID__?: string | null };
+  devWindow.__TRUSSEN_WORKSPACE_ID__ = workspaceId;
   console.log('[AuthSync] Workspace ID for Postman:', workspaceId);
 };
 

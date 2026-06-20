@@ -8,7 +8,7 @@ import { useToastStore } from '@/app/stores/useToastStore';
 import { workspaceService, type InvitationResolveResponse } from '@features/workspace';
 import type { ApiAxiosError } from '@shared/services/types';
 
-const PENDING_INVITE_TOKEN_KEY = 'linearis-pending-invite-token';
+const PENDING_INVITE_TOKEN_KEY = 'trussen-pending-invite-token';
 
 export const InvitePage: React.FC = () => {
   const navigate = useNavigate();

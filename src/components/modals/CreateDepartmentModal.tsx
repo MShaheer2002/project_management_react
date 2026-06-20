@@ -9,8 +9,8 @@ import { Modal } from './Modal';
 const DEPARTMENT_COLORS = ['#5f72ea', '#0f766e', '#ea5f5f', '#ea9b5f', '#5fea7b', '#1f2937'];
 const RECENT_SELECTION_LIMIT = 3;
 const RECENT_STORAGE_KEYS = {
-  head: 'linearis:create-department:recent-heads',
-  member: 'linearis:create-department:recent-members',
+  head: 'trussen:create-department:recent-heads',
+  member: 'trussen:create-department:recent-members',
 } as const;
 
 type PickerKey = keyof typeof RECENT_STORAGE_KEYS;

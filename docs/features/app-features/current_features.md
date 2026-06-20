@@ -578,7 +578,7 @@
 | Key | File | Purpose |
 |---|---|---|
 | `created_issues` | lib/issue-storage.ts | User-created issues saved to localStorage |
-| `linearis-auth` | app/stores/useAuthStore.ts | Persisted workspace (survives refresh) |
+| `trussen-auth` | app/stores/useAuthStore.ts | Persisted workspace (survives refresh) |
 | `app-ui` | app/stores/useUIStore.ts | Sidebar collapsed state |
 | `app-theme` | app/stores/useThemeStore.ts | Theme preference (light/dark/system) |
 

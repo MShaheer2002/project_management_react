@@ -1,4 +1,4 @@
-const CREATE_TEAM_DRAFT_STORAGE_KEY = 'linearis:create-team:draft';
+const CREATE_TEAM_DRAFT_STORAGE_KEY = 'trussen:create-team:draft';
 
 export type CreateTeamDraft = {
   departmentId?: string | null;

@@ -405,7 +405,7 @@ export const IntegrationsPage: React.FC = () => {
                   />
                 </h3>
                 <p className="text-sm text-gray-400 leading-relaxed">
-                  Upload files to your personal Drive. Linearis stores only links — zero storage cost.
+                  Upload files to your personal Drive. Trussen stores only links — zero storage cost.
                 </p>
               </div>
 
@@ -616,7 +616,7 @@ export const IntegrationsPage: React.FC = () => {
               </li>
               <li className="flex items-start gap-2">
                 <span className="mt-0.5 shrink-0">&bull;</span>
-                Revoke Linearis access to your Google account
+                Revoke Trussen access to your Google account
               </li>
             </ul>
             <p className="mt-3 text-xs text-gray-400">

@@ -364,7 +364,7 @@ export const SlackSettingsPanel: React.FC<SlackSettingsPanelProps> = ({ open, on
               <section className="space-y-1">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400">Slash Commands</h3>
                 <div className="space-y-0.5">
-                  <SettingToggle label="Enable /linearis commands" description="Create issues, check status, view sprint from Slack" checked={settings.slashCommandsEnabled} disabled={isSaving} onChange={(v) => handleToggle('slashCommandsEnabled', v)} />
+                  <SettingToggle label="Enable /trussen commands" description="Create issues, check status, view sprint from Slack" checked={settings.slashCommandsEnabled} disabled={isSaving} onChange={(v) => handleToggle('slashCommandsEnabled', v)} />
                 </div>
               </section>
 

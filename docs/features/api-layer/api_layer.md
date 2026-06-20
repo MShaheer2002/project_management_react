@@ -1,7 +1,7 @@
 # API Layer — Frontend HTTP Infrastructure
 
 > Complete guide for the Axios-based API client, interceptors, error handling middleware,
-> and the public vs private API separation used across the Linearis frontend.
+> and the public vs private API separation used across the Trussen frontend.
 
 ---
 

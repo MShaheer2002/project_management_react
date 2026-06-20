@@ -26,7 +26,7 @@ function getPathname(url: string | undefined): string {
   if (!url) return '';
 
   try {
-    return new URL(url, 'http://linearis.local').pathname;
+    return new URL(url, 'http://trussen.local').pathname;
   } catch {
     return url.split('?')[0] ?? '';
   }

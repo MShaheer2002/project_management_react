@@ -91,7 +91,7 @@ const Nav = () => {
             <div className="w-9 h-9 bg-primary rounded-xl flex items-center justify-center text-white text-lg font-bold shadow-lg shadow-primary/25">
               L
             </div>
-            <span className="text-xl font-bold tracking-tight">Linearis</span>
+            <span className="text-xl font-bold tracking-tight">Trussen</span>
           </div>
 
           <div className="hidden md:flex items-center gap-8">
@@ -188,7 +188,7 @@ const Hero = () => {
           custom={2}
           className="mt-6 text-lg sm:text-xl text-gray-500 dark:text-gray-400 max-w-2xl mx-auto leading-relaxed"
         >
-          Linearis streamlines issues, sprints, and product roadmaps into one fast,
+          Trussen streamlines issues, sprints, and product roadmaps into one fast,
           keyboard-driven workspace. Built for teams who ship.
         </motion.p>
 
@@ -240,7 +240,7 @@ const Hero = () => {
               </div>
               <div className="flex-1 flex justify-center">
                 <div className="px-4 py-1 bg-white dark:bg-bg-dark rounded-lg text-[11px] text-gray-400 border border-gray-200 dark:border-border-dark min-w-[280px] text-center">
-                  app.linearis.io/dashboard
+                  app.trussen.io/dashboard
                 </div>
               </div>
               <div className="w-12" />
@@ -251,7 +251,7 @@ const Hero = () => {
               <div className="hidden sm:flex flex-col w-56 border-r border-gray-100 dark:border-border-dark bg-gray-50/50 dark:bg-sidebar-dark p-4 gap-1">
                 <div className="flex items-center gap-2 mb-6">
                   <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center text-white text-xs font-bold">L</div>
-                  <span className="text-sm font-semibold">Linearis</span>
+                  <span className="text-sm font-semibold">Trussen</span>
                 </div>
                 {['Dashboard', 'My Issues', 'All Issues', 'Projects', 'Teams', 'Cycles'].map((item, i) => (
                   <div
@@ -541,8 +541,8 @@ const Stats = () => (
   <Section id="testimonials" className="py-24 sm:py-32 bg-gray-50 dark:bg-black/20">
     <div className="max-w-7xl mx-auto px-4">
       <motion.div variants={fadeUp} className="text-center mb-16 space-y-4">
-        <span className="inline-block px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold uppercase tracking-wider">Why Linearis</span>
-        <h2 className="text-3xl sm:text-5xl font-bold tracking-tight">Why Teams Choose Linearis.</h2>
+        <span className="inline-block px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold uppercase tracking-wider">Why Trussen</span>
+        <h2 className="text-3xl sm:text-5xl font-bold tracking-tight">Why Teams Choose Trussen.</h2>
         <p className="text-gray-500 dark:text-gray-400 max-w-xl mx-auto">
           Trusted by teams to manage work more efficiently. Designed to help teams do their best work.
         </p>
@@ -675,7 +675,7 @@ const HowItWorks = () => (
    TESTIMONIALS
    ════════════════════════════════════════════════ */
 const testimonials = [
-  { name: 'Emily Zhang', role: 'VP of Engineering, ScaleAI', quote: 'Linearis replaced 3 tools for our team. Issue tracking has never been this fast.', stars: 5 },
+  { name: 'Emily Zhang', role: 'VP of Engineering, ScaleAI', quote: 'Trussen replaced 3 tools for our team. Issue tracking has never been this fast.', stars: 5 },
   { name: 'Marcus Johnson', role: 'CTO, DevForge', quote: 'The keyboard shortcuts alone saved us hours. We shipped 40% more features last quarter.', stars: 5 },
   { name: 'Sarah Kim', role: 'Product Lead, Nexus', quote: 'Beautiful, fast, and opinionated in all the right ways. Our team adopted it in a single day.', stars: 5 },
 ];
@@ -823,7 +823,7 @@ const CTA = () => {
             Ready to streamline your workflow?
           </h2>
           <p className="relative text-white/70 max-w-lg mx-auto mb-8">
-            Join thousands of teams already using Linearis to ship faster and stay aligned.
+            Join thousands of teams already using Trussen to ship faster and stay aligned.
           </p>
           <div className="relative flex flex-col sm:flex-row items-center justify-center gap-4">
             <button
@@ -852,7 +852,7 @@ const Footer = () => (
       <div className="col-span-2 lg:col-span-2 space-y-6">
         <div className="flex items-center gap-2.5">
           <div className="w-9 h-9 bg-primary rounded-xl flex items-center justify-center text-white text-lg font-bold shadow-lg shadow-primary/25">L</div>
-          <span className="text-xl font-bold tracking-tight">Linearis</span>
+          <span className="text-xl font-bold tracking-tight">Trussen</span>
         </div>
         <p className="text-sm text-gray-500 dark:text-gray-400 max-w-xs leading-relaxed">
           The next generation of project management. Built for high-performance teams who ship.
@@ -881,7 +881,7 @@ const Footer = () => (
       ))}
     </div>
     <div className="max-w-7xl mx-auto px-4 pt-8 border-t border-gray-100 dark:border-border-dark flex flex-col sm:flex-row items-center justify-between gap-4">
-      <p className="text-xs text-gray-400">&copy; 2025 Linearis Inc. All rights reserved.</p>
+      <p className="text-xs text-gray-400">&copy; 2025 Trussen Inc. All rights reserved.</p>
       <div className="flex items-center gap-6">
         {['Privacy', 'Terms', 'Cookies'].map((l) => (
           <span key={l} className="text-xs text-gray-400 hover:text-primary cursor-pointer transition-colors">{l}</span>

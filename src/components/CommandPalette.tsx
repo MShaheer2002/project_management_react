@@ -108,7 +108,7 @@ export const CommandPalette: React.FC = () => {
               Select
             </span>
           </div>
-          <span>Linearis Command Palette</span>
+          <span>Trussen Command Palette</span>
         </div>
       </motion.div>
     </div>

@@ -18,9 +18,9 @@ import { Modal } from './Modal';
 
 const RECENT_SELECTION_LIMIT = 3;
 const RECENT_STORAGE_KEYS = {
-  lead: 'linearis:create-team:recent-leads',
-  department: 'linearis:create-team:recent-departments',
-  member: 'linearis:create-team:recent-members',
+  lead: 'trussen:create-team:recent-leads',
+  department: 'trussen:create-team:recent-departments',
+  member: 'trussen:create-team:recent-members',
 } as const;
 
 type PickerKey = keyof typeof RECENT_STORAGE_KEYS;

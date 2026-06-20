@@ -68,7 +68,7 @@ export const driveService = {
     formData.append('file', file);
 
     // Append folder context — backend creates the folder hierarchy in Drive
-    // Linearis/{workspaceName}/{teamName}/{projectName}/{issueIdentifier}/file.png
+    // Trussen/{workspaceName}/{teamName}/{projectName}/{issueIdentifier}/file.png
     const ctx = options?.folderContext;
     if (ctx?.workspaceName) formData.append('workspaceName', ctx.workspaceName);
     if (ctx?.teamName) formData.append('teamName', ctx.teamName);
