@@ -57,6 +57,11 @@ export interface AiModelInfo {
 export interface AiConversation {
   id: string;
   title: string;
+  requestCount: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalTokens: number;
+  lastModelUsed: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -73,3 +78,64 @@ export interface AiMessage {
 
 /** SSE event types from POST /ai/chat */
 export type AiChatEventType = 'message' | 'tool_call' | 'tool_result' | 'done' | 'error' | 'close';
+
+export type AiUsagePeriod = '7d' | '30d' | '90d' | 'custom';
+
+export interface AiUsagePolicy {
+  subscriptionPlan: 'FREE' | 'STANDARD' | 'PREMIUM';
+  subscriptionStatus: 'ACTIVE' | 'CANCELED' | 'PAST_DUE' | 'TRIALING' | 'INCOMPLETE' | 'UNPAID' | 'NONE';
+  accessPlan: 'FREE' | 'STANDARD' | 'PREMIUM';
+  enforcementMode: 'monitor' | 'enforced';
+  planAllowsAi: boolean;
+  effectiveAccess: boolean;
+  limits: {
+    requestLimit: number | null;
+    tokenLimit: number | null;
+  };
+  today: {
+    workspaceRequestCount: number;
+    workspaceTotalTokens: number;
+  };
+}
+
+export interface AiUsageRange {
+  from: string;
+  to: string;
+  period: AiUsagePeriod;
+}
+
+export interface AiUsageTotals {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  requestCount: number;
+  issueGenerationCount: number;
+  chatTurnCount: number;
+}
+
+export interface AiWorkspaceDailyUsage extends AiUsageTotals {
+  date: string;
+}
+
+export interface AiWorkspaceUsageUser extends AiUsageTotals {
+  userId: string;
+  name: string;
+  email: string;
+  avatar: string | null;
+  role: string;
+}
+
+export interface AiWorkspaceUsage {
+  range: AiUsageRange;
+  policy: AiUsagePolicy;
+  totals: AiUsageTotals & {
+    activeUsers: number;
+  };
+  daily: AiWorkspaceDailyUsage[];
+  topUsers: AiWorkspaceUsageUser[];
+}
+
+export interface AiUserUsage {
+  range: AiUsageRange;
+  users: AiWorkspaceUsageUser[];
+}

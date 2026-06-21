@@ -1,21 +1,20 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ArrowUp,
-  Check,
   Clock,
   Loader2,
   MessageSquare,
   Plus,
   Sparkles,
+  ShieldCheck,
   Trash2,
   Wrench,
   X,
+  AlertCircle,
 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useUIStore } from '@/app/stores/useUIStore';
 import { useAuthStore } from '@/app/stores/useAuthStore';
-import { privateApi } from '@shared/services/privateApi';
-import { getAuthToken } from '@shared/services';
 import { aiService } from '../services/aiService';
 import { AiMarkdown } from './AiMarkdown';
 import { MentionDropdown } from './MentionDropdown';
@@ -49,6 +48,12 @@ const relativeTime = (value: string) => {
   return `${diffDay}d ago`;
 };
 
+const formatCompactNumber = (value: number) =>
+  new Intl.NumberFormat('en-US', {
+    notation: 'compact',
+    maximumFractionDigits: value >= 1000 ? 1 : 0,
+  }).format(value);
+
 const MIN_WIDTH = 300;
 const MAX_WIDTH = 600;
 const DEFAULT_WIDTH = 360;
@@ -65,6 +70,9 @@ export const TrussenAiPanel: React.FC = () => {
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
   const [toolActivity, setToolActivity] = useState<string | null>(null);
+  const [panelError, setPanelError] = useState<string | null>(null);
+  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  const [lastResponseMeta, setLastResponseMeta] = useState<{ model?: string; tokensUsed?: number } | null>(null);
   const [view, setView] = useState<'chat' | 'history'>('chat');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -112,15 +120,26 @@ export const TrussenAiPanel: React.FC = () => {
     staleTime: 30_000,
   });
   const conversations = conversationsQuery.data ?? [];
+  const activeConversation = conversations.find((conversation) => conversation.id === activeConvId) ?? null;
 
   useEffect(() => {
-    if (!activeConvId) { setMessages([]); return; }
+    if (!activeConvId) {
+      setMessages([]);
+      setIsLoadingMessages(false);
+      return;
+    }
+
+    setIsLoadingMessages(true);
+    setPanelError(null);
+
     aiService.getConversationMessages(activeConvId)
       .then(setMessages)
       .catch((err) => {
         console.error('[TrussenAI] Failed to load messages:', err);
+        setPanelError('Failed to load this conversation. Try selecting it again.');
         setMessages([]);
-      });
+      })
+      .finally(() => setIsLoadingMessages(false));
   }, [activeConvId]);
 
   useEffect(() => {
@@ -148,6 +167,8 @@ export const TrussenAiPanel: React.FC = () => {
     setIsStreaming(true);
     setStreamingContent('');
     setToolActivity(null);
+    setPanelError(null);
+    setLastResponseMeta(null);
 
     // Reset textarea height properly
     requestAnimationFrame(() => {
@@ -157,76 +178,30 @@ export const TrussenAiPanel: React.FC = () => {
     });
 
     try {
-      const token = await getAuthToken();
-      if (!token) throw new Error('Not authenticated');
-      const baseUrl = (privateApi.defaults.baseURL || '').replace(/\/$/, '');
-
-      const response = await fetch(`${baseUrl}/ai/chat`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          'X-Workspace-Id': workspaceId ?? '',
-          'ngrok-skip-browser-warning': 'true',
-        },
-        body: JSON.stringify({ conversationId: activeConvId, message: trimmed }),
-      });
-
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({})) as { error?: { message?: string } };
-        throw new Error(errData.error?.message || `Error ${response.status}`);
-      }
-
-      const reader = response.body?.getReader();
-      if (!reader) throw new Error('No response stream');
-
-      const decoder = new TextDecoder();
-      let buffer = '';
       let convId = activeConvId;
-      let lastContent = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-
-        // Parse SSE events from buffer
-        while (buffer.includes('\n\n')) {
-          const eventEnd = buffer.indexOf('\n\n');
-          const eventBlock = buffer.slice(0, eventEnd);
-          buffer = buffer.slice(eventEnd + 2);
-
-          let eventType = '';
-          let eventData = '';
-
-          for (const line of eventBlock.split('\n')) {
-            if (line.startsWith('event: ')) eventType = line.slice(7).trim();
-            if (line.startsWith('data: ')) eventData = line.slice(6);
+      await aiService.streamChat({
+        conversationId: activeConvId,
+        message: trimmed,
+        workspaceId: workspaceId ?? '',
+        onEvent: (eventType, data) => {
+          if (eventType === 'tool_call' && typeof data.tool === 'string') {
+            setToolActivity(`Using ${data.tool}...`);
+          } else if (eventType === 'tool_result') {
+            setToolActivity(null);
+          } else if (eventType === 'message' && typeof data.content === 'string') {
+            setStreamingContent(data.content);
+            setLastResponseMeta({
+              model: typeof data.model === 'string' ? data.model : undefined,
+              tokensUsed: typeof data.tokensUsed === 'number' ? data.tokensUsed : undefined,
+            });
+          } else if (eventType === 'done' && typeof data.conversationId === 'string') {
+            convId = data.conversationId;
+          } else if (eventType === 'error' && typeof data.message === 'string') {
+            setPanelError(data.message);
+            setStreamingContent(`Error: ${data.message}`);
           }
-
-          if (!eventType || !eventData) continue;
-
-          try {
-            const data = JSON.parse(eventData) as Record<string, unknown>;
-
-            if (eventType === 'tool_call' && typeof data.tool === 'string') {
-              setToolActivity(`Using ${data.tool}...`);
-            } else if (eventType === 'tool_result') {
-              setToolActivity(null);
-            } else if (eventType === 'message' && typeof data.content === 'string') {
-              lastContent = data.content;
-              setStreamingContent(lastContent);
-            } else if (eventType === 'done' && typeof data.conversationId === 'string') {
-              convId = data.conversationId;
-            } else if (eventType === 'error' && typeof data.message === 'string') {
-              setStreamingContent(`Error: ${data.message}`);
-            }
-          } catch {
-            // Skip malformed JSON — don't crash the stream
-          }
-        }
-      }
+        },
+      });
 
       if (convId && !activeConvId) {
         setActiveConvId(convId);
@@ -239,7 +214,13 @@ export const TrussenAiPanel: React.FC = () => {
 
       queryClient.invalidateQueries({ queryKey: ['ai', 'conversations'] });
     } catch (error) {
-      const errMsg = error instanceof Error ? error.message : 'Chat failed';
+      const err = error as Error & { code?: string };
+      const errMsg = err.code === 'AI_PLAN_UPGRADE_REQUIRED' || err.code === 'AI_FEATURE_DISABLED'
+        ? 'This workspace plan does not currently allow AI access.'
+        : err.code === 'AI_BUDGET_EXCEEDED'
+        ? 'Daily AI usage limit reached for this workspace.'
+        : err.message || 'Chat failed';
+      setPanelError(errMsg);
       setMessages((prev) => [
         ...prev,
         { id: crypto.randomUUID(), role: 'ASSISTANT', content: errMsg, createdAt: new Date().toISOString() },
@@ -254,6 +235,8 @@ export const TrussenAiPanel: React.FC = () => {
   const handleNewConversation = () => {
     setActiveConvId(null);
     setMessages([]);
+    setPanelError(null);
+    setLastResponseMeta(null);
     setView('chat');
     inputRef.current?.focus();
   };
@@ -277,10 +260,30 @@ export const TrussenAiPanel: React.FC = () => {
         className="absolute left-0 top-0 z-10 h-full w-1 cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors"
       />
       {/* Header */}
-      <div className="flex h-14 items-center justify-between border-b border-gray-200 px-4 dark:border-border-dark">
-        <div className="flex items-center gap-2">
-          <Sparkles size={14} className="text-primary" />
-          <span className="text-[13px] font-semibold text-gray-800 dark:text-gray-200">Trussen AI</span>
+      <div className="flex min-h-16 items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-border-dark">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <Sparkles size={14} className="text-primary" />
+            <span className="text-[13px] font-semibold text-gray-800 dark:text-gray-200">Trussen AI</span>
+          </div>
+          <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] text-gray-400">
+            <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 font-semibold uppercase tracking-wider dark:bg-white/[0.05]">
+              <ShieldCheck size={10} />
+              Workspace-scoped
+            </span>
+            {activeConversation && (
+              <span className="truncate">
+                {activeConversation.requestCount} requests · {formatCompactNumber(activeConversation.totalTokens)} tokens
+                {activeConversation.lastModelUsed ? ` · ${activeConversation.lastModelUsed}` : ''}
+              </span>
+            )}
+            {!activeConversation && lastResponseMeta?.model && (
+              <span>
+                {lastResponseMeta.model}
+                {typeof lastResponseMeta.tokensUsed === 'number' ? ` · ${formatCompactNumber(lastResponseMeta.tokensUsed)} tokens` : ''}
+              </span>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-0.5">
           <button
@@ -288,13 +291,14 @@ export const TrussenAiPanel: React.FC = () => {
             onClick={() => setView(view === 'history' ? 'chat' : 'history')}
             className={`rounded-md p-1.5 transition-colors ${view === 'history' ? 'bg-primary/10 text-primary' : 'text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5'}`}
             title="History"
+            aria-label="Toggle conversation history"
           >
             <Clock size={13} />
           </button>
-          <button type="button" onClick={handleNewConversation} className="rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-100 dark:hover:bg-white/5" title="New chat">
+          <button type="button" onClick={handleNewConversation} className="rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-100 dark:hover:bg-white/5" title="New chat" aria-label="Start a new conversation">
             <Plus size={13} />
           </button>
-          <button type="button" onClick={() => setOpen(false)} className="rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-100 dark:hover:bg-white/5">
+          <button type="button" onClick={() => setOpen(false)} className="rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-100 dark:hover:bg-white/5" aria-label="Close AI panel">
             <X size={13} />
           </button>
         </div>
@@ -306,6 +310,11 @@ export const TrussenAiPanel: React.FC = () => {
           {conversationsQuery.isLoading ? (
             <div className="flex items-center justify-center py-16">
               <Loader2 size={16} className="animate-spin text-gray-400" />
+            </div>
+          ) : conversationsQuery.isError ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <AlertCircle size={18} className="mb-2 text-red-400" />
+              <p className="text-[11px] text-gray-500 dark:text-gray-400">Failed to load conversation history</p>
             </div>
           ) : conversations.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -321,15 +330,26 @@ export const TrussenAiPanel: React.FC = () => {
                     activeConvId === conv.id ? 'bg-primary/5' : 'hover:bg-gray-50 dark:hover:bg-white/[0.03]'
                   }`}
                   onClick={() => handleSelectConversation(conv.id)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      handleSelectConversation(conv.id);
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
                 >
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-[12px] font-medium text-gray-700 dark:text-gray-300">{conv.title}</p>
-                    <p className="text-[10px] text-gray-400">{relativeTime(conv.updatedAt)}</p>
+                    <p className="text-[10px] text-gray-400">
+                      {relativeTime(conv.updatedAt)} · {conv.requestCount} req · {formatCompactNumber(conv.totalTokens)} tokens
+                    </p>
                   </div>
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); void handleDeleteConversation(conv.id); }}
                     className="shrink-0 rounded p-1 text-gray-300 opacity-0 transition-all group-hover:opacity-100 hover:text-red-500"
+                    aria-label={`Delete conversation ${conv.title}`}
                   >
                     <Trash2 size={11} />
                   </button>
@@ -342,7 +362,7 @@ export const TrussenAiPanel: React.FC = () => {
         <>
           {/* Messages */}
           <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2.5">
-            {messages.length === 0 && !isStreaming && (
+            {messages.length === 0 && !isStreaming && !isLoadingMessages && (
               <div className="flex flex-col items-center justify-center py-20 text-center">
                 <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-xl bg-primary/8 dark:bg-primary/12">
                   <Sparkles size={16} className="text-primary" />
@@ -351,6 +371,17 @@ export const TrussenAiPanel: React.FC = () => {
                 <p className="mt-1.5 max-w-[220px] text-[11px] leading-relaxed text-gray-400">
                   Create issues, check status, assign tasks, or ask about your workspace.
                 </p>
+                <div className="mt-4 max-w-[250px] rounded-2xl border border-gray-200 bg-gray-50/90 px-4 py-3 text-left dark:border-border-dark dark:bg-white/[0.03]">
+                  <div className="flex items-start gap-2">
+                    <ShieldCheck size={14} className="mt-0.5 shrink-0 text-primary" />
+                    <div className="space-y-1">
+                      <p className="text-[11px] font-semibold text-gray-700 dark:text-gray-200">Safe by default</p>
+                      <p className="text-[10px] leading-relaxed text-gray-400">
+                        Actions respect your workspace role, private scope access, and duplicate mutation retries are blocked automatically.
+                      </p>
+                    </div>
+                  </div>
+                </div>
                 <div className="mt-4 flex flex-wrap justify-center gap-1.5">
                   {['Show my issues', 'Sprint progress', 'Who is overloaded?'].map((q) => (
                     <button
@@ -362,6 +393,25 @@ export const TrussenAiPanel: React.FC = () => {
                       {q}
                     </button>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {isLoadingMessages && (
+              <div className="flex justify-center py-12">
+                <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-3 text-[12px] text-gray-500 shadow-sm dark:border-border-dark dark:bg-card-dark dark:text-gray-300">
+                  <Loader2 size={13} className="animate-spin" />
+                  Loading conversation...
+                </div>
+              </div>
+            )}
+
+            {panelError && (
+              <div className="flex items-start gap-2 rounded-2xl border border-red-200 bg-red-50 px-3 py-3 text-[11px] text-red-700 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">
+                <AlertCircle size={14} className="mt-0.5 shrink-0" />
+                <div>
+                  <p className="font-semibold">AI needs attention</p>
+                  <p className="mt-0.5 leading-relaxed">{panelError}</p>
                 </div>
               </div>
             )}
@@ -464,7 +514,7 @@ export const TrussenAiPanel: React.FC = () => {
                   onBlur={() => setTimeout(() => mention.closeMention(), 150)}
                   placeholder="Ask anything... use @ to mention"
                   rows={1}
-                  disabled={isStreaming}
+                  disabled={isStreaming || !workspaceId}
                   className="w-full resize-none rounded-xl border border-gray-200 bg-transparent px-3 py-2 text-[12px] outline-none transition-all placeholder:text-gray-400 focus:border-primary/40 focus:ring-1 focus:ring-primary/10 disabled:opacity-50 dark:border-border-dark dark:focus:border-primary/40"
                   style={{ minHeight: '34px', maxHeight: '96px' }}
                 />
@@ -498,15 +548,26 @@ export const TrussenAiPanel: React.FC = () => {
               <button
                 type="button"
                 onClick={() => void handleSend()}
-                disabled={!input.trim() || isStreaming}
+                disabled={!input.trim() || isStreaming || !workspaceId}
                 className={`flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-xl transition-all ${
-                  input.trim() && !isStreaming
+                  input.trim() && !isStreaming && workspaceId
                     ? 'bg-primary text-white hover:bg-primary/90 active:scale-95'
                     : 'bg-gray-100 text-gray-400 dark:bg-white/5'
                 }`}
+                aria-label="Send AI message"
               >
                 {isStreaming ? <Loader2 size={13} className="animate-spin" /> : <ArrowUp size={13} />}
               </button>
+            </div>
+
+            <div className="mt-2 flex items-center justify-between gap-3 px-1 text-[10px] text-gray-400">
+              <span>{workspaceId ? 'Enter to send, Shift+Enter for a new line.' : 'Select a workspace to use Trussen AI.'}</span>
+              {lastResponseMeta?.model && !isStreaming && (
+                <span className="truncate">
+                  {lastResponseMeta.model}
+                  {typeof lastResponseMeta.tokensUsed === 'number' ? ` · ${formatCompactNumber(lastResponseMeta.tokensUsed)} tokens` : ''}
+                </span>
+              )}
             </div>
           </div>
         </>

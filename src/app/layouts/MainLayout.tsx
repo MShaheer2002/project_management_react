@@ -6,7 +6,7 @@ import { ContextPanel } from '@/components/ContextPanel';
 import { CommandPalette } from '@/components/CommandPalette';
 import { ModalManager } from '@/components/modals/ModalManager';
 import { ToastContainer } from '@/components/ToastContainer';
-import { TrussenAiPanel } from '@features/ai/components/TrussenAiPanel';
+import { TrussenAiPanel } from '@features/ai';
 import { useUIStore } from '@/app/stores/useUIStore';
 import { AnimatePresence } from 'motion/react';
 

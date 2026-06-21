@@ -23,6 +23,8 @@ import { useUnreadNotificationsCount } from '@features/notifications';
 export const TopNavbar: React.FC = () => {
   const { signOut } = useAuth();
   const setCommandPaletteOpen = useUIStore((s) => s.setCommandPaletteOpen);
+  const isAiPanelOpen = useUIStore((s) => s.isAiPanelOpen);
+  const setAiPanelOpen = useUIStore((s) => s.setAiPanelOpen);
   const currentUser = useAuthStore((s) => s.currentUser);
   const theme = useThemeStore((s) => s.theme);
   const setTheme = useThemeStore((s) => s.setTheme);
@@ -76,9 +78,9 @@ export const TopNavbar: React.FC = () => {
         </button>
 
         <button
-          onClick={() => useUIStore.getState().setAiPanelOpen(!useUIStore.getState().isAiPanelOpen)}
+          onClick={() => setAiPanelOpen(!isAiPanelOpen)}
           className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all ${
-            useUIStore.getState().isAiPanelOpen
+            isAiPanelOpen
               ? 'bg-primary/10 text-primary'
               : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-white/5 dark:hover:text-gray-300'
           }`}

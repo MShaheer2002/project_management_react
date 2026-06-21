@@ -19,6 +19,8 @@ export const useGenerateIssue = () => {
         showToast('AI rate limit reached. Please wait a moment.', 'error');
       } else if (code === 'AI_BUDGET_EXCEEDED') {
         showToast('Daily AI usage limit reached. Upgrade your plan for more.', 'error');
+      } else if (code === 'AI_PLAN_UPGRADE_REQUIRED' || code === 'AI_FEATURE_DISABLED') {
+        showToast('This workspace plan does not currently allow AI access.', 'error');
       } else {
         showToast(
           err.response?.data?.error?.message || 'AI generation failed. Please try again.',
