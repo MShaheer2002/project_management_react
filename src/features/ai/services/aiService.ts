@@ -2,6 +2,7 @@ import { privateApi } from '@shared/services/privateApi';
 import { getAuthToken } from '@shared/services';
 import type { ApiResponse } from '@shared/services/types';
 import type {
+  AiAssistResponse,
   AiChatEventType,
   AiConversation,
   AiGenerateIssueResponse,
@@ -44,6 +45,20 @@ export const aiService = {
   /** GET /ai/models — List available AI models */
   getModels: async (): Promise<AiModelInfo[]> => {
     const { data } = await privateApi.get<ApiResponse<AiModelInfo[]>>('/ai/models');
+    return data.data;
+  },
+
+  /** POST /ai/assist — Lightweight ephemeral assistant */
+  assist: async (input: {
+    message: string;
+    route?: string;
+    pageTitle?: string;
+  }): Promise<AiAssistResponse> => {
+    const { data } = await privateApi.post<ApiResponse<AiAssistResponse>>(
+      '/ai/assist',
+      input,
+      { timeout: 60000 },
+    );
     return data.data;
   },
 

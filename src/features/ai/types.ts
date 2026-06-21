@@ -139,3 +139,30 @@ export interface AiUserUsage {
   range: AiUsageRange;
   users: AiWorkspaceUsageUser[];
 }
+
+// ── Phase 20C — Lightweight Assistant ───────────────────────────
+
+export type AiAssistIntent = 'guidance' | 'navigation' | 'permission' | 'feature' | 'status';
+
+export interface AiAssistFact {
+  label: string;
+  value: string;
+}
+
+export interface AiAssistResponse {
+  intent: AiAssistIntent;
+  title?: string;
+  answer: string;
+  followUps: string[];
+  navigation?: {
+    route: string;
+    label: string;
+  };
+  facts: AiAssistFact[];
+  usage: {
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+    model: string;
+  };
+}

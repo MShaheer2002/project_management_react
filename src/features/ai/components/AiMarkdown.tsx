@@ -39,8 +39,23 @@ const stripEmojis = (text: string): string =>
 const stripHtml = (text: string): string =>
   text.replace(/<script[\s\S]*?<\/script>/gi, '').replace(/<[^>]+>/g, '');
 
+const normalizeMarkdownEscapes = (text: string): string =>
+  text.replace(/\\([`*_[\]()])/g, '$1');
+
+const getSafeHref = (href: string): string | null => {
+  const trimmed = href.trim();
+  if (trimmed.startsWith('/')) return trimmed;
+
+  try {
+    const url = new URL(trimmed);
+    return ['https:', 'http:', 'mailto:'].includes(url.protocol) ? url.toString() : null;
+  } catch {
+    return null;
+  }
+};
+
 export const AiMarkdown: React.FC<AiMarkdownProps> = ({ content, className = '' }) => {
-  const lines = content.split('\n').map((l) => stripHtml(stripEmojis(l)));
+  const lines = content.split('\n').map((l) => normalizeMarkdownEscapes(stripHtml(stripEmojis(l))));
   const elements: React.ReactNode[] = [];
   let i = 0;
 
@@ -205,71 +220,47 @@ const IssueLink: React.FC<{ issueId: string; label: string }> = ({ issueId, labe
 /** Render inline markdown: **bold**, *italic*, `code`, [links](url), issue IDs */
 function renderInline(text: string): React.ReactNode {
   const parts: React.ReactNode[] = [];
-  let remaining = text;
+  const tokenRegex = /(`[^`]+`|\[[^\]]+\]\([^)]+\)|\*\*[^*]+?\*\*|__[^_]+?__|\*[^*\n]+?\*|_[^_\n]+?_|[A-Z]{2,10}-\d{1,6})/g;
+  let lastIndex = 0;
   let key = 0;
 
-  while (remaining.length > 0) {
-    // Issue ID pattern inline (e.g., FIS-42, VAT-10)
-    const issueInlineMatch = remaining.match(/^([A-Z]{2,10}-\d{1,6})/);
-    if (issueInlineMatch) {
-      parts.push(<IssueLinkInline key={key++} issueId={issueInlineMatch[1]} />);
-      remaining = remaining.slice(issueInlineMatch[0].length);
-      continue;
+  for (const match of text.matchAll(tokenRegex)) {
+    const token = match[0];
+    const index = match.index ?? 0;
+
+    if (index > lastIndex) {
+      parts.push(text.slice(lastIndex, index));
     }
 
-    // Inline code
-    const codeMatch = remaining.match(/^`([^`]+)`/);
-    if (codeMatch) {
+    if (/^[A-Z]{2,10}-\d{1,6}$/.test(token)) {
+      parts.push(<IssueLinkInline key={key++} issueId={token} />);
+    } else if (token.startsWith('`') && token.endsWith('`')) {
       parts.push(
         <code key={key++} className="rounded bg-gray-200/60 px-1 py-0.5 text-[10px] font-mono text-gray-700 dark:bg-white/10 dark:text-gray-300">
-          {codeMatch[1]}
+          {token.slice(1, -1)}
         </code>,
       );
-      remaining = remaining.slice(codeMatch[0].length);
-      continue;
-    }
-
-    // Bold
-    const boldMatch = remaining.match(/^\*\*([^*]+)\*\*/);
-    if (boldMatch) {
-      parts.push(<strong key={key++} className="font-semibold">{boldMatch[1]}</strong>);
-      remaining = remaining.slice(boldMatch[0].length);
-      continue;
-    }
-
-    // Italic
-    const italicMatch = remaining.match(/^\*([^*]+)\*/);
-    if (italicMatch) {
-      parts.push(<em key={key++}>{italicMatch[1]}</em>);
-      remaining = remaining.slice(italicMatch[0].length);
-      continue;
-    }
-
-    // Link [text](url)
-    const linkMatch = remaining.match(/^\[([^\]]+)\]\(([^)]+)\)/);
-    if (linkMatch) {
-      parts.push(
-        <a key={key++} href={linkMatch[2]} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline decoration-primary/30">
-          {linkMatch[1]}
-        </a>,
-      );
-      remaining = remaining.slice(linkMatch[0].length);
-      continue;
-    }
-
-    // Regular character — collect until next special char
-    const nextSpecial = remaining.search(/[`*\[A-Z]{2}/);
-    if (nextSpecial === -1 || nextSpecial > 100) {
-      parts.push(remaining);
-      break;
-    }
-    if (nextSpecial === 0) {
-      parts.push(remaining[0]);
-      remaining = remaining.slice(1);
+    } else if ((token.startsWith('**') && token.endsWith('**')) || (token.startsWith('__') && token.endsWith('__'))) {
+      parts.push(<strong key={key++} className="font-semibold">{renderInline(token.slice(2, -2))}</strong>);
+    } else if ((token.startsWith('*') && token.endsWith('*')) || (token.startsWith('_') && token.endsWith('_'))) {
+      parts.push(<em key={key++}>{renderInline(token.slice(1, -1))}</em>);
     } else {
-      parts.push(remaining.slice(0, nextSpecial));
-      remaining = remaining.slice(nextSpecial);
+      const linkMatch = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+      const safeHref = linkMatch ? getSafeHref(linkMatch[2]) : null;
+      parts.push(safeHref ? (
+        <a key={key++} href={safeHref} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline decoration-primary/30">
+          {linkMatch?.[1]}
+        </a>
+      ) : (
+        <span key={key++}>{linkMatch?.[1] ?? token}</span>
+      ));
     }
+
+    lastIndex = index + token.length;
+  }
+
+  if (lastIndex < text.length) {
+    parts.push(text.slice(lastIndex));
   }
 
   return parts.length === 1 ? parts[0] : <>{parts}</>;

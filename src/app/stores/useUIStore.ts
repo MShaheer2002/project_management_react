@@ -11,6 +11,8 @@ interface UIState {
   // Trussen AI Panel (Phase 20B)
   isAiPanelOpen: boolean;
   setAiPanelOpen: (open: boolean) => void;
+  isAiAssistantOpen: boolean;
+  setAiAssistantOpen: (open: boolean) => void;
   activeConversationId: string | null;
   setActiveConversationId: (id: string | null) => void;
 }
@@ -29,6 +31,8 @@ export const useUIStore = create<UIState>()(
       setSelectedIssueId: (id) => set({ selectedIssueId: id }),
       isAiPanelOpen: false,
       setAiPanelOpen: (open) => set({ isAiPanelOpen: open }),
+      isAiAssistantOpen: false,
+      setAiAssistantOpen: (open) => set({ isAiAssistantOpen: open }),
       activeConversationId: null,
       setActiveConversationId: (id) => set({ activeConversationId: id }),
     }),

@@ -7,6 +7,7 @@ export { aiUsageQueryKeys, useAiUserUsage, useAiWorkspaceUsage } from './hooks/u
 
 // Components
 export { AiIssueGenerator } from './components/AiIssueGenerator';
+export { AiAssistantBubble } from './components/AiAssistantBubble';
 export { TrussenAiPanel } from './components/TrussenAiPanel';
 
 // Types
@@ -16,6 +17,7 @@ export type {
   AiGenerateIssueResponse,
   AiModelInfo,
   AiConversation,
+  AiAssistResponse,
   AiMessage,
   AiUsagePeriod,
   AiWorkspaceDailyUsage,
