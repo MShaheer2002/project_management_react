@@ -15,7 +15,8 @@ import {
   LogOut,
   Moon,
   Sun,
-  Globe
+  Globe,
+  Sparkles,
 } from 'lucide-react';
 import { useUnreadNotificationsCount } from '@features/notifications';
 
@@ -72,6 +73,19 @@ export const TopNavbar: React.FC = () => {
           {unreadCount > 0 && (
             <span className="absolute top-2 right-2 w-2 h-2 bg-primary rounded-full border-2 border-white dark:border-bg-dark" />
           )}
+        </button>
+
+        <button
+          onClick={() => useUIStore.getState().setAiPanelOpen(!useUIStore.getState().isAiPanelOpen)}
+          className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all ${
+            useUIStore.getState().isAiPanelOpen
+              ? 'bg-primary/10 text-primary'
+              : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-white/5 dark:hover:text-gray-300'
+          }`}
+          title="Open Trussen AI"
+        >
+          <Sparkles size={13} />
+          <span className="hidden sm:inline">Ask Trussen</span>
         </button>
 
         <div className="relative">

@@ -6,6 +6,7 @@ export { useGenerateIssue } from './hooks/useAiMutations';
 
 // Components
 export { AiIssueGenerator } from './components/AiIssueGenerator';
+export { TrussenAiPanel } from './components/TrussenAiPanel';
 
 // Types
 export type {
@@ -13,4 +14,6 @@ export type {
   AiClarificationNeeded,
   AiGenerateIssueResponse,
   AiModelInfo,
+  AiConversation,
+  AiMessage,
 } from './types';

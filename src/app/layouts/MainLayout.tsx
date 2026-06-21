@@ -6,9 +6,13 @@ import { ContextPanel } from '@/components/ContextPanel';
 import { CommandPalette } from '@/components/CommandPalette';
 import { ModalManager } from '@/components/modals/ModalManager';
 import { ToastContainer } from '@/components/ToastContainer';
+import { TrussenAiPanel } from '@features/ai/components/TrussenAiPanel';
+import { useUIStore } from '@/app/stores/useUIStore';
 import { AnimatePresence } from 'motion/react';
 
 export const MainLayout: React.FC = () => {
+  const isAiPanelOpen = useUIStore((s) => s.isAiPanelOpen);
+
   return (
     <div className="flex h-screen bg-white dark:bg-bg-dark text-text-primary-light dark:text-text-primary-dark overflow-hidden transition-colors duration-300">
       <ModalManager />
@@ -20,6 +24,8 @@ export const MainLayout: React.FC = () => {
           <Outlet />
         </main>
       </div>
+      {/* Trussen AI Panel — pushes content, part of flex layout */}
+      {isAiPanelOpen && <TrussenAiPanel />}
       <AnimatePresence>
         <ContextPanel />
       </AnimatePresence>

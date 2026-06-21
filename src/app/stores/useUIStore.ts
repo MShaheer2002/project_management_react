@@ -8,6 +8,11 @@ interface UIState {
   setCommandPaletteOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
   selectedIssueId: string | null;
   setSelectedIssueId: (id: string | null) => void;
+  // Trussen AI Panel (Phase 20B)
+  isAiPanelOpen: boolean;
+  setAiPanelOpen: (open: boolean) => void;
+  activeConversationId: string | null;
+  setActiveConversationId: (id: string | null) => void;
 }
 
 export const useUIStore = create<UIState>()(
@@ -22,6 +27,10 @@ export const useUIStore = create<UIState>()(
         })),
       selectedIssueId: null,
       setSelectedIssueId: (id) => set({ selectedIssueId: id }),
+      isAiPanelOpen: false,
+      setAiPanelOpen: (open) => set({ isAiPanelOpen: open }),
+      activeConversationId: null,
+      setActiveConversationId: (id) => set({ activeConversationId: id }),
     }),
     {
       name: 'app-ui',

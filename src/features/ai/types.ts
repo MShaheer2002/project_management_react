@@ -51,3 +51,25 @@ export interface AiModelInfo {
   free: boolean;
   tier: 'fast' | 'balanced' | 'premium';
 }
+
+// ── Phase 20B — Trussen AI Chat ─────────────────────────────────
+
+export interface AiConversation {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AiMessage {
+  id: string;
+  role: 'USER' | 'ASSISTANT' | 'TOOL_CALL' | 'TOOL_RESULT';
+  content: string;
+  toolCalls?: unknown;
+  toolResults?: unknown;
+  tokenCount?: number;
+  createdAt: string;
+}
+
+/** SSE event types from POST /ai/chat */
+export type AiChatEventType = 'message' | 'tool_call' | 'tool_result' | 'done' | 'error' | 'close';

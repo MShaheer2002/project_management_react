@@ -11,6 +11,16 @@ export function setClerkTokenGetter(fn: () => Promise<string | null>) {
   _getToken = fn;
 }
 
+/** Get a fresh auth token. Used by SSE/fetch calls that bypass Axios. */
+export async function getAuthToken(): Promise<string | null> {
+  if (!_getToken) return null;
+  try {
+    return await _getToken();
+  } catch {
+    return null;
+  }
+}
+
 export function attachAuthInterceptor(instance: AxiosInstance) {
   instance.interceptors.request.use(async (config) => {
     if (_getToken) {

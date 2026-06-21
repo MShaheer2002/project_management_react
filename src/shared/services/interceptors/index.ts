@@ -3,7 +3,7 @@ import { attachAuthInterceptor } from './authInterceptor';
 import { attachWorkspaceInterceptor } from './workspaceInterceptor';
 import { attachErrorInterceptor } from './errorInterceptor';
 
-export { setClerkTokenGetter } from './authInterceptor';
+export { setClerkTokenGetter, getAuthToken } from './authInterceptor';
 export { attachErrorInterceptor };
 
 /**
