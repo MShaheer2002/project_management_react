@@ -21,6 +21,52 @@ export interface DepartmentStatsDetail extends DepartmentStatsSummary {
   issueCount: number;
 }
 
+export interface DepartmentAnalyticsTrend {
+  value: number;
+  direction: 'up' | 'down' | 'flat';
+}
+
+export interface DepartmentAnalyticsMetric {
+  value: number;
+  trend: DepartmentAnalyticsTrend;
+}
+
+export interface DepartmentVelocityPoint {
+  date: string;
+  label: string;
+  completed: number;
+  created: number;
+  velocity: number;
+}
+
+export interface DepartmentWorkloadPoint {
+  teamId: string;
+  name: string;
+  issues: number;
+  completed: number;
+  open: number;
+  completionRate: number;
+}
+
+export interface DepartmentAnalytics {
+  period: {
+    from: string;
+    to: string;
+    previousFrom: string;
+    previousTo: string;
+  };
+  summary: {
+    efficiencyPercent: DepartmentAnalyticsMetric;
+    resourceLoadPercent: DepartmentAnalyticsMetric;
+    stressIndex: DepartmentAnalyticsMetric;
+    overdueIssues: number;
+  };
+  charts: {
+    velocity: DepartmentVelocityPoint[];
+    workload: DepartmentWorkloadPoint[];
+  };
+}
+
 export interface DepartmentSummary {
   id: string;
   name: string;
@@ -36,6 +82,7 @@ export interface DepartmentSummary {
 
 export interface DepartmentDetail extends Omit<DepartmentSummary, 'stats'> {
   stats: DepartmentStatsDetail;
+  analytics: DepartmentAnalytics;
 }
 
 export interface DepartmentCompact {

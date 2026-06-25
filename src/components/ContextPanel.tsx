@@ -1,5 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import DOMPurify from 'dompurify';
+import { AiMarkdown } from '@features/ai/components/AiMarkdown';
 import {
   AlertCircle,
   Bug,
@@ -263,10 +265,14 @@ export const ContextPanel: React.FC = () => {
               <h2 className="pr-8 text-xl font-semibold leading-tight">{issue.title}</h2>
               <div className="rounded-lg p-2 text-sm leading-relaxed text-text-secondary-light transition-all hover:bg-gray-50 dark:text-text-secondary-dark dark:hover:bg-white/5">
                 {issue.description ? (
-                  <div
-                    className="[&_a]:text-primary [&_code]:rounded [&_code]:bg-gray-100 [&_code]:px-1 [&_code]:py-0.5 dark:[&_code]:bg-white/10"
-                    dangerouslySetInnerHTML={{ __html: issue.description }}
-                  />
+                  /<[^>]+>/.test(issue.description.trim()) ? (
+                    <div
+                      className="[&_a]:text-primary [&_code]:rounded [&_code]:bg-gray-100 [&_code]:px-1 [&_code]:py-0.5 dark:[&_code]:bg-white/10"
+                      dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(issue.description) }}
+                    />
+                  ) : (
+                    <AiMarkdown content={issue.description} className="text-sm leading-relaxed" />
+                  )
                 ) : (
                   'No description provided.'
                 )}

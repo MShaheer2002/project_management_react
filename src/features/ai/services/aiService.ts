@@ -8,10 +8,13 @@ import type {
   AiGenerateIssueResponse,
   AiMessage,
   AiModelInfo,
+  AiSuggestion,
+  AiSuggestionsListResult,
   AiUsagePeriod,
   AiUserUsage,
   AiWorkspaceUsage,
 } from '../types';
+import type { ApiPaginatedResponse } from '@shared/services/types';
 
 type ChatStreamEvent = Record<string, unknown>;
 
@@ -67,6 +70,42 @@ export const aiService = {
   /** GET /ai/conversations — List user's conversations */
   listConversations: async (): Promise<AiConversation[]> => {
     const { data } = await privateApi.get<ApiResponse<AiConversation[]>>('/ai/conversations');
+    return data.data;
+  },
+
+  /** GET /ai/suggestions — List background AI suggestions */
+  listSuggestions: async (input?: {
+    status?: string;
+    targetType?: string;
+    targetId?: string;
+    limit?: number;
+    cursor?: string;
+  }): Promise<AiSuggestionsListResult> => {
+    const { data } = await privateApi.get<ApiPaginatedResponse<AiSuggestion>>('/ai/suggestions', {
+      params: input,
+    });
+
+    return {
+      items: data.data,
+      meta: data.meta,
+    };
+  },
+
+  /** POST /ai/suggestions/:id/accept — Accept a background suggestion */
+  acceptSuggestion: async (suggestionId: string, input?: { selectedIds?: string[] }): Promise<AiSuggestion> => {
+    const { data } = await privateApi.post<ApiResponse<AiSuggestion>>(
+      `/ai/suggestions/${suggestionId}/accept`,
+      input ?? {},
+    );
+    return data.data;
+  },
+
+  /** POST /ai/suggestions/:id/dismiss — Dismiss a background suggestion */
+  dismissSuggestion: async (suggestionId: string, input?: { reason?: string }): Promise<AiSuggestion> => {
+    const { data } = await privateApi.post<ApiResponse<AiSuggestion>>(
+      `/ai/suggestions/${suggestionId}/dismiss`,
+      input ?? {},
+    );
     return data.data;
   },
 

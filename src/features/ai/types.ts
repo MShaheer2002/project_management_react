@@ -140,6 +140,51 @@ export interface AiUserUsage {
   users: AiWorkspaceUsageUser[];
 }
 
+// ── Phase 20D — Background AI Suggestions ──────────────────────
+
+export type AiSuggestionType =
+  | 'ASSIGNEE'
+  | 'LABEL'
+  | 'PRIORITY'
+  | 'DUPLICATE'
+  | 'STALE'
+  | 'WEEKLY_DIGEST'
+  | 'SPRINT_PLANNING';
+
+export type AiSuggestionStatus = 'OPEN' | 'ACCEPTED' | 'DISMISSED' | 'SUPERSEDED' | 'EXPIRED';
+
+export interface AiSuggestion {
+  id: string;
+  type: AiSuggestionType;
+  status: AiSuggestionStatus;
+  source: string;
+  targetType: string;
+  targetId: string;
+  title: string;
+  message: string;
+  confidence: number | null;
+  reason: string | null;
+  payload: Record<string, unknown> | null;
+  model: string | null;
+  createdByUserId: string | null;
+  acceptedById: string | null;
+  dismissedById: string | null;
+  acceptedAt: string | null;
+  dismissedAt: string | null;
+  expiresAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AiSuggestionsListResult {
+  items: AiSuggestion[];
+  meta: {
+    total: number;
+    cursor: string | null;
+    hasMore: boolean;
+  };
+}
+
 // ── Phase 20C — Lightweight Assistant ───────────────────────────
 
 export type AiAssistIntent = 'guidance' | 'navigation' | 'permission' | 'feature' | 'status';

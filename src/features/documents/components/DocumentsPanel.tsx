@@ -330,8 +330,25 @@ export const DocumentsPanel: React.FC<DocumentsPanelProps> = ({
     setFolderMenuId(null);
   };
 
+  const handleStartCreateFolder = () => {
+    setIsCreatingFolder(true);
+    setNewFolderName('');
+    setTimeout(() => newFolderInputRef.current?.focus(), 0);
+  };
+
   const panelRef = useRef<HTMLDivElement | null>(null);
   const isFileInputOpen = useRef(false);
+
+  const openFilePicker = () => {
+    isFileInputOpen.current = true;
+    fileInputRef.current?.click();
+    const resetFlag = () => {
+      isFileInputOpen.current = false;
+      setIsDragging(false);
+      window.removeEventListener('focus', resetFlag);
+    };
+    window.addEventListener('focus', resetFlag, { once: true });
+  };
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -664,11 +681,7 @@ export const DocumentsPanel: React.FC<DocumentsPanelProps> = ({
             <>
               <button
                 type="button"
-                onClick={() => {
-                  setIsCreatingFolder(true);
-                  setNewFolderName('');
-                  setTimeout(() => newFolderInputRef.current?.focus(), 0);
-                }}
+                onClick={handleStartCreateFolder}
                 className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold transition-colors hover:border-primary/40 hover:text-primary dark:border-border-dark dark:hover:border-primary/40"
               >
                 <FolderPlus size={13} />
@@ -676,12 +689,7 @@ export const DocumentsPanel: React.FC<DocumentsPanelProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => {
-                isFileInputOpen.current = true;
-                fileInputRef.current?.click();
-                const resetFlag = () => { isFileInputOpen.current = false; setIsDragging(false); window.removeEventListener('focus', resetFlag); };
-                window.addEventListener('focus', resetFlag, { once: true });
-              }}
+                onClick={openFilePicker}
                 className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold transition-colors hover:border-primary/40 hover:text-primary dark:border-border-dark dark:hover:border-primary/40"
               >
                 <Plus size={13} />
@@ -753,30 +761,35 @@ export const DocumentsPanel: React.FC<DocumentsPanelProps> = ({
           ) : documents.length === 0 && folders.length === 0 && drafts.length === 0 ? (
             /* ── Empty state ── */
             <div
-              className="flex cursor-pointer flex-col items-center rounded-xl border border-dashed border-gray-200 py-12 text-center transition-colors hover:border-primary/40 dark:border-border-dark"
-              onClick={() => canManage && fileInputRef.current?.click()}
+              className="flex flex-col items-center rounded-xl border border-dashed border-gray-200 py-12 text-center transition-colors hover:border-primary/40 dark:border-border-dark"
             >
+              {isCreatingFolder && canManage && (
+                <div className="mb-4 w-full max-w-sm px-6 text-left">
+                  {renderNewFolderInlineInput()}
+                </div>
+              )}
               <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gray-100 text-gray-400 dark:bg-white/5">
                 <FileText size={18} />
               </div>
               <h3 className="mt-3 text-sm font-semibold text-gray-900 dark:text-text-primary-dark">{emptyTitle}</h3>
               <p className="mx-auto mt-1 max-w-sm text-xs text-gray-400 dark:text-text-secondary-dark">{emptyDescription}</p>
               {canManage && (
-                <div className="mt-3 flex items-center gap-3">
+                <div className="relative z-10 mt-3 flex items-center gap-3 pointer-events-auto">
                   <button
                     type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setIsCreatingFolder(true);
-                      setNewFolderName('');
-                      setTimeout(() => newFolderInputRef.current?.focus(), 0);
-                    }}
-                    className="text-xs font-medium text-primary"
+                    onClick={handleStartCreateFolder}
+                    className="rounded px-1 py-0.5 text-xs font-medium text-primary transition-colors hover:text-primary/80 focus:outline-none focus:ring-2 focus:ring-primary/30"
                   >
                     Create a folder
                   </button>
                   <span className="text-xs text-gray-300 dark:text-text-secondary-dark">or</span>
-                  <p className="text-xs font-medium text-primary">Upload files</p>
+                  <button
+                    type="button"
+                    onClick={openFilePicker}
+                    className="rounded px-1 py-0.5 text-xs font-medium text-primary transition-colors hover:text-primary/80 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  >
+                    Upload files
+                  </button>
                 </div>
               )}
             </div>

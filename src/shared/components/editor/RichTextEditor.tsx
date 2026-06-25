@@ -20,6 +20,96 @@ interface RichTextEditorProps {
   className?: string;
 }
 
+const escapeHtml = (value: string) =>
+  value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+const renderInlineMarkdown = (value: string) => {
+  let html = escapeHtml(value);
+  html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+  html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/__([^_]+)__/g, '<strong>$1</strong>');
+  html = html.replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
+  html = html.replace(/_([^_\n]+)_/g, '<em>$1</em>');
+  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+  return html;
+};
+
+const looksLikeHtml = (value: string) => /<[^>]+>/.test(value);
+
+const looksLikeMarkdown = (value: string) =>
+  /(^|\n)\s{0,3}(#{1,6}\s|[-*]\s|\d+\.\s)|\*\*[^*]+\*\*|_[^_]+_|`[^`]+`|\[[^\]]+\]\([^)]+\)/m.test(value);
+
+const markdownToEditorHtml = (value: string) => {
+  const normalized = value.replace(/\r\n/g, '\n').trim();
+  if (!normalized) return '';
+
+  const lines = normalized.split('\n');
+  const blocks: string[] = [];
+  let index = 0;
+
+  while (index < lines.length) {
+    const line = lines[index]?.trim() ?? '';
+
+    if (!line) {
+      index += 1;
+      continue;
+    }
+
+    if (/^#{1,3}\s/.test(line)) {
+      const level = Math.min(3, line.match(/^#+/)?.[0].length ?? 1);
+      blocks.push(`<h${level}>${renderInlineMarkdown(line.replace(/^#{1,3}\s*/, ''))}</h${level}>`);
+      index += 1;
+      continue;
+    }
+
+    if (/^[-*]\s/.test(line)) {
+      const items: string[] = [];
+      while (index < lines.length && /^[-*]\s/.test(lines[index]?.trim() ?? '')) {
+        items.push(`<li>${renderInlineMarkdown((lines[index] ?? '').trim().replace(/^[-*]\s*/, ''))}</li>`);
+        index += 1;
+      }
+      blocks.push(`<ul>${items.join('')}</ul>`);
+      continue;
+    }
+
+    if (/^\d+\.\s/.test(line)) {
+      const items: string[] = [];
+      while (index < lines.length && /^\d+\.\s/.test(lines[index]?.trim() ?? '')) {
+        items.push(`<li>${renderInlineMarkdown((lines[index] ?? '').trim().replace(/^\d+\.\s*/, ''))}</li>`);
+        index += 1;
+      }
+      blocks.push(`<ol>${items.join('')}</ol>`);
+      continue;
+    }
+
+    const paragraphLines: string[] = [];
+    while (index < lines.length) {
+      const current = lines[index]?.trim() ?? '';
+      if (!current || /^#{1,3}\s/.test(current) || /^[-*]\s/.test(current) || /^\d+\.\s/.test(current)) {
+        break;
+      }
+      paragraphLines.push(current);
+      index += 1;
+    }
+
+    blocks.push(`<p>${renderInlineMarkdown(paragraphLines.join('<br />'))}</p>`);
+  }
+
+  return blocks.join('');
+};
+
+const normalizeEditorValue = (value: string) => {
+  if (!value) return '';
+  if (looksLikeHtml(value)) return value;
+  if (looksLikeMarkdown(value)) return markdownToEditorHtml(value);
+  return value;
+};
+
 export const RichTextEditor: React.FC<RichTextEditorProps> = ({ 
   value, 
   onChange, 
@@ -33,8 +123,9 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
 
   // Sync state to editor only once or when value is changed externally (rare)
   useEffect(() => {
-    if (editorRef.current && editorRef.current.innerHTML !== value) {
-      editorRef.current.innerHTML = value;
+    const normalizedValue = normalizeEditorValue(value);
+    if (editorRef.current && editorRef.current.innerHTML !== normalizedValue) {
+      editorRef.current.innerHTML = normalizedValue;
     }
   }, [value]);
 

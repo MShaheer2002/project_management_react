@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import DOMPurify from 'dompurify';
+import { AiMarkdown } from '@features/ai/components/AiMarkdown';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   AlertCircle,
@@ -124,6 +125,18 @@ const StatusSelect: React.FC<{
 const renderRichText = (value: string | undefined, fallback: string) => {
   if (!value?.trim()) {
     return <p className="text-base leading-relaxed text-gray-500 dark:text-gray-400">{fallback}</p>;
+  }
+
+  const trimmed = value.trim();
+  const looksLikeHtml = /<[^>]+>/.test(trimmed);
+
+  if (!looksLikeHtml) {
+    return (
+      <AiMarkdown
+        content={trimmed}
+        className="text-base leading-relaxed text-gray-700 dark:text-gray-300"
+      />
+    );
   }
 
   return (

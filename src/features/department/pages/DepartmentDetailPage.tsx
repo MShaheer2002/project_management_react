@@ -2,7 +2,6 @@ import React, { useDeferredValue, useEffect, useMemo, useRef, useState } from 'r
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   AlertCircle,
-  ArrowUpRight,
   Briefcase,
   Building2,
   ChevronDown,
@@ -41,13 +40,7 @@ import { useAuthStore } from '@/app/stores/useAuthStore';
 import { useApp } from '@/AppContext';
 import { Modal } from '@/components/modals/Modal';
 import { ActivityPage } from '@features/activity';
-import {
-  MOCK_DEPARTMENTS,
-  MOCK_ISSUES,
-  MOCK_PROJECTS,
-  MOCK_TEAMS,
-  MOCK_USERS,
-} from '@/constants';
+import { MOCK_USERS } from '@/constants';
 import { useProjectsDirectory } from '@features/projects';
 import { useWorkspaceMemberOptions } from '@features/workspace';
 import { useTeamsDirectory, useUpdateAnyTeam } from '@features/team';
@@ -213,83 +206,6 @@ export const DepartmentDetailPage: React.FC = () => {
   const headOptions = headOptionsQuery.data?.pages.flatMap((page) => page.items) ?? [];
   const errorCode = getApiErrorCode(departmentQuery.error);
 
-  const matchedMockDepartment = useMemo(() => {
-    if (!department) return MOCK_DEPARTMENTS[0] ?? null;
-    return (
-      MOCK_DEPARTMENTS.find(
-        (mockDepartment) => mockDepartment.name.toLowerCase() === department.name.toLowerCase()
-      ) ??
-      MOCK_DEPARTMENTS[0] ??
-      null
-    );
-  }, [department]);
-
-  const mockDepartmentTeams = useMemo(() => {
-    if (!matchedMockDepartment) return [];
-    return MOCK_TEAMS.filter((team) => team.departmentId === matchedMockDepartment.id);
-  }, [matchedMockDepartment]);
-
-  const mockDepartmentTeamIds = useMemo(
-    () => mockDepartmentTeams.map((team) => team.id),
-    [mockDepartmentTeams]
-  );
-
-  const mockProjects = useMemo(() => {
-    if (!matchedMockDepartment) return [];
-    return MOCK_PROJECTS.filter(
-      (project) =>
-        project.departmentId === matchedMockDepartment.id || mockDepartmentTeamIds.includes(project.teamId)
-    );
-  }, [matchedMockDepartment, mockDepartmentTeamIds]);
-
-  const mockIssues = useMemo(() => {
-    if (!matchedMockDepartment) return [];
-    return MOCK_ISSUES.filter(
-      (issue) =>
-        mockDepartmentTeamIds.includes(issue.teamId) ||
-        mockProjects.some((project) => project.id === issue.projectId)
-    );
-  }, [mockDepartmentTeamIds, mockProjects]);
-
-  const completedMockIssues = useMemo(
-    () => mockIssues.filter((issue) => issue.status === 'done').length,
-    [mockIssues]
-  );
-
-  const mockVelocity = useMemo(
-    () => (mockIssues.length === 0 ? 84 : Math.round((completedMockIssues / mockIssues.length) * 100)),
-    [completedMockIssues, mockIssues.length]
-  );
-
-  const velocityData = useMemo(
-    () => [
-      { day: 'Mon', issues: 4, velocity: 65 },
-      { day: 'Tue', issues: 7, velocity: 72 },
-      { day: 'Wed', issues: 5, velocity: 68 },
-      { day: 'Thu', issues: 9, velocity: 85 },
-      { day: 'Fri', issues: 12, velocity: 90 },
-    ],
-    []
-  );
-
-  const workloadData = useMemo(() => {
-    if (relatedTeams.length > 0) {
-      return relatedTeams.map((team) => {
-        const mockTeam =
-          MOCK_TEAMS.find((mockItem) => mockItem.name.toLowerCase() === team.name.toLowerCase()) ?? null;
-        return {
-          name: team.name,
-          issues: mockIssues.filter((issue) => issue.teamId === mockTeam?.id).length,
-        };
-      });
-    }
-
-    return mockDepartmentTeams.map((team) => ({
-      name: team.name,
-      issues: mockIssues.filter((issue) => issue.teamId === team.id).length,
-    }));
-  }, [mockDepartmentTeams, mockIssues, relatedTeams]);
-
   useEffect(() => {
     if (!department) return;
     setName(department.name);
@@ -364,8 +280,6 @@ export const DepartmentDetailPage: React.FC = () => {
   const selectableMembers = memberOptions.filter(
     (option) => !members.some((member) => member.id === option.id)
   );
-  const mockEfficiency = mockIssues.length === 0 ? 84 : Math.min(96, Math.max(72, mockVelocity + 12));
-
   const handleToggleMember = (memberId: string) => {
     setSelectedMemberIds((current) =>
       current.includes(memberId)
@@ -491,7 +405,6 @@ export const DepartmentDetailPage: React.FC = () => {
           label="Total Resources"
           value={department.stats.memberCount || members.length}
           icon={<Users size={20} />}
-          trend={{ value: 12, label: 'MoM' }}
         />
         <StatCard
           label="Active Projects"
@@ -501,16 +414,16 @@ export const DepartmentDetailPage: React.FC = () => {
         />
         <StatCard
           label="Avg. Efficiency"
-          value={`${mockEfficiency}%`}
+          value={`${department.analytics.summary.efficiencyPercent.value}%`}
           icon={<TrendingUp size={20} />}
-          trend={{ value: 5.4, label: 'Weekly' }}
+          trend={{ value: department.analytics.summary.efficiencyPercent.trend.value, label: 'Weekly' }}
           color="#5fea64"
         />
         <StatCard
           label="Resource Load"
-          value="72%"
+          value={`${department.analytics.summary.resourceLoadPercent.value}%`}
           icon={<LayoutDashboard size={20} />}
-          trend={{ value: -2, label: 'Stress Index' }}
+          trend={{ value: department.analytics.summary.stressIndex.trend.value, label: 'Stress Index' }}
           color="#eab45f"
         />
       </div>
@@ -522,28 +435,26 @@ export const DepartmentDetailPage: React.FC = () => {
               <div>
                 <h3 className="text-sm font-black uppercase tracking-wider">Department Velocity</h3>
                 <p className="mt-0.5 text-xs font-medium text-gray-400">
-                  Completed issues across all teams this week
+                  Completed issues across all teams in the last 7 days.
                 </p>
               </div>
-              <div className="flex gap-2">
-                <div className="flex items-center gap-1.5">
-                  <div className="h-2 w-2 rounded-full bg-primary" />
-                  <span className="text-[10px] font-bold uppercase tracking-widest opacity-50">Output</span>
-                </div>
+              <div className="flex items-center gap-1.5">
+                <div className="h-2 w-2 rounded-full bg-primary" />
+                <span className="text-[10px] font-bold uppercase tracking-widest opacity-50">Output</span>
               </div>
             </div>
-            <div className="h-[280px] w-full min-w-0">
+            <div className="h-[280px] min-h-[280px] w-full min-w-0 overflow-hidden">
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={velocityData}>
+                <AreaChart data={department.analytics.charts.velocity}>
                   <defs>
-                    <linearGradient id="colorVelocity" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#5f72ea" stopOpacity={0.1} />
+                    <linearGradient id="departmentVelocityFill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#5f72ea" stopOpacity={0.18} />
                       <stop offset="95%" stopColor="#5f72ea" stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#888" opacity={0.05} />
                   <XAxis
-                    dataKey="day"
+                    dataKey="label"
                     axisLine={false}
                     tickLine={false}
                     tick={{ fontSize: 10, fill: '#888', fontWeight: 700 }}
@@ -566,7 +477,7 @@ export const DepartmentDetailPage: React.FC = () => {
                     stroke="#5f72ea"
                     strokeWidth={3}
                     fillOpacity={1}
-                    fill="url(#colorVelocity)"
+                    fill="url(#departmentVelocityFill)"
                   />
                 </AreaChart>
               </ResponsiveContainer>
@@ -575,33 +486,40 @@ export const DepartmentDetailPage: React.FC = () => {
 
           <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm dark:border-border-dark dark:bg-card-dark">
             <h3 className="mb-8 text-sm font-black uppercase tracking-wider">Workload Distribution</h3>
-            <div className="h-[240px] w-full min-w-0">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={workloadData} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#888" opacity={0.05} />
-                  <XAxis type="number" hide />
-                  <YAxis
-                    dataKey="name"
-                    type="category"
-                    axisLine={false}
-                    tickLine={false}
-                    tick={{ fontSize: 10, fill: '#888', fontWeight: 700 }}
-                    width={100}
-                  />
-                  <Tooltip
-                    cursor={{ fill: 'transparent' }}
-                    contentStyle={{
-                      backgroundColor: '#151821',
-                      border: 'none',
-                      borderRadius: '12px',
-                      fontSize: '11px',
-                      color: '#fff',
-                    }}
-                  />
-                  <Bar dataKey="issues" fill="#8B5CF6" radius={[0, 4, 4, 0]} barSize={20} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+            {department.analytics.charts.workload.length === 0 ? (
+              <div className="rounded-2xl border-2 border-dashed border-gray-200 px-6 py-10 text-center dark:border-border-dark">
+                <p className="text-sm font-semibold text-gray-600 dark:text-gray-300">No teams added yet.</p>
+                <p className="mt-2 text-xs text-gray-400">Once teams are assigned to this department, workload data will appear here.</p>
+              </div>
+            ) : (
+              <div className="h-[240px] min-h-[240px] w-full min-w-0 overflow-hidden">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={department.analytics.charts.workload} layout="vertical">
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#888" opacity={0.05} />
+                    <XAxis type="number" hide />
+                    <YAxis
+                      dataKey="name"
+                      type="category"
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fontSize: 10, fill: '#888', fontWeight: 700 }}
+                      width={100}
+                    />
+                    <Tooltip
+                      cursor={{ fill: 'transparent' }}
+                      contentStyle={{
+                        backgroundColor: '#151821',
+                        border: 'none',
+                        borderRadius: '12px',
+                        fontSize: '11px',
+                        color: '#fff',
+                      }}
+                    />
+                    <Bar dataKey="issues" fill="#8B5CF6" radius={[0, 4, 4, 0]} barSize={20} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
           </div>
         </div>
 
@@ -661,19 +579,32 @@ export const DepartmentDetailPage: React.FC = () => {
                   </span>
                 </div>
               </div>
+
+              <div className="block border-t border-gray-100 pt-6 dark:border-border-dark">
+                <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-gray-400 opacity-50">
+                  Live Totals
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-3 dark:border-border-dark dark:bg-white/5">
+                    <p className="text-lg font-bold text-gray-900 dark:text-white">{department.stats.teamCount}</p>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Teams</p>
+                  </div>
+                  <div className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-3 dark:border-border-dark dark:bg-white/5">
+                    <p className="text-lg font-bold text-gray-900 dark:text-white">{department.stats.issueCount}</p>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Issues</p>
+                  </div>
+                  <div className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-3 dark:border-border-dark dark:bg-white/5">
+                    <p className="text-lg font-bold text-gray-900 dark:text-white">{department.analytics.summary.stressIndex.value}%</p>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Stress</p>
+                  </div>
+                  <div className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-3 dark:border-border-dark dark:bg-white/5">
+                    <p className="text-lg font-bold text-gray-900 dark:text-white">{department.analytics.summary.overdueIssues}</p>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Overdue</p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
-
-          <button
-            onClick={() => showToast('Detailed analytics are still mock-backed for now.', 'info')}
-            className="group flex w-full translate-y-0 items-center justify-between rounded-2xl border border-primary/20 bg-primary/10 p-6 text-left text-primary transition-all hover:-translate-y-1 hover:bg-primary hover:text-white"
-          >
-            <div>
-              <h4 className="text-sm font-black uppercase tracking-widest">Reports</h4>
-              <p className="text-[10px] font-bold opacity-70">View detailed analytics</p>
-            </div>
-            <ArrowUpRight className="opacity-40 group-hover:opacity-100" />
-          </button>
         </div>
       </div>
     </div>
@@ -1258,17 +1189,17 @@ export const DepartmentDetailPage: React.FC = () => {
                   Dept
                 </span>
               </div>
-              <p className="mt-0.5 flex items-center gap-2 text-sm font-medium text-gray-400">
+              <div className="mt-0.5 flex items-center gap-2 text-sm font-medium text-gray-400">
                 <span>Created {new Date(department.createdAt).toLocaleDateString()}</span>
                 {department.head && (
                   <>
-                    <div className="h-1 w-1 rounded-full bg-gray-200 dark:bg-gray-800" />
+                    <span className="h-1 w-1 rounded-full bg-gray-200 dark:bg-gray-800" />
                     <span className="flex items-center gap-1">
                       Managed by <span className="font-bold text-gray-900 dark:text-white">{department.head.name}</span>
                     </span>
                   </>
                 )}
-              </p>
+              </div>
             </div>
           </div>
 

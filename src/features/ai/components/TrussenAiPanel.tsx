@@ -15,26 +15,12 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useUIStore } from '@/app/stores/useUIStore';
 import { useAuthStore } from '@/app/stores/useAuthStore';
+import { useToastStore } from '@/app/stores/useToastStore';
 import { aiService } from '../services/aiService';
 import { AiMarkdown } from './AiMarkdown';
 import { MentionDropdown } from './MentionDropdown';
 import { useMentionAutocomplete } from '../hooks/useMentionAutocomplete';
-import type { AiMessage } from '../types';
-
-/** Extract tool names from toolCalls JSON safely */
-const formatToolNames = (toolCalls: unknown): string => {
-  if (!Array.isArray(toolCalls)) return 'tools';
-  const names = toolCalls
-    .map((tc) => {
-      if (typeof tc === 'object' && tc !== null && 'function' in tc) {
-        const fn = (tc as { function?: { name?: string } }).function;
-        return fn?.name ?? '';
-      }
-      return '';
-    })
-    .filter(Boolean);
-  return names.length > 0 ? names.join(', ') : 'tools';
-};
+import type { AiMessage, AiSuggestion } from '../types';
 
 const relativeTime = (value: string) => {
   const date = new Date(value);
@@ -58,11 +44,83 @@ const MIN_WIDTH = 300;
 const MAX_WIDTH = 600;
 const DEFAULT_WIDTH = 360;
 
+const formatSuggestionTarget = (suggestion: AiSuggestion) => {
+  if (typeof suggestion.payload?.issueId === 'string' && suggestion.payload.issueId.trim()) {
+    return suggestion.payload.issueId.trim();
+  }
+  return suggestion.targetId;
+};
+
+const formatSuggestionDetails = (suggestion: AiSuggestion) => {
+  if (suggestion.type === 'ASSIGNEE') {
+    const candidates = Array.isArray(suggestion.payload?.candidates)
+      ? suggestion.payload.candidates as Array<{ name?: string }>
+      : [];
+    const names = candidates.map((candidate) => candidate.name).filter(Boolean).slice(0, 3);
+    return names.length > 0 ? `Top candidates: ${names.join(', ')}` : 'Review the suggested assignee candidates.';
+  }
+
+  if (suggestion.type === 'PRIORITY') {
+    const priority = typeof suggestion.payload?.suggestedPriority === 'string'
+      ? suggestion.payload.suggestedPriority
+      : null;
+    return priority ? `Suggested priority: ${priority}` : 'Review the suggested priority change.';
+  }
+
+  if (suggestion.type === 'LABEL') {
+    const labels = Array.isArray(suggestion.payload?.labels)
+      ? suggestion.payload.labels as Array<{ name?: string }>
+      : [];
+    const names = labels.map((label) => label.name).filter(Boolean).slice(0, 4);
+    return names.length > 0 ? `Suggested labels: ${names.join(', ')}` : 'Review the suggested labels.';
+  }
+
+  if (suggestion.type === 'DUPLICATE') {
+    const matches = Array.isArray(suggestion.payload?.matches)
+      ? suggestion.payload.matches as Array<{ issueId?: string; title?: string }>
+      : [];
+    const first = matches[0];
+    return first?.issueId ? `Closest match: ${first.issueId}${first.title ? ` · ${first.title}` : ''}` : 'Review similar issues.';
+  }
+
+  return suggestion.reason ?? suggestion.message;
+};
+
+const getAssigneeCandidates = (suggestion: AiSuggestion) =>
+  Array.isArray(suggestion.payload?.candidates)
+    ? suggestion.payload.candidates as Array<{ userId?: string; name?: string }>
+    : [];
+
+const getSuggestedPriority = (suggestion: AiSuggestion) =>
+  typeof suggestion.payload?.suggestedPriority === 'string'
+    ? suggestion.payload.suggestedPriority
+    : null;
+
+const findSuggestionAnchorMessageId = (messages: AiMessage[], suggestion: AiSuggestion) => {
+  const target = formatSuggestionTarget(suggestion).toLowerCase();
+  const suggestionTime = new Date(suggestion.createdAt).getTime();
+  const assistantMessages = messages.filter((message) => message.role === 'ASSISTANT');
+
+  const directMatch = [...assistantMessages]
+    .reverse()
+    .find((message) =>
+      new Date(message.createdAt).getTime() <= suggestionTime &&
+      message.content.toLowerCase().includes(target)
+    );
+
+  if (directMatch) return directMatch.id;
+
+  return [...assistantMessages]
+    .reverse()
+    .find((message) => new Date(message.createdAt).getTime() <= suggestionTime)?.id ?? null;
+};
+
 export const TrussenAiPanel: React.FC = () => {
   const setOpen = useUIStore((s) => s.setAiPanelOpen);
   const activeConvId = useUIStore((s) => s.activeConversationId);
   const setActiveConvId = useUIStore((s) => s.setActiveConversationId);
   const workspaceId = useAuthStore((s) => s.workspace?.id);
+  const showToast = useToastStore((s) => s.showToast);
   const queryClient = useQueryClient();
 
   const [input, setInput] = useState('');
@@ -74,6 +132,7 @@ export const TrussenAiPanel: React.FC = () => {
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [lastResponseMeta, setLastResponseMeta] = useState<{ model?: string; tokensUsed?: number } | null>(null);
   const [view, setView] = useState<'chat' | 'history'>('chat');
+  const [actionSuggestionId, setActionSuggestionId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // @ mention autocomplete
@@ -121,6 +180,21 @@ export const TrussenAiPanel: React.FC = () => {
   });
   const conversations = conversationsQuery.data ?? [];
   const activeConversation = conversations.find((conversation) => conversation.id === activeConvId) ?? null;
+  const suggestionsQuery = useQuery({
+    queryKey: ['ai', 'suggestions', workspaceId],
+    queryFn: () => aiService.listSuggestions({ status: 'OPEN', limit: 5 }),
+    enabled: Boolean(workspaceId) && view === 'chat',
+    staleTime: 5_000,
+    refetchInterval: view === 'chat' ? 8_000 : false,
+  });
+  const suggestions = suggestionsQuery.data?.items ?? [];
+  const suggestionsByMessageId = suggestions.reduce<Record<string, AiSuggestion[]>>((acc, suggestion) => {
+    const messageId = findSuggestionAnchorMessageId(messages, suggestion);
+    if (!messageId) return acc;
+    acc[messageId] = [...(acc[messageId] ?? []), suggestion];
+    return acc;
+  }, {});
+  const unanchoredSuggestions = suggestions.filter((suggestion) => !findSuggestionAnchorMessageId(messages, suggestion));
 
   useEffect(() => {
     if (!activeConvId) {
@@ -184,8 +258,8 @@ export const TrussenAiPanel: React.FC = () => {
         message: trimmed,
         workspaceId: workspaceId ?? '',
         onEvent: (eventType, data) => {
-          if (eventType === 'tool_call' && typeof data.tool === 'string') {
-            setToolActivity(`Using ${data.tool}...`);
+          if (eventType === 'tool_call') {
+            setToolActivity('Trussen AI is working...');
           } else if (eventType === 'tool_result') {
             setToolActivity(null);
           } else if (eventType === 'message' && typeof data.content === 'string') {
@@ -252,6 +326,138 @@ export const TrussenAiPanel: React.FC = () => {
     queryClient.invalidateQueries({ queryKey: ['ai', 'conversations'] });
   };
 
+  const handleAcceptSuggestion = useCallback(async (suggestionId: string, selectedIds?: string[]) => {
+    setActionSuggestionId(suggestionId);
+    try {
+      await aiService.acceptSuggestion(suggestionId, selectedIds ? { selectedIds } : undefined);
+      await suggestionsQuery.refetch();
+      showToast('Suggestion applied.', 'success', 'Background AI');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to apply suggestion.';
+      showToast(message, 'error', 'Background AI');
+    } finally {
+      setActionSuggestionId(null);
+    }
+  }, [showToast, suggestionsQuery]);
+
+  const handleDismissSuggestion = useCallback(async (suggestionId: string) => {
+    setActionSuggestionId(suggestionId);
+    try {
+      await aiService.dismissSuggestion(suggestionId);
+      await suggestionsQuery.refetch();
+      showToast('Suggestion dismissed.', 'info', 'Background AI');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to dismiss suggestion.';
+      showToast(message, 'error', 'Background AI');
+    } finally {
+      setActionSuggestionId(null);
+    }
+  }, [showToast, suggestionsQuery]);
+
+  const renderSuggestionRow = useCallback((suggestion: AiSuggestion) => {
+    const isActing = actionSuggestionId === suggestion.id;
+    const confidence = typeof suggestion.confidence === 'number'
+      ? Math.max(0, Math.min(100, Math.round(suggestion.confidence * 100)))
+      : null;
+    const assigneeCandidates = getAssigneeCandidates(suggestion);
+    const suggestedPriority = getSuggestedPriority(suggestion);
+
+    return (
+      <div key={suggestion.id} className="rounded-lg border border-gray-200 bg-gray-50/60 px-3 py-2 dark:border-border-dark dark:bg-white/[0.03]">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-[12px] font-medium text-gray-700 dark:text-gray-200">{suggestion.title}</p>
+            <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[10px] text-gray-400">
+              <span>{formatSuggestionTarget(suggestion)}</span>
+              <span>•</span>
+              <span>{relativeTime(suggestion.createdAt)}</span>
+              {confidence !== null && (
+                <>
+                  <span>•</span>
+                  <span>{confidence}%</span>
+                </>
+              )}
+            </div>
+          </div>
+          <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[9px] font-medium uppercase tracking-wider text-gray-500 dark:bg-white/[0.05] dark:text-gray-400">
+            {suggestion.type}
+          </span>
+        </div>
+
+        {suggestion.type === 'ASSIGNEE' && assigneeCandidates.length > 0 ? (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-1.5">
+              {assigneeCandidates.map((candidate) => {
+                const userId = candidate.userId?.trim();
+                const name = candidate.name?.trim();
+                if (!userId || !name) return null;
+                return (
+                  <button
+                    key={userId}
+                    type="button"
+                    disabled={isActing}
+                    onClick={() => void handleAcceptSuggestion(suggestion.id, [userId])}
+                    className="rounded-full border border-gray-200 px-2 py-0.5 text-[10px] font-medium text-gray-500 transition-all hover:border-primary/30 hover:bg-primary/5 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50 dark:border-border-dark"
+                  >
+                    {isActing ? 'Applying...' : name}
+                  </button>
+                );
+              })}
+            </div>
+            <button
+              type="button"
+              disabled={isActing}
+              onClick={() => void handleDismissSuggestion(suggestion.id)}
+              className="rounded-full border border-gray-200 px-2 py-0.5 text-[10px] font-medium text-gray-400 transition-all hover:border-primary/30 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50 dark:border-border-dark"
+            >
+              Dismiss
+            </button>
+          </div>
+        ) : suggestion.type === 'PRIORITY' && suggestedPriority ? (
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            <span className="text-[10px] text-gray-400">{formatSuggestionDetails(suggestion)}</span>
+            <button
+              type="button"
+              disabled={isActing}
+              onClick={() => void handleAcceptSuggestion(suggestion.id)}
+              className="rounded-full border border-gray-200 px-2 py-0.5 text-[10px] font-medium text-gray-500 transition-all hover:border-primary/30 hover:bg-primary/5 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50 dark:border-border-dark"
+            >
+              {isActing ? 'Applying...' : `Set ${suggestedPriority}`}
+            </button>
+            <button
+              type="button"
+              disabled={isActing}
+              onClick={() => void handleDismissSuggestion(suggestion.id)}
+              className="rounded-full border border-gray-200 px-2 py-0.5 text-[10px] font-medium text-gray-400 transition-all hover:border-primary/30 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50 dark:border-border-dark"
+            >
+              Dismiss
+            </button>
+          </div>
+        ) : (
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            <span className="text-[10px] text-gray-400">{formatSuggestionDetails(suggestion)}</span>
+            <button
+              type="button"
+              disabled={isActing}
+              onClick={() => void handleAcceptSuggestion(suggestion.id)}
+              className="rounded-full border border-gray-200 px-2 py-0.5 text-[10px] font-medium text-gray-500 transition-all hover:border-primary/30 hover:bg-primary/5 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50 dark:border-border-dark"
+            >
+              {isActing ? 'Applying...' : 'Apply'}
+            </button>
+            <button
+              type="button"
+              disabled={isActing}
+              onClick={() => void handleDismissSuggestion(suggestion.id)}
+              className="rounded-full border border-gray-200 px-2 py-0.5 text-[10px] font-medium text-gray-400 transition-all hover:border-primary/30 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50 dark:border-border-dark"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }, [actionSuggestionId, handleAcceptSuggestion, handleDismissSuggestion]);
+
   return (
     <div className="relative flex h-full shrink-0 flex-col border-l border-gray-200 bg-white dark:border-border-dark dark:bg-bg-dark" style={{ width: `${panelWidth}px` }}>
       {/* Drag handle — left edge */}
@@ -274,13 +480,11 @@ export const TrussenAiPanel: React.FC = () => {
             {activeConversation && (
               <span className="truncate">
                 {activeConversation.requestCount} requests · {formatCompactNumber(activeConversation.totalTokens)} tokens
-                {activeConversation.lastModelUsed ? ` · ${activeConversation.lastModelUsed}` : ''}
               </span>
             )}
-            {!activeConversation && lastResponseMeta?.model && (
+            {!activeConversation && typeof lastResponseMeta?.tokensUsed === 'number' && (
               <span>
-                {lastResponseMeta.model}
-                {typeof lastResponseMeta.tokensUsed === 'number' ? ` · ${formatCompactNumber(lastResponseMeta.tokensUsed)} tokens` : ''}
+                {formatCompactNumber(lastResponseMeta.tokensUsed)} tokens
               </span>
             )}
           </div>
@@ -434,10 +638,10 @@ export const TrussenAiPanel: React.FC = () => {
                         <AiMarkdown content={msg.content} />
                       )}
                     </div>
-                    {msg.role === 'ASSISTANT' && Boolean(msg.toolCalls) && (
-                      <div className="flex items-center gap-1.5 px-1 text-[9px] text-gray-400">
-                        <Wrench size={8} />
-                        <span>Used {formatToolNames(msg.toolCalls)}</span>
+                    {msg.role === 'ASSISTANT' && (suggestionsByMessageId[msg.id]?.length ?? 0) > 0 && (
+                      <div className="space-y-1.5 pt-1">
+                        <p className="px-1 text-[10px] font-bold uppercase tracking-[0.15em] text-gray-400">Suggestions</p>
+                        {suggestionsByMessageId[msg.id]!.map(renderSuggestionRow)}
                       </div>
                     )}
                   </div>
@@ -461,6 +665,27 @@ export const TrussenAiPanel: React.FC = () => {
                     </div>
                   )}
                 </div>
+              </div>
+            )}
+
+            {unanchoredSuggestions.length > 0 && (
+              <div className="space-y-1.5 pt-1">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-gray-400">Suggestions</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void suggestionsQuery.refetch()}
+                    className="rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-white/5"
+                    aria-label="Refresh suggestions"
+                    title="Refresh suggestions"
+                  >
+                    <Loader2 size={12} className={suggestionsQuery.isFetching ? 'animate-spin' : ''} />
+                  </button>
+                </div>
+
+                {unanchoredSuggestions.map(renderSuggestionRow)}
               </div>
             )}
 
@@ -562,10 +787,9 @@ export const TrussenAiPanel: React.FC = () => {
 
             <div className="mt-2 flex items-center justify-between gap-3 px-1 text-[10px] text-gray-400">
               <span>{workspaceId ? 'Enter to send, Shift+Enter for a new line.' : 'Select a workspace to use Trussen AI.'}</span>
-              {lastResponseMeta?.model && !isStreaming && (
+              {typeof lastResponseMeta?.tokensUsed === 'number' && !isStreaming && (
                 <span className="truncate">
-                  {lastResponseMeta.model}
-                  {typeof lastResponseMeta.tokensUsed === 'number' ? ` · ${formatCompactNumber(lastResponseMeta.tokensUsed)} tokens` : ''}
+                  {formatCompactNumber(lastResponseMeta.tokensUsed)} tokens
                 </span>
               )}
             </div>
