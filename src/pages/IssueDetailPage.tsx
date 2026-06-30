@@ -31,6 +31,7 @@ import { useWorkspaceStatuses } from '@shared/hooks/useWorkspaceStatuses';
 import { canDeleteIssues } from '@shared/permissions';
 import { LabelChip } from '@shared/components/ui/LabelChip';
 import { getApiErrorCode, getApiErrorMessage } from '@shared/services';
+import { normalizeDateForInput, normalizeTimeForInput } from '@shared/utils/date';
 import { useOpenViewUploadUrl } from '@features/upload';
 import { AttachmentMediaPreview } from '@features/upload';
 import { useWorkspaceMemberOptions } from '@features/workspace';
@@ -145,22 +146,6 @@ const renderRichText = (value: string | undefined, fallback: string) => {
       dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(value) }}
     />
   );
-};
-
-const normalizeDateForInput = (value?: string) => {
-  if (!value) return '';
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return '';
-  return parsed.toISOString().slice(0, 10);
-};
-
-const normalizeTimeForInput = (value?: string) => {
-  if (!value) return '';
-  if (/^\d{2}:\d{2}$/.test(value)) return value;
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return '';
-  return parsed.toISOString().slice(11, 16);
 };
 
 export const IssueDetailPage: React.FC = () => {

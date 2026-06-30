@@ -17,6 +17,7 @@ import { useApp } from '../AppContext';
 import { PRIORITY_COLORS, ISSUE_TYPE_CONFIG } from '../constants';
 import { getStatusLabel, isStatusFinal } from '@shared/constants/statuses';
 import { useWorkspaceStatuses } from '@shared/hooks/useWorkspaceStatuses';
+import { formatCalendarDate } from '@shared/utils/date';
 import { Issue, IssueType, Status } from '../types';
 import { KanbanBoard } from '../components/board/KanbanBoard';
 import { useIssuesDirectory, useUpdateAnyIssueStatus } from '@/features/issues';
@@ -127,7 +128,7 @@ export const MyIssuesPage: React.FC = () => {
                   {issue.priority}
                 </span>
                 <span className="text-xs text-gray-400 w-24 text-right">
-                  {issue.dueDate ? new Date(issue.dueDate).toLocaleDateString() : 'No due date'}
+                  {formatCalendarDate(issue.dueDate, undefined, { year: 'numeric', month: 'numeric', day: 'numeric' })}
                 </span>
                 <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button type="button" className="p-1 rounded hover:bg-gray-200 dark:hover:bg-white/10 text-gray-400">

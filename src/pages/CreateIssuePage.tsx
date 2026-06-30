@@ -43,6 +43,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { RichTextEditor } from '../components/RichTextEditor';
 import { LabelChip } from '@shared/components/ui/LabelChip';
 import { getApiFieldErrors, getApiErrorMessage } from '@shared/services';
+import { addDaysToDateInput, normalizeDateForInput, normalizeTimeForInput } from '@shared/utils/date';
 import { useDepartmentOptions } from '@features/department';
 import { useActiveTemplates } from '@features/templates';
 import { useProjectOptions } from '@features/projects';
@@ -97,38 +98,6 @@ type IssueDraftSnapshot = {
 };
 
 const DEFAULT_NEW_LABEL_COLOR = '#38bdf8';
-
-const normalizeDateForInput = (value: unknown): string => {
-  if (typeof value !== 'string' || !value.trim()) return '';
-  const trimmed = value.trim();
-
-  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
-    return trimmed;
-  }
-
-  const parsed = new Date(trimmed);
-  if (Number.isNaN(parsed.getTime())) return '';
-  return parsed.toISOString().slice(0, 10);
-};
-
-const normalizeTimeForInput = (value: unknown): string => {
-  if (typeof value !== 'string' || !value.trim()) return '12:00';
-  const trimmed = value.trim();
-
-  if (/^\d{2}:\d{2}$/.test(trimmed)) {
-    return trimmed;
-  }
-
-  const parsed = new Date(trimmed);
-  if (Number.isNaN(parsed.getTime())) return '12:00';
-  return parsed.toISOString().slice(11, 16);
-};
-
-const addDaysToDateInput = (days: number): string => {
-  const next = new Date();
-  next.setDate(next.getDate() + days);
-  return next.toISOString().slice(0, 10);
-};
 
 export const CreateIssuePage: React.FC = () => {
   const { showToast } = useApp();

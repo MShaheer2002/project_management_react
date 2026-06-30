@@ -26,6 +26,7 @@ import { useApp } from '@/AppContext';
 import { ISSUE_TYPE_CONFIG, PRIORITY_COLORS, STATUS_LABELS } from '@/constants';
 import { canDeleteIssues } from '@shared/permissions';
 import { getApiErrorCode, getApiErrorMessage } from '@shared/services';
+import { normalizeDateForInput, normalizeTimeForInput } from '@shared/utils/date';
 import { useOpenViewUploadUrl } from '@features/upload';
 import { AttachmentMediaPreview } from '@features/upload';
 import { useWorkspaceMemberOptions } from '@features/workspace';
@@ -59,22 +60,6 @@ const AvatarFallback: React.FC<{ name: string }> = ({ name }) => (
     <span className="text-xs font-bold">{name.charAt(0).toUpperCase()}</span>
   </div>
 );
-
-const normalizeDateForInput = (value?: string) => {
-  if (!value) return '';
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return '';
-  return parsed.toISOString().slice(0, 10);
-};
-
-const normalizeTimeForInput = (value?: string) => {
-  if (!value) return '';
-  if (/^\d{2}:\d{2}$/.test(value)) return value;
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return '';
-  return parsed.toISOString().slice(11, 16);
-};
 
 export const ContextPanel: React.FC = () => {
   const { selectedIssueId, setSelectedIssueId, showToast } = useApp();

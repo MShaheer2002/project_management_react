@@ -11,6 +11,7 @@ import {
   Wrench,
   X,
   AlertCircle,
+  RefreshCcw,
 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useUIStore } from '@/app/stores/useUIStore';
@@ -43,6 +44,7 @@ const formatCompactNumber = (value: number) =>
 const MIN_WIDTH = 300;
 const MAX_WIDTH = 600;
 const DEFAULT_WIDTH = 360;
+const SUGGESTION_ANCHOR_WINDOW_MS = 10 * 60 * 1000;
 
 const formatSuggestionTarget = (suggestion: AiSuggestion) => {
   if (typeof suggestion.payload?.issueId === 'string' && suggestion.payload.issueId.trim()) {
@@ -83,7 +85,47 @@ const formatSuggestionDetails = (suggestion: AiSuggestion) => {
     return first?.issueId ? `Closest match: ${first.issueId}${first.title ? ` · ${first.title}` : ''}` : 'Review similar issues.';
   }
 
+  if (suggestion.type === 'PROJECT_HEALTH' || suggestion.type === 'TEAM_HEALTH' || suggestion.type === 'CYCLE_HEALTH') {
+    const signals = Array.isArray(suggestion.payload?.riskSignals)
+      ? (suggestion.payload?.riskSignals as Array<string>).filter(Boolean).slice(0, 3)
+      : [];
+    return signals.length > 0 ? signals.join(' · ') : (suggestion.reason ?? suggestion.message);
+  }
+
   return suggestion.reason ?? suggestion.message;
+};
+
+const formatSuggestionActionLabel = (suggestion: AiSuggestion) => {
+  if (suggestion.type === 'PRIORITY') {
+    const priority = getSuggestedPriority(suggestion);
+    return priority ? `Set ${priority.toLowerCase()}` : 'Use suggestion';
+  }
+
+  if (suggestion.type === 'ASSIGNEE') return 'Choose assignee';
+  if (suggestion.type === 'LABEL') return 'Add labels';
+  if (suggestion.type === 'DUPLICATE') return 'Review duplicate';
+  return 'Use suggestion';
+};
+
+const getSuggestionAnchorHints = (suggestion: AiSuggestion) => {
+  const hints = new Set<string>();
+  const payload = suggestion.payload ?? {};
+  const anchor = typeof payload.anchor === 'object' && payload.anchor ? payload.anchor as Record<string, unknown> : null;
+
+  const addValue = (value: unknown) => {
+    if (typeof value !== 'string') return;
+    const trimmed = value.trim();
+    if (trimmed) hints.add(trimmed.toLowerCase());
+  };
+
+  addValue(suggestion.targetId);
+  addValue(payload.issueId);
+  addValue(payload.projectId);
+  addValue(payload.teamId);
+  addValue(payload.cycleId);
+  addValue(anchor?.targetId);
+
+  return [...hints];
 };
 
 const getAssigneeCandidates = (suggestion: AiSuggestion) =>
@@ -96,23 +138,45 @@ const getSuggestedPriority = (suggestion: AiSuggestion) =>
     ? suggestion.payload.suggestedPriority
     : null;
 
+const getSuggestedLabels = (suggestion: AiSuggestion) =>
+  Array.isArray(suggestion.payload?.labels)
+    ? suggestion.payload.labels as Array<{ labelId?: string; name?: string }>
+    : [];
+
+const getSprintPlanningCandidates = (suggestion: AiSuggestion) =>
+  Array.isArray(suggestion.payload?.candidates)
+    ? suggestion.payload.candidates as Array<{ issueId?: string; title?: string }>
+    : [];
+
+const isSuggestionActionable = (suggestion: AiSuggestion) =>
+  ['ASSIGNEE', 'PRIORITY', 'LABEL', 'SPRINT_PLANNING'].includes(suggestion.type);
+
+const getSuggestionScopeBadge = (suggestion: AiSuggestion) => {
+  const scope = typeof suggestion.payload?.scope === 'string' ? suggestion.payload.scope : null;
+  if (!scope) return null;
+  return scope.toUpperCase();
+};
+
 const findSuggestionAnchorMessageId = (messages: AiMessage[], suggestion: AiSuggestion) => {
-  const target = formatSuggestionTarget(suggestion).toLowerCase();
+  const targets = getSuggestionAnchorHints(suggestion);
+  if (targets.length === 0) return null;
+
   const suggestionTime = new Date(suggestion.createdAt).getTime();
-  const assistantMessages = messages.filter((message) => message.role === 'ASSISTANT');
+  if (!Number.isFinite(suggestionTime)) return null;
 
-  const directMatch = [...assistantMessages]
-    .reverse()
-    .find((message) =>
-      new Date(message.createdAt).getTime() <= suggestionTime &&
-      message.content.toLowerCase().includes(target)
-    );
+  const matches = messages
+    .filter((message) => (
+      message.role === 'ASSISTANT'
+      && targets.some((target) => message.content.toLowerCase().includes(target))
+    ))
+    .map((message) => ({
+      message,
+      distanceMs: Math.abs(new Date(message.createdAt).getTime() - suggestionTime),
+    }))
+    .filter(({ distanceMs }) => Number.isFinite(distanceMs) && distanceMs <= SUGGESTION_ANCHOR_WINDOW_MS)
+    .sort((a, b) => a.distanceMs - b.distanceMs);
 
-  if (directMatch) return directMatch.id;
-
-  return [...assistantMessages]
-    .reverse()
-    .find((message) => new Date(message.createdAt).getTime() <= suggestionTime)?.id ?? null;
+  return matches[0]?.message.id ?? null;
 };
 
 export const TrussenAiPanel: React.FC = () => {
@@ -120,6 +184,7 @@ export const TrussenAiPanel: React.FC = () => {
   const activeConvId = useUIStore((s) => s.activeConversationId);
   const setActiveConvId = useUIStore((s) => s.setActiveConversationId);
   const workspaceId = useAuthStore((s) => s.workspace?.id);
+  const currentUserId = useAuthStore((s) => s.currentUser?.id);
   const showToast = useToastStore((s) => s.showToast);
   const queryClient = useQueryClient();
 
@@ -133,6 +198,8 @@ export const TrussenAiPanel: React.FC = () => {
   const [lastResponseMeta, setLastResponseMeta] = useState<{ model?: string; tokensUsed?: number } | null>(null);
   const [view, setView] = useState<'chat' | 'history'>('chat');
   const [actionSuggestionId, setActionSuggestionId] = useState<string | null>(null);
+  const [selectedLabelIds, setSelectedLabelIds] = useState<Record<string, string[]>>({});
+  const [selectedSprintIssueIds, setSelectedSprintIssueIds] = useState<Record<string, string[]>>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // @ mention autocomplete
@@ -187,14 +254,16 @@ export const TrussenAiPanel: React.FC = () => {
     staleTime: 5_000,
     refetchInterval: view === 'chat' ? 8_000 : false,
   });
-  const suggestions = suggestionsQuery.data?.items ?? [];
+  const suggestions = (suggestionsQuery.data?.items ?? []).filter((suggestion) => {
+    if (!currentUserId) return true;
+    return !suggestion.createdByUserId || suggestion.createdByUserId === currentUserId;
+  });
   const suggestionsByMessageId = suggestions.reduce<Record<string, AiSuggestion[]>>((acc, suggestion) => {
     const messageId = findSuggestionAnchorMessageId(messages, suggestion);
     if (!messageId) return acc;
     acc[messageId] = [...(acc[messageId] ?? []), suggestion];
     return acc;
   }, {});
-  const unanchoredSuggestions = suggestions.filter((suggestion) => !findSuggestionAnchorMessageId(messages, suggestion));
 
   useEffect(() => {
     if (!activeConvId) {
@@ -225,8 +294,8 @@ export const TrussenAiPanel: React.FC = () => {
     setTimeout(() => inputRef.current?.focus(), 200);
   }, []);
 
-  const handleSend = useCallback(async () => {
-    const trimmed = input.trim();
+  const sendMessage = useCallback(async (messageText: string) => {
+    const trimmed = messageText.trim();
     if (!trimmed || isStreaming) return;
 
     const userMsg: AiMessage = {
@@ -304,7 +373,15 @@ export const TrussenAiPanel: React.FC = () => {
       setStreamingContent('');
       setToolActivity(null);
     }
-  }, [input, isStreaming, activeConvId, workspaceId, queryClient, setActiveConvId]);
+  }, [isStreaming, activeConvId, workspaceId, queryClient, setActiveConvId, inputRef]);
+
+  const handleSend = useCallback(async () => {
+    await sendMessage(input);
+  }, [input, sendMessage]);
+
+  const handleQuickReply = useCallback((value: string) => {
+    void sendMessage(value);
+  }, [sendMessage]);
 
   const handleNewConversation = () => {
     setActiveConvId(null);
@@ -340,6 +417,19 @@ export const TrussenAiPanel: React.FC = () => {
     }
   }, [showToast, suggestionsQuery]);
 
+  const toggleSelectedValue = useCallback((
+    stateSetter: React.Dispatch<React.SetStateAction<Record<string, string[]>>>,
+    suggestionId: string,
+    value: string,
+  ) => {
+    stateSetter((prev) => {
+      const current = new Set(prev[suggestionId] ?? []);
+      if (current.has(value)) current.delete(value);
+      else current.add(value);
+      return { ...prev, [suggestionId]: [...current] };
+    });
+  }, []);
+
   const handleDismissSuggestion = useCallback(async (suggestionId: string) => {
     setActionSuggestionId(suggestionId);
     try {
@@ -361,13 +451,30 @@ export const TrussenAiPanel: React.FC = () => {
       : null;
     const assigneeCandidates = getAssigneeCandidates(suggestion);
     const suggestedPriority = getSuggestedPriority(suggestion);
+    const suggestedLabels = getSuggestedLabels(suggestion);
+    const sprintCandidates = getSprintPlanningCandidates(suggestion);
+    const actionLabel = formatSuggestionActionLabel(suggestion);
+    const scopeBadge = getSuggestionScopeBadge(suggestion);
+    const riskSignals = Array.isArray(suggestion.payload?.riskSignals)
+      ? (suggestion.payload?.riskSignals as Array<string>).filter(Boolean).slice(0, 4)
+      : [];
+    const report = typeof suggestion.payload?.report === 'string' ? suggestion.payload.report.trim() : null;
+    const chosenLabelIds = selectedLabelIds[suggestion.id] ?? [];
+    const chosenSprintIssueIds = selectedSprintIssueIds[suggestion.id] ?? [];
+    const actionable = isSuggestionActionable(suggestion);
 
     return (
-      <div key={suggestion.id} className="rounded-lg border border-gray-200 bg-gray-50/60 px-3 py-2 dark:border-border-dark dark:bg-white/[0.03]">
-        <div className="flex items-start justify-between gap-2">
+      <div
+        key={suggestion.id}
+        className="rounded-xl border border-gray-200/80 bg-white/90 px-3 py-2.5 shadow-sm shadow-black/[0.02] dark:border-border-dark dark:bg-white/[0.025]"
+      >
+        <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[12px] font-medium text-gray-700 dark:text-gray-200">{suggestion.title}</p>
-            <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[10px] text-gray-400">
+            <p className="text-[12px] font-semibold text-gray-700 dark:text-gray-200">{suggestion.title}</p>
+            <p className="mt-1 text-[11px] leading-relaxed text-gray-500 dark:text-gray-400">
+              {formatSuggestionDetails(suggestion)}
+            </p>
+            <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[10px] text-gray-400">
               <span>{formatSuggestionTarget(suggestion)}</span>
               <span>•</span>
               <span>{relativeTime(suggestion.createdAt)}</span>
@@ -379,13 +486,40 @@ export const TrussenAiPanel: React.FC = () => {
               )}
             </div>
           </div>
-          <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[9px] font-medium uppercase tracking-wider text-gray-500 dark:bg-white/[0.05] dark:text-gray-400">
-            {suggestion.type}
-          </span>
+          <div className="flex flex-col items-end gap-1">
+            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-gray-500 dark:bg-white/[0.05] dark:text-gray-400">
+              {suggestion.type}
+            </span>
+            {scopeBadge && (
+              <span className="rounded-full border border-gray-200 px-2 py-0.5 text-[9px] font-medium uppercase tracking-wider text-gray-400 dark:border-border-dark">
+                {scopeBadge}
+              </span>
+            )}
+          </div>
         </div>
 
-        {suggestion.type === 'ASSIGNEE' && assigneeCandidates.length > 0 ? (
+        {riskSignals.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-1.5">
+            {riskSignals.map((signal) => (
+              <span
+                key={signal}
+                className="rounded-full bg-gray-100 px-2 py-0.5 text-[9px] font-medium text-gray-500 dark:bg-white/[0.05] dark:text-gray-400"
+              >
+                {signal}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {report && (
+          <p className="mt-2 text-[11px] leading-relaxed text-gray-500 dark:text-gray-400 line-clamp-4">
+            {report}
+          </p>
+        )}
+
+        {suggestion.type === 'ASSIGNEE' && assigneeCandidates.length > 0 ? (
+          <div className="mt-2.5 flex flex-wrap gap-1.5">
+            <span className="self-center text-[10px] text-gray-400">{actionLabel}</span>
             <div className="flex flex-wrap gap-1.5">
               {assigneeCandidates.map((candidate) => {
                 const userId = candidate.userId?.trim();
@@ -397,7 +531,7 @@ export const TrussenAiPanel: React.FC = () => {
                     type="button"
                     disabled={isActing}
                     onClick={() => void handleAcceptSuggestion(suggestion.id, [userId])}
-                    className="rounded-full border border-gray-200 px-2 py-0.5 text-[10px] font-medium text-gray-500 transition-all hover:border-primary/30 hover:bg-primary/5 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50 dark:border-border-dark"
+                    className="rounded-full border border-gray-200 px-2.5 py-1 text-[10px] font-medium text-gray-600 transition-all hover:border-primary/30 hover:bg-primary/5 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50 dark:border-border-dark dark:text-gray-300"
                   >
                     {isActing ? 'Applying...' : name}
                   </button>
@@ -408,47 +542,145 @@ export const TrussenAiPanel: React.FC = () => {
               type="button"
               disabled={isActing}
               onClick={() => void handleDismissSuggestion(suggestion.id)}
-              className="rounded-full border border-gray-200 px-2 py-0.5 text-[10px] font-medium text-gray-400 transition-all hover:border-primary/30 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50 dark:border-border-dark"
+              className="rounded-full border border-gray-200 px-2.5 py-1 text-[10px] font-medium text-gray-400 transition-all hover:border-primary/30 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50 dark:border-border-dark"
             >
               Dismiss
             </button>
           </div>
+        ) : suggestion.type === 'LABEL' && suggestedLabels.length > 0 ? (
+          <div className="mt-2.5 space-y-2">
+            <div className="flex flex-wrap gap-1.5">
+              {suggestedLabels.map((label) => {
+                const labelId = label.labelId?.trim();
+                const name = label.name?.trim();
+                if (!labelId || !name) return null;
+                const selected = chosenLabelIds.includes(labelId);
+                return (
+                  <button
+                    key={labelId}
+                    type="button"
+                    disabled={isActing}
+                    onClick={() => toggleSelectedValue(setSelectedLabelIds, suggestion.id, labelId)}
+                    className={`rounded-full border px-2.5 py-1 text-[10px] font-medium transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
+                      selected
+                        ? 'border-primary/30 bg-primary/5 text-primary'
+                        : 'border-gray-200 text-gray-500 hover:border-primary/30 hover:text-primary dark:border-border-dark dark:text-gray-300'
+                    }`}
+                  >
+                    {name}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                disabled={isActing}
+                onClick={() => void handleAcceptSuggestion(suggestion.id, chosenLabelIds.length > 0 ? chosenLabelIds : undefined)}
+                className="rounded-full border border-gray-200 px-2.5 py-1 text-[10px] font-medium text-gray-600 transition-all hover:border-primary/30 hover:bg-primary/5 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50 dark:border-border-dark dark:text-gray-300"
+              >
+                {isActing ? 'Applying...' : actionLabel}
+              </button>
+              <button
+                type="button"
+                disabled={isActing}
+                onClick={() => void handleDismissSuggestion(suggestion.id)}
+                className="rounded-full border border-gray-200 px-2.5 py-1 text-[10px] font-medium text-gray-400 transition-all hover:border-primary/30 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50 dark:border-border-dark"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        ) : suggestion.type === 'SPRINT_PLANNING' && sprintCandidates.length > 0 ? (
+          <div className="mt-2.5 space-y-2">
+            <div className="flex flex-wrap gap-1.5">
+              {sprintCandidates.slice(0, 6).map((candidate) => {
+                const issueId = candidate.issueId?.trim();
+                const title = candidate.title?.trim();
+                if (!issueId) return null;
+                const selected = chosenSprintIssueIds.includes(issueId);
+                return (
+                  <button
+                    key={issueId}
+                    type="button"
+                    disabled={isActing}
+                    onClick={() => toggleSelectedValue(setSelectedSprintIssueIds, suggestion.id, issueId)}
+                    className={`rounded-full border px-2.5 py-1 text-[10px] font-medium transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
+                      selected
+                        ? 'border-primary/30 bg-primary/5 text-primary'
+                        : 'border-gray-200 text-gray-500 hover:border-primary/30 hover:text-primary dark:border-border-dark dark:text-gray-300'
+                    }`}
+                    title={title || issueId}
+                  >
+                    {issueId}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                disabled={isActing}
+                onClick={() => void handleAcceptSuggestion(suggestion.id, chosenSprintIssueIds.length > 0 ? chosenSprintIssueIds : undefined)}
+                className="rounded-full border border-gray-200 px-2.5 py-1 text-[10px] font-medium text-gray-600 transition-all hover:border-primary/30 hover:bg-primary/5 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50 dark:border-border-dark dark:text-gray-300"
+              >
+                {isActing ? 'Applying...' : actionLabel}
+              </button>
+              <button
+                type="button"
+                disabled={isActing}
+                onClick={() => void handleDismissSuggestion(suggestion.id)}
+                className="rounded-full border border-gray-200 px-2.5 py-1 text-[10px] font-medium text-gray-400 transition-all hover:border-primary/30 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50 dark:border-border-dark"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
         ) : suggestion.type === 'PRIORITY' && suggestedPriority ? (
-          <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            <span className="text-[10px] text-gray-400">{formatSuggestionDetails(suggestion)}</span>
+          <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
             <button
               type="button"
               disabled={isActing}
               onClick={() => void handleAcceptSuggestion(suggestion.id)}
-              className="rounded-full border border-gray-200 px-2 py-0.5 text-[10px] font-medium text-gray-500 transition-all hover:border-primary/30 hover:bg-primary/5 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50 dark:border-border-dark"
+              className="rounded-full border border-gray-200 px-2.5 py-1 text-[10px] font-medium text-gray-600 transition-all hover:border-primary/30 hover:bg-primary/5 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50 dark:border-border-dark dark:text-gray-300"
             >
-              {isActing ? 'Applying...' : `Set ${suggestedPriority}`}
+              {isActing ? 'Applying...' : actionLabel}
             </button>
             <button
               type="button"
               disabled={isActing}
               onClick={() => void handleDismissSuggestion(suggestion.id)}
-              className="rounded-full border border-gray-200 px-2 py-0.5 text-[10px] font-medium text-gray-400 transition-all hover:border-primary/30 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50 dark:border-border-dark"
+              className="rounded-full border border-gray-200 px-2.5 py-1 text-[10px] font-medium text-gray-400 transition-all hover:border-primary/30 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50 dark:border-border-dark"
+            >
+              Dismiss
+            </button>
+          </div>
+        ) : actionable ? (
+          <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              disabled={isActing}
+              onClick={() => void handleAcceptSuggestion(suggestion.id)}
+              className="rounded-full border border-gray-200 px-2.5 py-1 text-[10px] font-medium text-gray-600 transition-all hover:border-primary/30 hover:bg-primary/5 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50 dark:border-border-dark dark:text-gray-300"
+            >
+              {isActing ? 'Applying...' : actionLabel}
+            </button>
+            <button
+              type="button"
+              disabled={isActing}
+              onClick={() => void handleDismissSuggestion(suggestion.id)}
+              className="rounded-full border border-gray-200 px-2.5 py-1 text-[10px] font-medium text-gray-400 transition-all hover:border-primary/30 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50 dark:border-border-dark"
             >
               Dismiss
             </button>
           </div>
         ) : (
-          <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            <span className="text-[10px] text-gray-400">{formatSuggestionDetails(suggestion)}</span>
-            <button
-              type="button"
-              disabled={isActing}
-              onClick={() => void handleAcceptSuggestion(suggestion.id)}
-              className="rounded-full border border-gray-200 px-2 py-0.5 text-[10px] font-medium text-gray-500 transition-all hover:border-primary/30 hover:bg-primary/5 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50 dark:border-border-dark"
-            >
-              {isActing ? 'Applying...' : 'Apply'}
-            </button>
+          <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
             <button
               type="button"
               disabled={isActing}
               onClick={() => void handleDismissSuggestion(suggestion.id)}
-              className="rounded-full border border-gray-200 px-2 py-0.5 text-[10px] font-medium text-gray-400 transition-all hover:border-primary/30 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50 dark:border-border-dark"
+              className="rounded-full border border-gray-200 px-2.5 py-1 text-[10px] font-medium text-gray-400 transition-all hover:border-primary/30 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50 dark:border-border-dark"
             >
               Dismiss
             </button>
@@ -456,7 +688,14 @@ export const TrussenAiPanel: React.FC = () => {
         )}
       </div>
     );
-  }, [actionSuggestionId, handleAcceptSuggestion, handleDismissSuggestion]);
+  }, [
+    actionSuggestionId,
+    handleAcceptSuggestion,
+    handleDismissSuggestion,
+    selectedLabelIds,
+    selectedSprintIssueIds,
+    toggleSelectedValue,
+  ]);
 
   return (
     <div className="relative flex h-full shrink-0 flex-col border-l border-gray-200 bg-white dark:border-border-dark dark:bg-bg-dark" style={{ width: `${panelWidth}px` }}>
@@ -466,7 +705,7 @@ export const TrussenAiPanel: React.FC = () => {
         className="absolute left-0 top-0 z-10 h-full w-1 cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors"
       />
       {/* Header */}
-      <div className="flex min-h-16 items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-border-dark">
+          <div className="flex min-h-16 items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-border-dark">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <Sparkles size={14} className="text-primary" />
@@ -575,7 +814,7 @@ export const TrussenAiPanel: React.FC = () => {
                 <p className="mt-1.5 max-w-[220px] text-[11px] leading-relaxed text-gray-400">
                   Create issues, check status, assign tasks, or ask about your workspace.
                 </p>
-                <div className="mt-4 max-w-[250px] rounded-2xl border border-gray-200 bg-gray-50/90 px-4 py-3 text-left dark:border-border-dark dark:bg-white/[0.03]">
+                <div className="mt-4 max-w-[250px] rounded-2xl border border-gray-200 bg-gray-50/80 px-4 py-3 text-left dark:border-border-dark dark:bg-white/[0.03]">
                   <div className="flex items-start gap-2">
                     <ShieldCheck size={14} className="mt-0.5 shrink-0 text-primary" />
                     <div className="space-y-1">
@@ -624,7 +863,7 @@ export const TrussenAiPanel: React.FC = () => {
               .filter((m) => m.role === 'USER' || m.role === 'ASSISTANT')
               .map((msg) => (
                 <div key={msg.id} className={`flex ${msg.role === 'USER' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={msg.role === 'USER' ? 'max-w-[88%]' : 'max-w-[88%] space-y-1'}>
+                  <div className={msg.role === 'USER' ? 'max-w-[88%]' : 'max-w-[88%] space-y-1.5'}>
                     <div
                       className={`rounded-2xl px-3 py-2 text-[12px] leading-[1.6] ${
                         msg.role === 'USER'
@@ -635,12 +874,19 @@ export const TrussenAiPanel: React.FC = () => {
                       {msg.role === 'USER' ? (
                         <p className="whitespace-pre-wrap break-words">{msg.content}</p>
                       ) : (
-                        <AiMarkdown content={msg.content} />
+                        <AiMarkdown
+                          content={msg.content}
+                          onQuickReply={handleQuickReply}
+                          quickReplyDisabled={isStreaming}
+                        />
                       )}
                     </div>
                     {msg.role === 'ASSISTANT' && (suggestionsByMessageId[msg.id]?.length ?? 0) > 0 && (
-                      <div className="space-y-1.5 pt-1">
-                        <p className="px-1 text-[10px] font-bold uppercase tracking-[0.15em] text-gray-400">Suggestions</p>
+                      <div className="space-y-1.5 pt-0.5">
+                        <div className="flex items-center gap-2 px-1 text-[10px] text-gray-400">
+                          <span className="font-semibold uppercase tracking-[0.14em]">Suggestions</span>
+                          <span className="h-px flex-1 bg-gray-200 dark:bg-border-dark" />
+                        </div>
                         {suggestionsByMessageId[msg.id]!.map(renderSuggestionRow)}
                       </div>
                     )}
@@ -657,7 +903,12 @@ export const TrussenAiPanel: React.FC = () => {
                       <span>{toolActivity}</span>
                     </div>
                   ) : streamingContent ? (
-                    <AiMarkdown content={streamingContent} className="text-[12px] leading-[1.6] text-gray-800 dark:text-gray-200" />
+                    <AiMarkdown
+                      content={streamingContent}
+                      className="text-[12px] leading-[1.6] text-gray-800 dark:text-gray-200"
+                      onQuickReply={handleQuickReply}
+                      quickReplyDisabled={isStreaming}
+                    />
                   ) : (
                     <div className="flex items-center gap-1.5 text-[11px] text-gray-400">
                       <Loader2 size={11} className="animate-spin" />
@@ -665,27 +916,6 @@ export const TrussenAiPanel: React.FC = () => {
                     </div>
                   )}
                 </div>
-              </div>
-            )}
-
-            {unanchoredSuggestions.length > 0 && (
-              <div className="space-y-1.5 pt-1">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-gray-400">Suggestions</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => void suggestionsQuery.refetch()}
-                    className="rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-white/5"
-                    aria-label="Refresh suggestions"
-                    title="Refresh suggestions"
-                  >
-                    <Loader2 size={12} className={suggestionsQuery.isFetching ? 'animate-spin' : ''} />
-                  </button>
-                </div>
-
-                {unanchoredSuggestions.map(renderSuggestionRow)}
               </div>
             )}
 
@@ -787,10 +1017,15 @@ export const TrussenAiPanel: React.FC = () => {
 
             <div className="mt-2 flex items-center justify-between gap-3 px-1 text-[10px] text-gray-400">
               <span>{workspaceId ? 'Enter to send, Shift+Enter for a new line.' : 'Select a workspace to use Trussen AI.'}</span>
-              {typeof lastResponseMeta?.tokensUsed === 'number' && !isStreaming && (
-                <span className="truncate">
-                  {formatCompactNumber(lastResponseMeta.tokensUsed)} tokens
-                </span>
+              {Boolean(suggestions.length) && (
+                <button
+                  type="button"
+                  onClick={() => void suggestionsQuery.refetch()}
+                  className="inline-flex items-center gap-1 rounded-full border border-gray-200 px-2 py-0.5 text-[10px] font-medium text-gray-500 transition-all hover:border-primary/30 hover:text-primary dark:border-border-dark dark:text-gray-400"
+                >
+                  <RefreshCcw size={10} />
+                  Refresh
+                </button>
               )}
             </div>
           </div>

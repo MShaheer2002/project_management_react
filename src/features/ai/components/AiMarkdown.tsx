@@ -11,6 +11,30 @@ import { useNavigate } from 'react-router-dom';
 type AiMarkdownProps = {
   content: string;
   className?: string;
+  onQuickReply?: (value: string) => void;
+  quickReplyDisabled?: boolean;
+};
+
+const QUICK_REPLY_SECTION_PATTERN = /^available (projects|teams|members|users|cycles|departments):$/i;
+const QUICK_REPLY_OPTION_PATTERN = /^[A-Za-z0-9][A-Za-z0-9 '&()./_-]{1,80}$/;
+const INTERNAL_TRACE_LINE_PATTERN = /^used [a-z0-9_]+$/i;
+const INTERNAL_SUMMARY_LINE_PATTERN = /^already completed in this request:/i;
+
+const parseInlineChoices = (line: string): string[] => {
+  const match = line.match(/:\s*(.+)$/);
+  if (!match) return [];
+
+  const raw = match[1]
+    .replace(/\.$/, '')
+    .replace(/\bor\b/gi, ',')
+    .split(',')
+    .map((part) => part.trim().replace(/^(a|an|the)\s+/i, ''))
+    .filter(Boolean);
+
+  const unique = [...new Set(raw)];
+  if (unique.length < 2 || unique.length > 6) return [];
+  if (unique.some((item) => item.length > 24 || !/^[A-Za-z0-9 _/-]+$/.test(item))) return [];
+  return unique;
 };
 
 // Priority color mapping
@@ -54,8 +78,16 @@ const getSafeHref = (href: string): string | null => {
   }
 };
 
-export const AiMarkdown: React.FC<AiMarkdownProps> = ({ content, className = '' }) => {
-  const lines = content.split('\n').map((l) => normalizeMarkdownEscapes(stripHtml(stripEmojis(l))));
+export const AiMarkdown: React.FC<AiMarkdownProps> = ({
+  content,
+  className = '',
+  onQuickReply,
+  quickReplyDisabled = false,
+}) => {
+  const lines = content
+    .split('\n')
+    .map((l) => normalizeMarkdownEscapes(stripHtml(stripEmojis(l))))
+    .filter((line) => !INTERNAL_TRACE_LINE_PATTERN.test(line.trim()) && !INTERNAL_SUMMARY_LINE_PATTERN.test(line.trim()));
   const elements: React.ReactNode[] = [];
   let i = 0;
 
@@ -108,8 +140,50 @@ export const AiMarkdown: React.FC<AiMarkdownProps> = ({ content, className = '' 
               // Extract badges from remaining cells
               const badges = row.filter((c, ci) => ci !== idIdx && c !== title && c.trim().length > 0);
 
+              const quickReplyValue = !issueId && badges.length === 0 && onQuickReply && title.trim().length > 0
+                ? title.trim()
+                : null;
+
+              const cardClasses = `rounded-lg border border-gray-200 bg-white p-2.5 text-left transition-all dark:border-border-dark dark:bg-white/[0.02] ${
+                quickReplyValue
+                  ? 'hover:border-primary/30 hover:bg-primary/5'
+                  : 'hover:border-gray-300 dark:hover:border-gray-600'
+              }`;
+
+              const cardContent = (
+                <>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      {issueId && <IssueLink issueId={issueId} label={issueId} />}
+                      <p className="mt-0.5 text-[11px] text-gray-700 dark:text-gray-300 leading-snug">{title}</p>
+                    </div>
+                  </div>
+                  {badges.length > 0 && (
+                    <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                      {badges.map((badge, bi) => (
+                        <CellBadge key={bi} value={badge} />
+                      ))}
+                    </div>
+                  )}
+                </>
+              );
+
+              if (quickReplyValue) {
+                return (
+                  <button
+                    key={ri}
+                    type="button"
+                    disabled={quickReplyDisabled}
+                    onClick={() => onQuickReply(quickReplyValue)}
+                    className={cardClasses}
+                  >
+                    {cardContent}
+                  </button>
+                );
+              }
+
               return (
-                <div key={ri} className="rounded-lg border border-gray-200 bg-white p-2.5 transition-all hover:border-gray-300 dark:border-border-dark dark:bg-white/[0.02] dark:hover:border-gray-600">
+                <div key={ri} className={cardClasses}>
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
                       {issueId && <IssueLink issueId={issueId} label={issueId} />}
@@ -144,6 +218,96 @@ export const AiMarkdown: React.FC<AiMarkdownProps> = ({ content, className = '' 
     if (line.startsWith('# ')) {
       elements.push(<p key={`h1-${i}`} className="mt-2 mb-1 text-[13px] font-bold text-gray-800 dark:text-gray-100">{renderInline(line.slice(2))}</p>);
       i++; continue;
+    }
+
+    if (QUICK_REPLY_SECTION_PATTERN.test(line.trim()) && onQuickReply) {
+      elements.push(
+        <p key={`quick-label-${i}`} className="py-0.5">
+          {renderInline(line)}
+        </p>,
+      );
+
+      const options: string[] = [];
+      let cursor = i + 1;
+      while (cursor < lines.length) {
+        const rawLine = lines[cursor]?.trim() ?? '';
+        if (!rawLine) {
+          cursor++;
+          continue;
+        }
+
+        const normalizedOption = rawLine.replace(/^[-*]\s+/, '').trim();
+        if (!QUICK_REPLY_OPTION_PATTERN.test(normalizedOption)) break;
+        options.push(normalizedOption);
+        cursor++;
+      }
+
+      if (options.length > 0) {
+        elements.push(
+          <div key={`quick-options-${i}`} className="my-1.5 flex flex-wrap gap-1.5">
+            {options.map((option) => (
+              <button
+                key={option}
+                type="button"
+                disabled={quickReplyDisabled}
+                onClick={() => onQuickReply(option)}
+                className="rounded-full border border-gray-200 px-2.5 py-1 text-[10px] font-medium text-gray-500 transition-all hover:border-primary/30 hover:bg-primary/5 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50 dark:border-border-dark dark:hover:border-primary/30"
+              >
+                {option}
+              </button>
+            ))}
+          </div>,
+        );
+        i = cursor;
+        continue;
+      }
+    }
+
+    if (onQuickReply && /reply `?confirm`?/i.test(line) && /`?cancel`?/i.test(line)) {
+      elements.push(<p key={`confirm-label-${i}`} className="py-0.5">{renderInline(line)}</p>);
+      elements.push(
+        <div key={`confirm-actions-${i}`} className="my-1.5 flex flex-wrap gap-1.5">
+          {['Confirm', 'Cancel'].map((option) => (
+            <button
+              key={option}
+              type="button"
+              disabled={quickReplyDisabled}
+              onClick={() => onQuickReply(option)}
+              className={`rounded-full border px-2.5 py-1 text-[10px] font-medium transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
+                option === 'Confirm'
+                  ? 'border-primary/30 bg-primary/5 text-primary hover:bg-primary/10'
+                  : 'border-gray-200 text-gray-500 hover:border-primary/30 hover:text-primary dark:border-border-dark'
+              }`}
+            >
+              {option}
+            </button>
+          ))}
+        </div>,
+      );
+      i++;
+      continue;
+    }
+
+    const inlineChoices = onQuickReply ? parseInlineChoices(line.trim()) : [];
+    if (onQuickReply && inlineChoices.length > 0) {
+      elements.push(<p key={`choice-label-${i}`} className="py-0.5">{renderInline(line)}</p>);
+      elements.push(
+        <div key={`choice-actions-${i}`} className="my-1.5 flex flex-wrap gap-1.5">
+          {inlineChoices.map((option) => (
+            <button
+              key={option}
+              type="button"
+              disabled={quickReplyDisabled}
+              onClick={() => onQuickReply(option)}
+              className="rounded-full border border-gray-200 px-2.5 py-1 text-[10px] font-medium text-gray-500 transition-all hover:border-primary/30 hover:bg-primary/5 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50 dark:border-border-dark dark:hover:border-primary/30"
+            >
+              {option}
+            </button>
+          ))}
+        </div>,
+      );
+      i++;
+      continue;
     }
 
     // List item

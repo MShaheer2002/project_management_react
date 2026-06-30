@@ -147,9 +147,12 @@ export type AiSuggestionType =
   | 'LABEL'
   | 'PRIORITY'
   | 'DUPLICATE'
-  | 'STALE'
+  | 'STALE_ISSUE'
   | 'WEEKLY_DIGEST'
-  | 'SPRINT_PLANNING';
+  | 'SPRINT_PLANNING'
+  | 'PROJECT_HEALTH'
+  | 'TEAM_HEALTH'
+  | 'CYCLE_HEALTH';
 
 export type AiSuggestionStatus = 'OPEN' | 'ACCEPTED' | 'DISMISSED' | 'SUPERSEDED' | 'EXPIRED';
 

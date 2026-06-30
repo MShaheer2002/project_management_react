@@ -13,6 +13,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/app/stores/useAuthStore';
 import { useApp } from '@/AppContext';
+import { formatCalendarDate } from '@shared/utils/date';
 import { useDashboardData, type DashboardChartPoint } from '@features/dashboard';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
 
@@ -87,8 +88,7 @@ const normalizeChartData = (points: DashboardChartPoint[]) =>
   }));
 
 const formatDate = (value?: string | null) => {
-  if (!value) return 'No due date';
-  return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(new Date(value));
+  return formatCalendarDate(value);
 };
 
 export const DashboardPage: React.FC = () => {
