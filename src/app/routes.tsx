@@ -38,6 +38,7 @@ import { CyclesPage } from '@/pages/CyclesPage';
 import { CycleDetailPage } from '@/pages/CycleDetailPage';
 import { BillingPage } from '@/pages/BillingPage';
 import { ApiKeysPage } from '@/pages/ApiKeysPage';
+import { AiConnectionsPage } from '@/pages/AiConnectionsPage';
 import { ProjectDetailPage } from '@/features/projects/pages/ProjectDetailPage';
 import { DepartmentsPage } from '@/features/department/pages/DepartmentsPage';
 import { DepartmentDetailPage } from '@/features/department/pages/DepartmentDetailPage';
@@ -164,6 +165,7 @@ export const AppRoutes: React.FC = () => {
           <Route path="/templates/:templateId/edit" element={isAdmin ? <TemplatesPage /> : <Navigate to="/" />} />
           <Route path="/templates/:templateId/apply" element={isAdmin ? <TemplatesPage /> : <Navigate to="/" />} />
           <Route path="/api-keys" element={isAdmin ? <ApiKeysPage /> : <Navigate to="/" />} />
+          <Route path="/ai-connections" element={isAdmin ? <AiConnectionsPage /> : <Navigate to="/" />} />
           <Route path="/billing" element={isAdmin ? <BillingPage /> : <Navigate to="/" />} />
 
           {/* Catch-all inside authenticated layout — redirect to dashboard */}

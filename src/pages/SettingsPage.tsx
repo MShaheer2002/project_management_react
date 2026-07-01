@@ -362,6 +362,7 @@ export const SettingsPage: React.FC = () => {
     { name: 'Teams', view: 'teams' },
     { name: 'Billing', view: 'billing' },
     { name: 'Integrations', view: 'integrations' },
+    { name: 'AI Connections', view: 'ai-connections' },
     { name: 'API Keys', view: 'api-keys' },
   ];
 
