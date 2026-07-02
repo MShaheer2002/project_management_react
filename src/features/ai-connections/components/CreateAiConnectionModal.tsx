@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Modal } from '@/components/modals/Modal';
-import { AlertTriangle, Check, Copy, Loader2 } from 'lucide-react';
+import { AlertTriangle, Check, Copy, ExternalLink, Loader2 } from 'lucide-react';
 import type { ApiAxiosError } from '@shared/services/types';
 import { useCreateAiConnection } from '../hooks/useAiConnectionMutations';
 import { useAiConnectionCatalog } from '../hooks/useAiConnectionData';
@@ -20,6 +20,80 @@ const CLIENT_OPTIONS = [
   { value: 'cursor', label: 'Cursor' },
   { value: 'generic_mcp', label: 'Generic MCP' },
 ] as const;
+
+type SetupGuide = {
+  title: string;
+  docsLabel: string;
+  docsUrl: string;
+  notes?: string;
+  steps: string[];
+  verify: string;
+};
+
+function getSetupGuide(
+  client: 'codex' | 'claude_desktop' | 'cursor' | 'generic_mcp',
+  endpoint: string | undefined,
+): SetupGuide {
+  switch (client) {
+    case 'codex':
+      return {
+        title: 'Connect in Codex',
+        docsLabel: 'OpenAI Codex MCP docs',
+        docsUrl: 'https://developers.openai.com/codex/mcp',
+        notes: 'Codex stores MCP servers in config.toml. The same config works across the Codex CLI and IDE extension.',
+        steps: [
+          'Open Codex MCP config. In the IDE extension, open MCP settings and choose "Open config.toml" from the gear menu. In the CLI, edit `~/.codex/config.toml`.',
+          'Paste the Trussen TOML block shown below into that file under a new `[mcp_servers.trussen]` entry.',
+          'Save the file and reopen Codex or start a new Codex session.',
+        ],
+        verify: 'In Codex TUI, run `/mcp` to confirm the Trussen server appears, then ask it to list your Trussen projects.',
+      };
+    case 'claude_desktop':
+      return {
+        title: 'Connect in Claude Desktop',
+        docsLabel: 'MCP local server setup docs',
+        docsUrl: 'https://modelcontextprotocol.io/docs/develop/connect-local-servers',
+        notes: 'Claude Desktop uses a config file opened from Developer settings. Trussen provides a remote HTTP MCP entry, so paste the generated JSON exactly as shown.',
+        steps: [
+          'Open Claude Desktop settings from the Claude app menu, then go to the Developer tab.',
+          'Click "Edit Config" to open `claude_desktop_config.json`.',
+          'Replace or merge the `mcpServers.trussen` entry with the JSON block shown below, then save the file.',
+          'Completely quit and restart Claude Desktop.',
+        ],
+        verify: 'After restart, check that Claude shows the MCP server indicator, then ask it to list your Trussen projects.',
+      };
+    case 'cursor':
+      return {
+        title: 'Connect in Cursor',
+        docsLabel: 'Cursor MCP docs',
+        docsUrl: 'https://cursor.com/docs/mcp',
+        notes: 'Cursor’s docs page is the official MCP reference. UI labels can vary slightly by build, but the flow is to open MCP settings, add a server, and paste the generated JSON.',
+        steps: [
+          'Open Cursor and go to its MCP settings screen.',
+          'Add a new MCP server or open the MCP JSON config editor.',
+          'Paste the Trussen JSON block shown below and save it.',
+          'Reload Cursor or start a new chat so it picks up the Trussen server.',
+        ],
+        verify: 'Ask Cursor to list your Trussen projects. If it already answers with live project data, the connection is working.',
+      };
+    case 'generic_mcp':
+      return {
+        title: 'Connect in another MCP client',
+        docsLabel: 'MCP remote server guide',
+        docsUrl: 'https://modelcontextprotocol.io/docs/develop/connect-remote-servers',
+        notes: endpoint
+          ? `Use Trussen as a remote MCP server at ${endpoint}. If your client accepts JSON server definitions, you can use the generated block directly.`
+          : 'Use Trussen as a remote MCP server. If your client accepts JSON server definitions, you can use the generated block directly.',
+        steps: [
+          'Open your client’s MCP, connectors, or tools settings.',
+          'Add a remote or HTTP MCP server.',
+          'Use the Trussen endpoint and Authorization header shown below, or paste the generated config if the client supports full server JSON.',
+          'Save the server and reconnect the client.',
+        ],
+        verify: 'Test with a simple prompt such as "list my Trussen projects".',
+      };
+  }
+}
 
 function addDays(date: Date, days: number): string {
   const d = new Date(date);
@@ -126,6 +200,7 @@ export const CreateAiConnectionModal: React.FC<CreateAiConnectionModalProps> = (
           ? 'genericMcp'
           : primaryClient
     ];
+  const setupGuide = created ? getSetupGuide(primaryClient, 'endpoint' in preferredSetup! ? preferredSetup.endpoint : undefined) : null;
 
   return (
     <Modal
@@ -269,6 +344,38 @@ export const CreateAiConnectionModal: React.FC<CreateAiConnectionModalProps> = (
             This token is shown only once. Store it securely. Anyone with this token can act with the same Trussen permissions as the user who created it, within the allowed AI safety boundary.
           </div>
 
+          {setupGuide && (
+            <div className="rounded-xl border border-blue-500/10 bg-blue-500/[0.06] px-4 py-4 space-y-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-white">{setupGuide.title}</p>
+                  {setupGuide.notes && (
+                    <p className="mt-1 text-xs text-blue-700 dark:text-blue-300/80 leading-relaxed">{setupGuide.notes}</p>
+                  )}
+                </div>
+                <a
+                  href={setupGuide.docsUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 text-xs text-primary hover:opacity-80 shrink-0"
+                >
+                  {setupGuide.docsLabel}
+                  <ExternalLink size={12} />
+                </a>
+              </div>
+
+              <ol className="space-y-2 text-xs text-gray-700 dark:text-gray-300 list-decimal list-inside">
+                {setupGuide.steps.map((step) => (
+                  <li key={step} className="leading-relaxed">{step}</li>
+                ))}
+              </ol>
+
+              <div className="rounded-lg border border-blue-500/10 bg-white/40 dark:bg-black/20 px-3 py-2 text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
+                <span className="font-medium text-gray-900 dark:text-white">Verify:</span> {setupGuide.verify}
+              </div>
+            </div>
+          )}
+
           <div>
             <p className="text-[11px] font-medium text-gray-400 dark:text-gray-500 mb-1.5">AI connection token</p>
             <button
@@ -324,7 +431,7 @@ export const CreateAiConnectionModal: React.FC<CreateAiConnectionModalProps> = (
           )}
 
           <div className="rounded-xl border border-gray-200 dark:border-border-dark bg-gray-50 dark:bg-black/20 px-4 py-3 text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
-            This setup is generated from the backend base URL. In development it falls back to your local Trussen backend URL; in production it should point at the deployed Trussen MCP endpoint automatically.
+            This setup is generated from the backend base URL. In development it falls back to your local Trussen backend URL; in production it should point at the deployed Trussen MCP endpoint automatically. For Codex, the config block already contains what you need to paste into `config.toml`.
           </div>
 
           <button
