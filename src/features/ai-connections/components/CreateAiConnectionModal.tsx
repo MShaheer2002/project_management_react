@@ -3,7 +3,8 @@ import { Modal } from '@/components/modals/Modal';
 import { AlertTriangle, Check, Copy, Loader2 } from 'lucide-react';
 import type { ApiAxiosError } from '@shared/services/types';
 import { useCreateAiConnection } from '../hooks/useAiConnectionMutations';
-import type { AiConnectionCreateResponse } from '../types';
+import { useAiConnectionCatalog } from '../hooks/useAiConnectionData';
+import type { AiConnectionCreateResponse, CreateAiConnectionInput } from '../types';
 
 const EXPIRY_OPTIONS = [
   { label: 'Never', days: 0 },
@@ -48,9 +49,11 @@ interface CreateAiConnectionModalProps {
 
 export const CreateAiConnectionModal: React.FC<CreateAiConnectionModalProps> = ({ isOpen, onClose }) => {
   const createAiConnection = useCreateAiConnection();
+  const catalogQuery = useAiConnectionCatalog();
   const [name, setName] = useState('');
   const [expiryDays, setExpiryDays] = useState(0);
   const [primaryClient, setPrimaryClient] = useState<'codex' | 'claude_desktop' | 'cursor' | 'generic_mcp'>('codex');
+  const [authType, setAuthType] = useState<'pat' | 'oauth'>('pat');
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<AiConnectionCreateResponse | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
@@ -59,6 +62,7 @@ export const CreateAiConnectionModal: React.FC<CreateAiConnectionModalProps> = (
     setName('');
     setExpiryDays(0);
     setPrimaryClient('codex');
+    setAuthType('pat');
     setError(null);
     setCreated(null);
     setCopiedField(null);
@@ -88,11 +92,13 @@ export const CreateAiConnectionModal: React.FC<CreateAiConnectionModalProps> = (
     setError(null);
 
     try {
-      const result = await createAiConnection.mutateAsync({
+      const payload: CreateAiConnectionInput = {
         name: name.trim(),
         primaryClient,
+        authType,
         expiresAt: expiryDays > 0 ? addDays(new Date(), expiryDays) : undefined,
-      });
+      };
+      const result = await createAiConnection.mutateAsync(payload);
       setCreated(result);
     } catch (err) {
       const apiError = err as ApiAxiosError;
@@ -100,11 +106,17 @@ export const CreateAiConnectionModal: React.FC<CreateAiConnectionModalProps> = (
 
       if (code === 'API_KEY_LIMIT_REACHED') {
         setError("You've reached the maximum AI connection tokens for your plan. Revoke an unused token or upgrade.");
+      } else if (code === 'AI_CONNECTION_AUTH_NOT_IMPLEMENTED') {
+        setError('OAuth AI connections are planned but not available in this version. Use a personal access token for now.');
       } else {
         setError(apiError.response?.data?.error?.message || 'Could not create AI connection token.');
       }
     }
   };
+
+  const clientCatalog = catalogQuery.data?.clients.find((client) => client.id === primaryClient);
+  const patMethod = catalogQuery.data?.authMethods.find((method) => method.type === 'pat');
+  const oauthMethod = catalogQuery.data?.authMethods.find((method) => method.type === 'oauth');
 
   const preferredSetup =
     created?.setup[
@@ -153,6 +165,51 @@ export const CreateAiConnectionModal: React.FC<CreateAiConnectionModalProps> = (
             </select>
           </div>
 
+          <div className="space-y-2">
+            <label className="text-xs font-bold uppercase tracking-wider text-gray-400">Auth method</label>
+            <div className="grid gap-2">
+              <button
+                type="button"
+                onClick={() => setAuthType('pat')}
+                className={`rounded-xl border px-4 py-3 text-left transition-colors ${
+                  authType === 'pat'
+                    ? 'border-primary bg-primary/5'
+                    : 'border-gray-200 dark:border-border-dark bg-gray-50 dark:bg-black/20'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-medium text-gray-900 dark:text-white">Personal Access Token</div>
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      {patMethod?.summary ?? 'Generate a Trussen token and paste the config into your client.'}
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-400">
+                    Available
+                  </span>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setAuthType('oauth')}
+                className="rounded-xl border border-gray-200 dark:border-border-dark bg-gray-50 dark:bg-black/20 px-4 py-3 text-left opacity-70 transition-colors"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-medium text-gray-900 dark:text-white">OAuth</div>
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      {oauthMethod?.summary ?? 'Planned for hosted clients that support user-authorized remote connections.'}
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">
+                    Planned
+                  </span>
+                </div>
+              </button>
+            </div>
+          </div>
+
           <div className="space-y-1.5">
             <label className="text-xs font-bold uppercase tracking-wider text-gray-400">Expiration</label>
             <select
@@ -171,6 +228,15 @@ export const CreateAiConnectionModal: React.FC<CreateAiConnectionModalProps> = (
           <div className="rounded-xl border border-blue-500/10 bg-blue-500/[0.06] px-4 py-3 text-xs text-blue-700 dark:text-blue-300/80 leading-relaxed">
             This creates a Trussen-scoped AI connection token for remote MCP clients. The generated setup points directly at the Trussen MCP endpoint, so normal users only need to paste the config and token into their AI client.
           </div>
+
+          {clientCatalog && (
+            <div className="rounded-xl border border-gray-200 dark:border-border-dark bg-gray-50 dark:bg-black/20 px-4 py-3 text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
+              <p className="font-medium text-gray-900 dark:text-white">{clientCatalog.label} capabilities</p>
+              <p className="mt-1">
+                Available auth: {clientCatalog.availableAuthMethods.map((method) => method.toUpperCase()).join(', ')}. Setup mode: copy ready config.
+              </p>
+            </div>
+          )}
 
           {error && (
             <div className="flex items-start gap-2 rounded-lg border border-red-100 bg-red-50 px-3 py-2.5 text-xs text-red-600 dark:border-red-900/40 dark:bg-red-900/10 dark:text-red-400">
@@ -193,7 +259,7 @@ export const CreateAiConnectionModal: React.FC<CreateAiConnectionModalProps> = (
               className="px-5 py-2 bg-primary text-white text-sm font-bold rounded-lg hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 disabled:opacity-50 disabled:shadow-none flex items-center gap-2"
             >
               {createAiConnection.isPending && <Loader2 size={16} className="animate-spin" />}
-              Generate Token
+              {authType === 'pat' ? 'Generate Token' : 'Continue'}
             </button>
           </div>
         </form>

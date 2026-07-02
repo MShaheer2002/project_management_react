@@ -4,8 +4,19 @@ import { aiConnectionService } from '../services/aiConnectionService';
 
 export const aiConnectionQueryKeys = {
   all: ['ai-connections'] as const,
+  catalog: (workspaceId: string | undefined) =>
+    [...aiConnectionQueryKeys.all, 'catalog', workspaceId] as const,
   list: (workspaceId: string | undefined) =>
     [...aiConnectionQueryKeys.all, 'list', workspaceId] as const,
+};
+
+export const useAiConnectionCatalog = () => {
+  const workspaceId = useAuthStore((s) => s.workspace?.id);
+  return useQuery({
+    queryKey: aiConnectionQueryKeys.catalog(workspaceId),
+    queryFn: aiConnectionService.catalog,
+    enabled: Boolean(workspaceId),
+  });
 };
 
 export const useAiConnections = () => {

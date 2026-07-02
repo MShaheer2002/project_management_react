@@ -3,6 +3,7 @@ import { privateApi } from '@shared/services/privateApi';
 import type { ApiResponse } from '@shared/services/types';
 import type {
   AiConnection,
+  AiConnectionCatalog,
   AiConnectionCreateResponse,
   CreateAiConnectionInput,
 } from '../types';
@@ -10,6 +11,11 @@ import type {
 export const aiConnectionService = {
   list: async (): Promise<AiConnection[]> => {
     const { data } = await privateApi.get<ApiResponse<AiConnection[]>>('/ai-connections');
+    return data.data;
+  },
+
+  catalog: async (): Promise<AiConnectionCatalog> => {
+    const { data } = await privateApi.get<ApiResponse<AiConnectionCatalog>>('/ai-connections/catalog');
     return data.data;
   },
 

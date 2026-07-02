@@ -3,7 +3,7 @@ import { useAuthStore } from '@/app/stores/useAuthStore';
 import { useToastStore } from '@/app/stores/useToastStore';
 import { aiConnectionService } from '../services/aiConnectionService';
 import { aiConnectionQueryKeys } from './useAiConnectionData';
-import type { CreateAiConnectionInput } from '../types';
+import type { AiConnection, CreateAiConnectionInput } from '../types';
 
 export const useCreateAiConnection = () => {
   const queryClient = useQueryClient();
@@ -26,7 +26,11 @@ export const useRevokeAiConnection = () => {
 
   return useMutation({
     mutationFn: (id: string) => aiConnectionService.revoke(id),
-    onSuccess: () => {
+    onSuccess: (_, id) => {
+      queryClient.setQueryData<AiConnection[]>(
+        aiConnectionQueryKeys.list(workspaceId),
+        (current) => current?.filter((connection) => connection.id !== id) ?? [],
+      );
       queryClient.invalidateQueries({
         queryKey: aiConnectionQueryKeys.list(workspaceId),
       });

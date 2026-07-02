@@ -24,6 +24,19 @@ function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+function formatClientLabel(client: AiConnection['client']): string {
+  switch (client) {
+    case 'codex':
+      return 'Codex';
+    case 'claude_desktop':
+      return 'Claude Desktop';
+    case 'cursor':
+      return 'Cursor';
+    case 'generic_mcp':
+      return 'Generic MCP';
+  }
+}
+
 const setupCards = [
   { title: 'Codex', description: 'Copy a ready TOML block that points to the Trussen MCP URL.' },
   { title: 'Claude Desktop', description: 'Copy a ready JSON config block for remote Trussen MCP access.' },
@@ -140,6 +153,12 @@ export const AiConnectionsPage: React.FC = () => {
                           <h4 className="text-sm font-semibold text-gray-900 dark:text-white truncate">
                             {connection.name}
                           </h4>
+                          <span className="text-[10px] font-medium px-1.5 py-px rounded-full bg-gray-100 text-gray-500 dark:bg-white/[0.06] dark:text-gray-300">
+                            {formatClientLabel(connection.client)}
+                          </span>
+                          <span className="text-[10px] font-medium px-1.5 py-px rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 uppercase">
+                            {connection.authType}
+                          </span>
                           {connection.isExpired && (
                             <span className="text-[10px] font-medium px-1.5 py-px rounded-full bg-red-500/10 text-red-500">
                               Expired
