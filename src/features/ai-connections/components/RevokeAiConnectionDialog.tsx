@@ -27,7 +27,7 @@ export const RevokeAiConnectionDialog: React.FC<RevokeAiConnectionDialogProps> =
       onSuccess: () => onClose(),
       onError: (err) => {
         const code = (err as ApiAxiosError).response?.data?.error?.code;
-        if (code === 'API_KEY_NOT_FOUND') {
+        if (code === 'API_KEY_NOT_FOUND' || code === 'AI_CONNECTION_NOT_FOUND') {
           showToast('This AI connection no longer exists.', 'info');
           queryClient.invalidateQueries({ queryKey: aiConnectionQueryKeys.list(workspaceId) });
           onClose();

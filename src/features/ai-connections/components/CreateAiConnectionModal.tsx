@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Modal } from '@/components/modals/Modal';
 import { AlertTriangle, Check, Copy, ExternalLink, Loader2 } from 'lucide-react';
 import type { ApiAxiosError } from '@shared/services/types';
@@ -119,9 +119,10 @@ async function copyText(text: string) {
 interface CreateAiConnectionModalProps {
   isOpen: boolean;
   onClose: () => void;
+  presetResult?: AiConnectionCreateResponse | null;
 }
 
-export const CreateAiConnectionModal: React.FC<CreateAiConnectionModalProps> = ({ isOpen, onClose }) => {
+export const CreateAiConnectionModal: React.FC<CreateAiConnectionModalProps> = ({ isOpen, onClose, presetResult = null }) => {
   const createAiConnection = useCreateAiConnection();
   const catalogQuery = useAiConnectionCatalog();
   const [name, setName] = useState('');
@@ -131,6 +132,14 @@ export const CreateAiConnectionModal: React.FC<CreateAiConnectionModalProps> = (
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<AiConnectionCreateResponse | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      setCreated(presetResult);
+      setCopiedField(null);
+      setError(null);
+    }
+  }, [isOpen, presetResult]);
 
   const reset = () => {
     setName('');
@@ -144,7 +153,7 @@ export const CreateAiConnectionModal: React.FC<CreateAiConnectionModalProps> = (
   };
 
   const handleClose = () => {
-    if (created) return;
+    if (created && !presetResult) return;
     reset();
     onClose();
   };

@@ -3,7 +3,7 @@ import { useAuthStore } from '@/app/stores/useAuthStore';
 import { useToastStore } from '@/app/stores/useToastStore';
 import { aiConnectionService } from '../services/aiConnectionService';
 import { aiConnectionQueryKeys } from './useAiConnectionData';
-import type { AiConnection, CreateAiConnectionInput } from '../types';
+import type { AiConnection, AiConnectionHealthResponse, CreateAiConnectionInput } from '../types';
 
 export const useCreateAiConnection = () => {
   const queryClient = useQueryClient();
@@ -35,6 +35,47 @@ export const useRevokeAiConnection = () => {
         queryKey: aiConnectionQueryKeys.list(workspaceId),
       });
       showToast('AI connection revoked', 'success');
+    },
+  });
+};
+
+export const useAiConnectionHealthCheck = () => {
+  const queryClient = useQueryClient();
+  const workspaceId = useAuthStore((s) => s.workspace?.id);
+
+  return useMutation({
+    mutationFn: (id: string) => aiConnectionService.getHealth(id),
+    onSuccess: (result) => {
+      queryClient.setQueryData<AiConnection[]>(
+        aiConnectionQueryKeys.list(workspaceId),
+        (current) => current?.map((connection) => (
+          connection.id === result.connection.id ? result.connection : connection
+        )) ?? [],
+      );
+      queryClient.setQueryData<AiConnectionHealthResponse>(
+        aiConnectionQueryKeys.health(workspaceId, result.connection.id),
+        result,
+      );
+    },
+  });
+};
+
+export const useRotateAiConnection = () => {
+  const queryClient = useQueryClient();
+  const workspaceId = useAuthStore((s) => s.workspace?.id);
+
+  return useMutation({
+    mutationFn: (id: string) => aiConnectionService.rotate(id),
+    onSuccess: (result) => {
+      queryClient.setQueryData<AiConnection[]>(
+        aiConnectionQueryKeys.list(workspaceId),
+        (current) => current?.map((connection) => (
+          connection.id === result.connection.id ? result.connection : connection
+        )) ?? [result.connection],
+      );
+      queryClient.invalidateQueries({
+        queryKey: aiConnectionQueryKeys.sessions(workspaceId, result.connection.id),
+      });
     },
   });
 };
