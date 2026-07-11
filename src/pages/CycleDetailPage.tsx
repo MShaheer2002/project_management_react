@@ -45,6 +45,12 @@ import { getApiErrorMessage } from '@shared/services';
 import { ISSUE_TYPE_CONFIG, PRIORITY_COLORS, STATUS_LABELS } from '@/constants';
 import type { Issue, IssueType, Priority, Status } from '@/types';
 
+type CycleAssigneeFilter = {
+  id: string;
+  name: string;
+  avatar?: string | null;
+};
+
 const formatDateRange = (start: string, end: string) => {
   const s = new Date(start);
   const e = new Date(end);
@@ -153,7 +159,8 @@ export const CycleDetailPage: React.FC = () => {
   const workspaceId = useAuthStore((state) => state.workspace?.id);
   const { showToast, setActiveModal } = useApp();
   const [activeTab, setActiveTab] = useState<'overview' | 'issues' | 'activity'>('overview');
-  const [issueView, setIssueView] = useState<'list' | 'board' | 'calendar'>('list');
+  const [issueView, setIssueView] = useState<'list' | 'board' | 'calendar'>('board');
+  const [selectedAssigneeIds, setSelectedAssigneeIds] = useState<string[]>([]);
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
   const [isPlanDialogOpen, setIsPlanDialogOpen] = useState(false);
   const [selectedPlanIssueIds, setSelectedPlanIssueIds] = useState<string[]>([]);
@@ -183,6 +190,26 @@ export const CycleDetailPage: React.FC = () => {
     const apiIssues = cycleIssuesQuery.data?.pages.flatMap((page) => page.items) ?? cycle?.issues ?? [];
     return apiIssues.length > 0 ? apiIssues : [];
   }, [cycle?.issues, cycleIssuesQuery.data]);
+  const cycleAssignees = useMemo<CycleAssigneeFilter[]>(() => {
+    const map = new Map<string, CycleAssigneeFilter>();
+
+    cycleIssues.forEach((issue) => {
+      if (!issue.assigneeId || !issue.assignee?.name) return;
+      map.set(issue.assigneeId, {
+        id: issue.assigneeId,
+        name: issue.assignee.name,
+        avatar: issue.assignee.avatar ?? null,
+      });
+    });
+
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [cycleIssues]);
+  const filteredCycleIssues = useMemo(() => {
+    if (selectedAssigneeIds.length === 0) return cycleIssues;
+    const selectedIds = new Set(selectedAssigneeIds);
+    return cycleIssues.filter((issue) => issue.assigneeId && selectedIds.has(issue.assigneeId));
+  }, [cycleIssues, selectedAssigneeIds]);
+  const visibleCycleIssues = issueView === 'board' ? filteredCycleIssues : cycleIssues;
   const isActionLoading =
     updateCycle.isPending ||
     completeCycle.isPending ||
@@ -264,6 +291,12 @@ export const CycleDetailPage: React.FC = () => {
       showToast(getApiErrorMessage(error) || 'Failed to update issue status.', 'error', 'Update failed');
       return false;
     }
+  };
+
+  const toggleAssigneeFilter = (assigneeId: string) => {
+    setSelectedAssigneeIds((current) =>
+      current.includes(assigneeId) ? current.filter((id) => id !== assigneeId) : [...current, assigneeId]
+    );
   };
 
   const handlePlanIssues = () => {
@@ -665,6 +698,57 @@ export const CycleDetailPage: React.FC = () => {
                     Plan Issues
                   </button>
                 </div>
+
+                {issueView === 'board' && (
+                  <div className="flex w-full flex-wrap items-center gap-1.5 border-t border-gray-100 pt-3 dark:border-border-dark/70">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedAssigneeIds([])}
+                      className={`rounded-lg border px-2.5 py-1 text-[11px] font-medium transition-all ${
+                        selectedAssigneeIds.length === 0
+                          ? 'border-primary/30 bg-primary/10 text-primary shadow-sm'
+                          : 'border-gray-200 bg-white text-gray-500 hover:border-primary/30 hover:text-primary dark:border-border-dark dark:bg-white/5 dark:text-gray-300'
+                      }`}
+                    >
+                      Everyone
+                    </button>
+                    {cycleAssignees.map((assignee) => {
+                      const isActive = selectedAssigneeIds.includes(assignee.id);
+                      return (
+                        <button
+                          key={assignee.id}
+                          type="button"
+                          onClick={() => toggleAssigneeFilter(assignee.id)}
+                          title={assignee.name}
+                          className={`group flex items-center gap-1.5 rounded-lg border px-1.5 py-1 text-[11px] font-medium transition-all ${
+                            isActive
+                              ? 'border-primary/40 bg-primary/10 text-primary shadow-sm shadow-primary/10'
+                              : 'border-gray-200 bg-white text-gray-500 hover:border-primary/30 hover:bg-gray-50 hover:text-gray-700 dark:border-border-dark dark:bg-white/5 dark:text-gray-300 dark:hover:bg-white/10 dark:hover:text-white'
+                          }`}
+                        >
+                          {assignee.avatar ? (
+                            <img
+                              src={assignee.avatar}
+                              alt={assignee.name}
+                              className={`h-5 w-5 rounded-full object-cover ring-1 ${isActive ? 'ring-primary/30' : 'ring-black/5 dark:ring-white/10'}`}
+                            />
+                          ) : (
+                            <div
+                              className={`flex h-5 w-5 items-center justify-center rounded-full text-[9px] font-bold ${
+                                isActive
+                                  ? 'bg-primary/15 text-primary'
+                                  : 'bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-200'
+                              }`}
+                            >
+                              {assignee.name.charAt(0).toUpperCase()}
+                            </div>
+                          )}
+                          <span className="max-w-[88px] truncate">{assignee.name}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               {issueView === 'list' && (
@@ -688,8 +772,8 @@ export const CycleDetailPage: React.FC = () => {
                         <Loader2 size={16} className="mr-2 animate-spin" />
                         Loading cycle issues...
                       </div>
-                    ) : cycleIssues.length > 0 ? (
-                      cycleIssues.map((issue) => (
+                    ) : visibleCycleIssues.length > 0 ? (
+                      visibleCycleIssues.map((issue) => (
                         <div
                           key={issue.id}
                           role="button"
@@ -764,7 +848,7 @@ export const CycleDetailPage: React.FC = () => {
               {issueView === 'board' && (
                 <div className="flex-1 overflow-hidden">
                   <KanbanBoard
-                    issues={cycleIssues}
+                    issues={visibleCycleIssues}
                     onIssueUpdate={handleIssueStatusUpdate}
                     onNewIssue={(status) => {
                       showToast(`Planning a ${STATUS_LABELS[status]} issue for ${cycle.name}.`, 'info');
@@ -784,7 +868,7 @@ export const CycleDetailPage: React.FC = () => {
                     ))}
                     {Array.from({ length: 35 }).map((_, index) => {
                       const dayNumber = index + 1;
-                      const dayIssues = cycleIssues.filter((issue) => Number(issue.dueDate?.slice(8, 10)) === dayNumber);
+                      const dayIssues = visibleCycleIssues.filter((issue) => Number(issue.dueDate?.slice(8, 10)) === dayNumber);
                       return (
                         <div key={dayNumber} className="flex min-h-[112px] flex-col gap-1 bg-white p-2 dark:bg-card-dark">
                           <span className="mb-1 text-xs font-medium text-gray-400">{dayNumber}</span>

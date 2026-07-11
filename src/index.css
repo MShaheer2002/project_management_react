@@ -108,3 +108,24 @@
 ::-webkit-scrollbar-thumb:hover {
   @apply bg-gray-400 dark:bg-gray-600;
 }
+
+.kanban-scroll::-webkit-scrollbar {
+  height: 4px;
+}
+
+.kanban-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.kanban-scroll::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+  background: rgba(156, 163, 175, 0.35);
+}
+
+.dark .kanban-scroll::-webkit-scrollbar-thumb {
+  background: rgba(107, 114, 128, 0.45);
+}
+
+.kanban-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(107, 114, 128, 0.55);
+}

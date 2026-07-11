@@ -22,6 +22,7 @@ import { PRIORITY_COLORS, STATUS_LABELS, ISSUE_TYPE_CONFIG } from '@/constants';
 import { LabelChip } from '@shared/components/ui/LabelChip';
 import { useDepartmentsDirectory } from '@features/department';
 import { useTeamDetail } from '@features/team';
+import { useWorkspaceMemberOptions } from '@features/workspace';
 import type { Issue, IssueType, Priority, Status } from '@/types';
 import { useIssuesDirectory, useUpdateAnyIssueStatus } from '../hooks/useIssueData';
 
@@ -100,6 +101,12 @@ const buildCalendarDays = (issues: Issue[]) => {
   });
 };
 
+type BoardAssigneeFilter = {
+  id: string;
+  name: string;
+  avatar?: string | null;
+};
+
 export const IssuesPage: React.FC<IssuesPageProps> = ({
   projectId,
   teamId,
@@ -117,6 +124,7 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState<string>('all');
   const [typeFilter, setTypeFilter] = useState<IssueType | 'all'>('all');
+  const [selectedAssigneeIds, setSelectedAssigneeIds] = useState<string[]>([]);
   const deferredSearchQuery = useDeferredValue(searchQuery);
 
   const teamQuery = useTeamDetail(activeTeamId);
@@ -124,6 +132,13 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
     {
       sort: 'name:asc',
       limit: 100,
+    },
+    { enabled: true }
+  );
+  const assigneeOptionsQuery = useWorkspaceMemberOptions(
+    {
+      sort: 'name:asc',
+      limit: 24,
     },
     { enabled: true }
   );
@@ -139,6 +154,7 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
   const updateAnyIssueStatus = useUpdateAnyIssueStatus();
 
   const departments = departmentsQuery.data?.pages.flatMap((page) => page.items) ?? [];
+  const workspaceAssigneeOptions = assigneeOptionsQuery.data?.pages.flatMap((page) => page.items) ?? [];
   const issues = useMemo(() => {
     const issuesById = new Map<string, Issue>();
     issuesQuery.data?.pages.forEach((page) => {
@@ -148,9 +164,45 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
     });
     return Array.from(issuesById.values());
   }, [issuesQuery.data]);
+  const boardAssignees = useMemo<BoardAssigneeFilter[]>(() => {
+    const map = new Map<string, BoardAssigneeFilter>();
+
+    workspaceAssigneeOptions.forEach((member) => {
+      map.set(member.id, {
+        id: member.id,
+        name: member.name,
+        avatar: undefined,
+      });
+    });
+
+    issues.forEach((issue) => {
+      if (!issue.assigneeId || !issue.assignee?.name) return;
+      map.set(issue.assigneeId, {
+        id: issue.assigneeId,
+        name: issue.assignee.name,
+        avatar: issue.assignee.avatar ?? null,
+      });
+    });
+
+    return Array.from(map.values())
+      .filter((member) => issues.some((issue) => issue.assigneeId === member.id))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [issues, workspaceAssigneeOptions]);
+  const filteredIssues = useMemo(() => {
+    if (selectedAssigneeIds.length === 0) return issues;
+    const selectedIds = new Set(selectedAssigneeIds);
+    return issues.filter((issue) => issue.assigneeId && selectedIds.has(issue.assigneeId));
+  }, [issues, selectedAssigneeIds]);
+  const visibleIssues = viewMode === 'kanban' ? filteredIssues : issues;
   const teamLabel = teamQuery.data?.name;
   const pageTitle = title ?? (teamLabel ? `${teamLabel} — Issues` : 'All Issues');
-  const calendarDays = useMemo(() => buildCalendarDays(issues), [issues]);
+  const calendarDays = useMemo(() => buildCalendarDays(visibleIssues), [visibleIssues]);
+
+  const toggleAssigneeFilter = (assigneeId: string) => {
+    setSelectedAssigneeIds((current) =>
+      current.includes(assigneeId) ? current.filter((id) => id !== assigneeId) : [...current, assigneeId]
+    );
+  };
 
   const handleIssueUpdate = async (issueId: string, newStatus: Status) => {
     try {
@@ -182,8 +234,8 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        {issues.length > 0 ? (
-          issues.map((issue) => {
+        {visibleIssues.length > 0 ? (
+          visibleIssues.map((issue) => {
             const assignee = issue.assignee;
             return (
               <div
@@ -253,7 +305,7 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
 
   const renderKanbanView = () => (
     <KanbanBoard
-      issues={issues}
+      issues={visibleIssues}
       onIssueUpdate={handleIssueUpdate}
       onNewIssue={(status) => navigate(`/issues/create?status=${status}`)}
     />
@@ -402,6 +454,57 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
             <span className="hidden sm:inline">New Issue</span>
           </button>
         </div>
+
+        {viewMode === 'kanban' && (
+          <div className="flex w-full flex-wrap items-center gap-1.5 border-t border-gray-100 pt-3 dark:border-border-dark/70">
+            <button
+              type="button"
+              onClick={() => setSelectedAssigneeIds([])}
+              className={`rounded-lg border px-2.5 py-1 text-[11px] font-medium transition-all ${
+                selectedAssigneeIds.length === 0
+                  ? 'border-primary/30 bg-primary/10 text-primary shadow-sm'
+                  : 'border-gray-200 bg-white text-gray-500 hover:border-primary/30 hover:text-primary dark:border-border-dark dark:bg-white/5 dark:text-gray-300'
+              }`}
+            >
+              Everyone
+            </button>
+            {boardAssignees.map((assignee) => {
+              const isActive = selectedAssigneeIds.includes(assignee.id);
+              return (
+                <button
+                  key={assignee.id}
+                  type="button"
+                  onClick={() => toggleAssigneeFilter(assignee.id)}
+                  title={assignee.name}
+                  className={`group flex items-center gap-1.5 rounded-lg border px-1.5 py-1 text-[11px] font-medium transition-all ${
+                    isActive
+                      ? 'border-primary/40 bg-primary/10 text-primary shadow-sm shadow-primary/10'
+                      : 'border-gray-200 bg-white text-gray-500 hover:border-primary/30 hover:bg-gray-50 hover:text-gray-700 dark:border-border-dark dark:bg-white/5 dark:text-gray-300 dark:hover:bg-white/10 dark:hover:text-white'
+                  }`}
+                >
+                  {assignee.avatar ? (
+                    <img
+                      src={assignee.avatar}
+                      alt={assignee.name}
+                      className={`h-5 w-5 rounded-full object-cover ring-1 ${isActive ? 'ring-primary/30' : 'ring-black/5 dark:ring-white/10'}`}
+                    />
+                  ) : (
+                    <div
+                      className={`flex h-5 w-5 items-center justify-center rounded-full text-[9px] font-bold ${
+                        isActive
+                          ? 'bg-primary/15 text-primary'
+                          : 'bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-200'
+                      }`}
+                    >
+                      {assignee.name.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <span className="max-w-[88px] truncate">{assignee.name}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </header>
 
       <div className="flex-1 overflow-hidden flex flex-col">

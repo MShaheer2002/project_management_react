@@ -959,7 +959,14 @@ export const ProjectDetailPage: React.FC = () => {
 
       <div className="flex-1 overflow-y-auto bg-gray-50/30 dark:bg-black/10">
         {activeTab === 'overview' && renderOverview()}
-        {activeTab === 'issues' && <IssuesPage projectId={project.id} title={`${project.name} Issues`} showTeamScopeBadge={false} />}
+        {activeTab === 'issues' && (
+          <IssuesPage
+            projectId={project.id}
+            title={`${project.name} Issues`}
+            showTeamScopeBadge={false}
+            initialViewMode="kanban"
+          />
+        )}
         {activeTab === 'board' && (
           <IssuesPage
             projectId={project.id}

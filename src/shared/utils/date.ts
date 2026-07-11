@@ -1,5 +1,6 @@
 const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_ONLY_PATTERN = /^\d{2}:\d{2}$/;
+const ISO_TIME_FRAGMENT_PATTERN = /(?:T|\s)(\d{2}:\d{2})(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?$/i;
 
 const pad = (value: number) => String(value).padStart(2, '0');
 
@@ -32,6 +33,11 @@ export const normalizeTimeForInput = (value: unknown, fallback = ''): string => 
 
   if (TIME_ONLY_PATTERN.test(trimmed)) {
     return trimmed;
+  }
+
+  const isoMatch = trimmed.match(ISO_TIME_FRAGMENT_PATTERN);
+  if (isoMatch?.[1]) {
+    return isoMatch[1];
   }
 
   const parsed = new Date(trimmed);

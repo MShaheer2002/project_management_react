@@ -146,7 +146,7 @@ export const NotificationsPage: React.FC = () => {
     },
     { enabled: true }
   );
-  const unreadQuery = useUnreadNotificationsCount({ enabled: true, refetchInterval: 30_000 });
+  const unreadQuery = useUnreadNotificationsCount({ enabled: true });
   const markRead = useMarkNotificationRead();
   const markAllRead = useMarkAllNotificationsRead();
   const markBatchRead = useMarkNotificationsBatchRead();

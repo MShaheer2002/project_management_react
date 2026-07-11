@@ -30,7 +30,7 @@ export const TopNavbar: React.FC = () => {
   const setTheme = useThemeStore((s) => s.setTheme);
   const [isUserMenuOpen, setUserMenuOpen] = useState(false);
   const navigate = useNavigate();
-  const unreadNotifications = useUnreadNotificationsCount({ enabled: true, refetchInterval: 30_000 });
+  const unreadNotifications = useUnreadNotificationsCount({ enabled: true });
   const unreadCount = unreadNotifications.data?.unread ?? 0;
 
   /** Logout — clear store + Clerk sign-out */

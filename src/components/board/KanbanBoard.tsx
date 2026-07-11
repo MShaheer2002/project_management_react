@@ -223,7 +223,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
       onDragEnd={handleDragEnd}
       modifiers={[restrictToWindowEdges]}
     >
-      <div className="flex-1 overflow-x-auto p-6 bg-gray-50/30 dark:bg-black/10">
+      <div className="kanban-scroll flex-1 overflow-x-auto p-6 bg-gray-50/30 dark:bg-black/10">
         <div className="flex gap-6 h-full min-w-max">
           {COLUMNS.map((status) => {
             const statusConfig = resolvedStatuses.find((s) => s.key === status);

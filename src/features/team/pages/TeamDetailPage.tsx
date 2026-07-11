@@ -543,6 +543,7 @@ export const TeamDetailPage: React.FC = () => {
       teamId={team.id}
       title="All Issues"
       showTeamScopeBadge={false}
+      initialViewMode="kanban"
     />
   );
 

@@ -40,7 +40,7 @@ export const MyIssuesPage: React.FC = () => {
   const { setSelectedIssueId, showToast } = useApp();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'assigned' | 'created' | 'completed'>('assigned');
-  const [viewMode, setViewMode] = useState<'list' | 'board'>('list');
+  const [viewMode, setViewMode] = useState<'list' | 'board'>('board');
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<IssueType | 'all'>('all');
   const deferredSearch = useDeferredValue(search);

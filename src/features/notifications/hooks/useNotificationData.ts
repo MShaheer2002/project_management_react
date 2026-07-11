@@ -38,7 +38,7 @@ export const useNotifications = (params: ListNotificationsInput = {}, options?: 
   });
 };
 
-export const useUnreadNotificationsCount = (options?: { enabled?: boolean; refetchInterval?: number }) => {
+export const useUnreadNotificationsCount = (options?: { enabled?: boolean; refetchInterval?: number | false }) => {
   const workspaceId = useAuthStore((s) => s.workspace?.id);
 
   return useQuery({
@@ -46,6 +46,9 @@ export const useUnreadNotificationsCount = (options?: { enabled?: boolean; refet
     queryFn: notificationService.getUnreadCount,
     enabled: Boolean(workspaceId) && (options?.enabled ?? true),
     refetchInterval: options?.refetchInterval,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
   });
 };
 
