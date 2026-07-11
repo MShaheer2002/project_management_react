@@ -361,23 +361,36 @@ export const useNotificationRealtime = () => {
 export const useIssueSocketRoom = (issueId: string | undefined) => {
   useEffect(() => {
     if (!issueId) return;
-    const socket = realtimeSocket.getSocket();
-    if (!socket) return;
+    let detachSocketListeners: (() => void) | null = null;
 
-    const joinRoom = () => {
-      socket.emit('issue:join', { issueId });
-      log('issue:join', { issueId });
+    const bindSocket = (socket: ReturnType<typeof realtimeSocket.getSocket>) => {
+      detachSocketListeners?.();
+      detachSocketListeners = null;
+
+      if (!socket) return;
+
+      const joinRoom = () => {
+        socket.emit('issue:join', { issueId });
+        log('issue:join', { issueId });
+      };
+
+      if (socket.connected) {
+        joinRoom();
+      }
+      socket.on('connect', joinRoom);
+
+      detachSocketListeners = () => {
+        socket.off('connect', joinRoom);
+        socket.emit('issue:leave', { issueId });
+        log('issue:leave', { issueId });
+      };
     };
 
-    if (socket.connected) {
-      joinRoom();
-    }
-    socket.on('connect', joinRoom);
+    const unsubscribe = realtimeSocket.subscribe(bindSocket);
 
     return () => {
-      socket.off('connect', joinRoom);
-      socket.emit('issue:leave', { issueId });
-      log('issue:leave', { issueId });
+      unsubscribe();
+      detachSocketListeners?.();
     };
   }, [issueId]);
 };

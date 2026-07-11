@@ -12,6 +12,7 @@ const LOG_PREFIX = '[RealtimeSocket]';
 class RealtimeSocketService {
   private socket: Socket | null = null;
   private authKey: string | null = null;
+  private listeners = new Set<(socket: Socket | null) => void>();
 
   private log(message: string, payload?: unknown) {
     if (!import.meta.env.DEV) return;
@@ -79,11 +80,21 @@ class RealtimeSocketService {
     this.bindCoreLogs(socket);
     this.socket = socket;
     this.authKey = nextAuthKey;
+    this.notifyListeners();
     return socket;
   }
 
   getSocket() {
     return this.socket;
+  }
+
+  subscribe(listener: (socket: Socket | null) => void) {
+    this.listeners.add(listener);
+    listener(this.socket);
+
+    return () => {
+      this.listeners.delete(listener);
+    };
   }
 
   emit(event: string, payload?: unknown) {
@@ -98,6 +109,11 @@ class RealtimeSocketService {
     this.socket.disconnect();
     this.socket = null;
     this.authKey = null;
+    this.notifyListeners();
+  }
+
+  private notifyListeners() {
+    this.listeners.forEach((listener) => listener(this.socket));
   }
 }
 
