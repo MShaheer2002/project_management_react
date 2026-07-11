@@ -10,12 +10,13 @@ import {
   useWorkspaceDetails,
 } from '@features/workspace';
 import { workspaceService } from '@features/workspace/services/workspaceService';
+import { useThemeStore } from '@/app/stores/useThemeStore';
+import { useToastStore } from '@/app/stores/useToastStore';
 import { canManageDocuments } from '@shared/permissions';
 import { useWorkspaceStatuses } from '@shared/hooks/useWorkspaceStatuses';
 import type { WorkspaceStatus } from '@/types';
 import type { ApiAxiosError } from '@shared/services/types';
 import type { UploadPolicy } from '@/app/stores/useAuthStore';
-import { useApp } from '../AppContext';
 import { useAuthStore } from '@/app/stores/useAuthStore';
 
 interface SettingsSectionProps {
@@ -55,7 +56,7 @@ const STATUS_COLORS = [
 const toKebabCase = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
 const WorkflowStatusesEditor: React.FC<{ workspaceId: string; canManage: boolean }> = ({ workspaceId, canManage }) => {
-  const { showToast } = useApp();
+  const showToast = useToastStore((s) => s.showToast);
   const queryClient = useQueryClient();
   const setWorkspace = useAuthStore((s) => s.setWorkspace);
   const currentWorkspace = useAuthStore((s) => s.workspace);
@@ -280,7 +281,7 @@ const WorkflowStatusesEditor: React.FC<{ workspaceId: string; canManage: boolean
 
 /** Dedicated upload policy selector — isolated mutation to avoid racing with "Save Changes" */
 const UploadPolicySection: React.FC<{ workspaceId: string }> = ({ workspaceId }) => {
-  const { showToast } = useApp();
+  const showToast = useToastStore((s) => s.showToast);
   const activeWorkspace = useAuthStore((s) => s.workspace);
   const setWorkspace = useAuthStore((s) => s.setWorkspace);
 
@@ -330,7 +331,9 @@ const UploadPolicySection: React.FC<{ workspaceId: string }> = ({ workspaceId })
 };
 
 export const SettingsPage: React.FC = () => {
-  const { theme, setTheme, showToast } = useApp();
+  const theme = useThemeStore((s) => s.theme);
+  const setTheme = useThemeStore((s) => s.setTheme);
+  const showToast = useToastStore((s) => s.showToast);
   const navigate = useNavigate();
   const currentUser = useAuthStore((s) => s.currentUser);
   const setWorkspace = useAuthStore((s) => s.setWorkspace);

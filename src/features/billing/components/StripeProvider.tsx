@@ -1,15 +1,9 @@
 import React from 'react';
 import { Elements } from '@stripe/react-stripe-js';
 import { loadStripe } from '@stripe/stripe-js';
-import { useThemeStore } from '@/app/stores/useThemeStore';
+import { useResolvedTheme } from '@shared/hooks/useResolvedTheme';
 
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '');
-
-function useResolvedTheme() {
-  const theme = useThemeStore((s) => s.theme);
-  if (theme !== 'system') return theme;
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-}
 
 export const StripeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const resolvedTheme = useResolvedTheme();

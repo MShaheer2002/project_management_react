@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --color-primary: #5f72ea;
   --color-bg-light: #FFFFFF;
@@ -16,6 +18,12 @@
 }
 
 @layer base {
+  :root {
+    color-scheme: light;
+    background-color: var(--color-bg-light);
+    color: var(--color-text-primary-light);
+  }
+
   body {
     @apply font-sans antialiased;
   }

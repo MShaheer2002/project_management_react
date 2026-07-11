@@ -3,6 +3,8 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { ClerkProvider } from '@clerk/clerk-react';
+import { useThemeStore } from '@/app/stores/useThemeStore';
+import { applyThemeToDom } from '@shared/theme/theme';
 import { queryClient } from './lib/query-client';
 import App from './App.tsx';
 import './index.css';
@@ -16,6 +18,8 @@ const CLERK_PUBLISHABLE_KEY = process.env.CLERK_PUBLISHABLE_KEY;
 if (!CLERK_PUBLISHABLE_KEY) {
   throw new Error('Missing CLERK_PUBLISHABLE_KEY in environment variables. Check your .env file.');
 }
+
+applyThemeToDom(useThemeStore.getState().theme);
 
 /**
  * Provider order (outermost → innermost):

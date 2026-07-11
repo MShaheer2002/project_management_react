@@ -1,21 +1,12 @@
 import React, { useState } from 'react';
 import { CardNumberElement, CardExpiryElement, CardCvcElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import { X, CreditCard, Lock } from 'lucide-react';
-import { useThemeStore } from '@/app/stores/useThemeStore';
+import { useResolvedTheme } from '@shared/hooks/useResolvedTheme';
 
 interface AddCardModalProps {
   clientSecret: string;
   onSuccess: (paymentMethodId: string) => void;
   onClose: () => void;
-}
-
-/**
- * Returns the resolved theme ('light' | 'dark') accounting for 'system'.
- */
-function useResolvedTheme() {
-  const theme = useThemeStore((s) => s.theme);
-  if (theme !== 'system') return theme;
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
 export const AddCardModal: React.FC<AddCardModalProps> = ({ clientSecret, onSuccess, onClose }) => {
