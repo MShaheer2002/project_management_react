@@ -95,6 +95,11 @@ type RawIssueDependency = {
   title: string;
   status: IssueDetail['status'];
   relation: IssueDependency['relation'];
+  issue?: {
+    id: string;
+    title: string;
+    status: IssueDetail['status'];
+  } | null;
 };
 
 type RawIssueIntegrationRef = {
@@ -213,9 +218,9 @@ const normalizeAttachment = (attachment: RawIssueAttachment): IssueAttachment =>
 });
 
 const normalizeDependency = (dependency: RawIssueDependency): IssueDependencyRow => ({
-  issueId: dependency.issueId ?? dependency.relatedId ?? dependency.id ?? '',
-  title: dependency.title,
-  status: dependency.status,
+  issueId: dependency.issue?.id ?? dependency.issueId ?? dependency.relatedId ?? dependency.id ?? '',
+  title: dependency.issue?.title ?? dependency.title,
+  status: dependency.issue?.status ?? dependency.status,
   relation: dependency.relation,
 });
 
@@ -472,7 +477,14 @@ export const issueService = {
   },
 
   addDependency: async (issueId: string, input: AddIssueDependencyInput): Promise<void> => {
-    await privateApi.post(`/issues/${issueId}/dependencies`, input, mutationConfig);
+    await privateApi.post(
+      `/issues/${issueId}/dependencies`,
+      {
+        issueId: input.issueId,
+        relation: input.relation,
+      },
+      mutationConfig
+    );
   },
 
   removeDependency: async (issueId: string, relatedId: string): Promise<void> => {

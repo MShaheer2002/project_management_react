@@ -218,7 +218,7 @@ export const ContextPanel: React.FC = () => {
       animate={{ x: 0 }}
       exit={{ x: '100%' }}
       transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-      className="fixed right-0 top-0 z-40 flex h-full w-[450px] flex-col border-l border-gray-200 bg-white shadow-2xl dark:border-border-dark dark:bg-sidebar-dark"
+      className="fixed right-0 top-14 z-[70] flex h-[calc(100%-56px)] w-[450px] flex-col border-l border-gray-200 bg-white shadow-2xl dark:border-border-dark dark:bg-sidebar-dark"
     >
       <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4 dark:border-border-dark">
         <div className="flex items-center gap-3">

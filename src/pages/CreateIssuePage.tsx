@@ -467,7 +467,7 @@ export const CreateIssuePage: React.FC = () => {
             addIssueDependencyAny.mutateAsync({
               issueId: createdIssueResourceId,
               input: {
-                relatedId: dependency.issueId,
+                issueId: dependency.issueId,
                 relation: dependency.relation,
               },
             })

@@ -56,7 +56,7 @@ export const TopNavbar: React.FC = () => {
   }, [isUserMenuOpen]);
 
   return (
-    <header className="h-14 border-b border-gray-200 dark:border-border-dark bg-white/80 dark:bg-bg-dark/80 backdrop-blur-md flex items-center justify-between px-6 sticky top-0 z-30">
+    <header className="h-14 border-b border-gray-200 dark:border-border-dark bg-white/80 dark:bg-bg-dark/80 backdrop-blur-md flex items-center justify-between px-6 sticky top-0 z-[80]">
       <div className="flex items-center gap-4 flex-1">
         <div className="relative max-w-md w-full">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -125,7 +125,7 @@ export const TopNavbar: React.FC = () => {
                   initial={{ opacity: 0, scale: 0.95, y: 10 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                  className="absolute right-0 mt-2 w-56 bg-white dark:bg-sidebar-dark border border-gray-200 dark:border-border-dark rounded-xl shadow-2xl z-50 overflow-hidden"
+                  className="absolute right-0 mt-2 w-56 bg-white dark:bg-sidebar-dark border border-gray-200 dark:border-border-dark rounded-xl shadow-2xl z-[90] overflow-hidden"
                 >
                   <div className="p-3 border-b border-gray-200 dark:border-border-dark">
                     <div className="text-sm font-bold">{currentUser?.name}</div>

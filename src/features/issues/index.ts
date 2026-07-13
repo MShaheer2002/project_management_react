@@ -6,6 +6,8 @@ export { IssueAttachmentsField } from './components/IssueAttachmentsField';
 export { IssueCommentsThread } from './components/IssueCommentsThread';
 export { IssueActivityTimeline } from './components/IssueActivityTimeline';
 export { IssueLabelsEditor } from './components/IssueLabelsEditor';
+export { IssueRelationsSection } from './components/IssueRelationsSection';
+export { IssueSystemContextSection } from './components/IssueSystemContextSection';
 export { useProjectAssignmentGuard } from './hooks/useProjectAssignmentGuard';
 export {
   issueQueryKeys,

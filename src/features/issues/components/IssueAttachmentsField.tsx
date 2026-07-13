@@ -37,6 +37,7 @@ type IssueAttachmentsFieldProps = {
   value: IssueAttachment[];
   onChange: (attachments: IssueAttachment[]) => void;
   driveFolderContext?: DriveFolderContext;
+  embedded?: boolean;
 };
 
 const acceptedMimePrefixes = ['image/', 'video/'];
@@ -172,7 +173,12 @@ const InlineRename: React.FC<{
   );
 };
 
-export const IssueAttachmentsField: React.FC<IssueAttachmentsFieldProps> = ({ value, onChange, driveFolderContext }) => {
+export const IssueAttachmentsField: React.FC<IssueAttachmentsFieldProps> = ({
+  value,
+  onChange,
+  driveFolderContext,
+  embedded = false,
+}) => {
   const { showToast } = useApp();
   const uploadFile = useUploadFile();
   const openViewUploadUrl = useOpenViewUploadUrl();
@@ -580,7 +586,7 @@ export const IssueAttachmentsField: React.FC<IssueAttachmentsFieldProps> = ({ va
   };
 
   return (
-    <div className="space-y-4 border-t border-gray-100 pt-12 dark:border-border-dark">
+    <div className={embedded ? 'space-y-4' : 'space-y-4 border-t border-gray-100 pt-12 dark:border-border-dark'}>
       {showSystemUpload && (
         <input
           ref={inputRef}
@@ -601,45 +607,47 @@ export const IssueAttachmentsField: React.FC<IssueAttachmentsFieldProps> = ({ va
         />
       )}
 
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-100 text-gray-500 dark:bg-white/[0.04] dark:text-gray-400">
-            <Paperclip size={16} />
+      {!embedded && (
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-100 text-gray-500 dark:bg-white/[0.04] dark:text-gray-400">
+              <Paperclip size={16} />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400">Attachments</h3>
+              <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                {uploadedCount > 0 ? `${uploadedCount} uploaded` : 'Images, videos & files'}
+              </p>
+            </div>
           </div>
-          <div>
-            <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400">Attachments</h3>
-            <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-              {uploadedCount > 0 ? `${uploadedCount} uploaded` : 'Images, videos & files'}
-            </p>
-          </div>
-        </div>
 
-        {!showDriveConnectPrompt && (
-          <div className="flex items-center gap-2">
-            {showDriveUpload && (
-              <button
-                type="button"
-                onClick={() => driveInputRef.current?.click()}
-                className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-600 transition-all hover:border-blue-400 hover:bg-blue-50 hover:text-blue-600 dark:border-border-dark dark:bg-white/[0.03] dark:text-gray-300 dark:hover:border-blue-500/50 dark:hover:bg-blue-500/10 dark:hover:text-blue-400"
-                title="Upload to your Google Drive — any file type"
-              >
-                <HardDrive size={14} />
-                Upload to Drive
-              </button>
-            )}
-            {showSystemUpload && (
-              <button
-                type="button"
-                onClick={() => inputRef.current?.click()}
-                className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-600 transition-all hover:border-gray-300 hover:bg-gray-50 dark:border-border-dark dark:bg-white/[0.03] dark:text-gray-300 dark:hover:border-white/10 dark:hover:bg-white/[0.05]"
-              >
-                <Plus size={14} />
-                Add files
-              </button>
-            )}
-          </div>
-        )}
-      </div>
+          {!showDriveConnectPrompt && (
+            <div className="flex items-center gap-2">
+              {showDriveUpload && (
+                <button
+                  type="button"
+                  onClick={() => driveInputRef.current?.click()}
+                  className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-600 transition-all hover:border-blue-400 hover:bg-blue-50 hover:text-blue-600 dark:border-border-dark dark:bg-white/[0.03] dark:text-gray-300 dark:hover:border-blue-500/50 dark:hover:bg-blue-500/10 dark:hover:text-blue-400"
+                  title="Upload to your Google Drive — any file type"
+                >
+                  <HardDrive size={14} />
+                  Upload to Drive
+                </button>
+              )}
+              {showSystemUpload && (
+                <button
+                  type="button"
+                  onClick={() => inputRef.current?.click()}
+                  className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-600 transition-all hover:border-gray-300 hover:bg-gray-50 dark:border-border-dark dark:bg-white/[0.03] dark:text-gray-300 dark:hover:border-white/10 dark:hover:bg-white/[0.05]"
+                >
+                  <Plus size={14} />
+                  Add files
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Drive-only policy but user hasn't connected Drive — show connect prompt */}
       {showDriveConnectPrompt && (

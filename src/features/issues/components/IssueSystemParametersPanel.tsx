@@ -1,4 +1,5 @@
 import React, { useDeferredValue, useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   AlertCircle,
   Check,
@@ -70,40 +71,53 @@ const getInitials = (name: string) =>
     .map((segment) => segment[0]?.toUpperCase() ?? '')
     .join('');
 
-const MiniDialog: React.FC<MiniDialogProps> = ({ title, subtitle, onClose, children }) => (
-  <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
-    <motion.button
-      type="button"
-      aria-label="Close dialog"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      onClick={onClose}
-      className="absolute inset-0 bg-black/45 backdrop-blur-sm"
-    />
-    <motion.div
-      initial={{ opacity: 0, y: 12, scale: 0.98 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: 10, scale: 0.98 }}
-      className="relative w-full max-w-md rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-border-dark dark:bg-card-dark"
-    >
-      <div className="flex items-start justify-between border-b border-gray-100 px-4 py-4 dark:border-border-dark">
-        <div>
-          <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{title}</h3>
-          <p className="mt-1 text-xs text-gray-400">{subtitle}</p>
+const MiniDialog: React.FC<MiniDialogProps> = ({ title, subtitle, onClose, children }) => {
+  useEffect(() => {
+    const { overflow } = document.body.style;
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.body.style.overflow = overflow;
+    };
+  }, []);
+
+  return createPortal(
+    <div className="fixed inset-0 z-[160] isolate flex items-center justify-center p-4">
+      <motion.button
+        type="button"
+        aria-label="Close dialog"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+        className="absolute inset-0 bg-black/55 backdrop-blur-sm"
+      />
+      <motion.div
+        initial={{ opacity: 0, y: 12, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: 10, scale: 0.98 }}
+        onClick={(event) => event.stopPropagation()}
+        className="relative w-full max-w-md rounded-2xl border border-gray-200 bg-white shadow-2xl dark:border-border-dark dark:bg-card-dark"
+      >
+        <div className="flex items-start justify-between border-b border-gray-100 px-4 py-4 dark:border-border-dark">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{title}</h3>
+            <p className="mt-1 text-xs text-gray-400">{subtitle}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-primary dark:hover:bg-white/10"
+          >
+            <X size={16} />
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-primary dark:hover:bg-white/10"
-        >
-          <X size={16} />
-        </button>
-      </div>
-      <div className="max-h-[70vh] overflow-y-auto p-4">{children}</div>
-    </motion.div>
-  </div>
-);
+        <div className="max-h-[70vh] overflow-y-auto p-4">{children}</div>
+      </motion.div>
+    </div>,
+    document.body
+  );
+};
 
 export const IssueSystemParametersPanel: React.FC<IssueSystemParametersPanelProps> = ({
   projectId,

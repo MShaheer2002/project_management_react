@@ -163,7 +163,7 @@ export interface AddIssueWatchersInput {
 }
 
 export interface AddIssueDependencyInput {
-  relatedId: string;
+  issueId: string;
   relation: IssueDependencyRelation;
 }
 

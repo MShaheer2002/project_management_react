@@ -42,6 +42,8 @@ import {
   IssueActivityTimeline,
   IssueCommentsThread,
   IssueLabelsEditor,
+  IssueRelationsSection,
+  IssueSystemContextSection,
   SubtaskList,
   useAddIssueAttachments,
   useDeleteIssue,
@@ -570,6 +572,7 @@ export const IssueDetailPage: React.FC = () => {
                   <IssueAttachmentsField
                     value={newAttachments}
                     onChange={setNewAttachments}
+                    embedded
                     driveFolderContext={{
                       workspaceName: useAuthStore.getState().workspace?.name,
                       projectName: issue?.project?.name,
@@ -660,6 +663,14 @@ export const IssueDetailPage: React.FC = () => {
             <div className="border-t border-gray-100 pt-8 dark:border-border-dark">
               <SubtaskList issue={issue} />
             </div>
+
+            <IssueRelationsSection dependencies={issue.dependencies} />
+
+            <IssueSystemContextSection
+              parent={issue.parent}
+              watchers={issue.watchers}
+              integrationRefs={issue.integrationRefs}
+            />
 
             <IssueGitHubActivity issueId={issueResourceId} />
 
