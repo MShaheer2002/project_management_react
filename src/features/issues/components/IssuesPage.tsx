@@ -1,9 +1,10 @@
-import React, { useDeferredValue, useMemo, useState } from 'react';
+import React, { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   AlertCircle,
   ArrowUpDown,
   Bug,
+  ChevronDown,
   Building2,
   Calendar,
   CheckCircle2,
@@ -17,14 +18,19 @@ import {
   Zap,
 } from 'lucide-react';
 import { useApp } from '@/AppContext';
+import { useAuthStore } from '@/app/stores/useAuthStore';
 import { KanbanBoard } from '@/components/board/KanbanBoard';
 import { PRIORITY_COLORS, STATUS_LABELS, ISSUE_TYPE_CONFIG } from '@/constants';
+import { AssignIssuesToCycleDialog } from '@features/cycles';
+import { canDeleteIssues } from '@shared/permissions';
 import { LabelChip } from '@shared/components/ui/LabelChip';
+import { WorkflowStatusSelect } from '@shared/components/ui/WorkflowStatusSelect';
 import { useDepartmentsDirectory } from '@features/department';
 import { useTeamDetail } from '@features/team';
 import { useWorkspaceMemberOptions } from '@features/workspace';
+import { useWorkspaceStatuses } from '@shared/hooks/useWorkspaceStatuses';
 import type { Issue, IssueType, Priority, Status } from '@/types';
-import { useIssuesDirectory, useUpdateAnyIssueStatus } from '../hooks/useIssueData';
+import { useDeleteAnyIssue, useIssuesDirectory, useUpdateAnyIssueStatus } from '../hooks/useIssueData';
 
 const TypeBadge: React.FC<{ type: IssueType }> = ({ type }) => {
   const config = ISSUE_TYPE_CONFIG[type];
@@ -119,13 +125,20 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
   const [searchParams] = useSearchParams();
   const teamIdFromQuery = searchParams.get('team') || undefined;
   const activeTeamId = teamId ?? teamIdFromQuery;
+  const role = useAuthStore((state) => state.workspace?.role);
+  const canDelete = canDeleteIssues(role);
 
   const [viewMode, setViewMode] = useState<'list' | 'kanban' | 'calendar'>(initialViewMode);
   const [searchQuery, setSearchQuery] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState<string>('all');
   const [typeFilter, setTypeFilter] = useState<IssueType | 'all'>('all');
   const [selectedAssigneeIds, setSelectedAssigneeIds] = useState<string[]>([]);
+  const [selectedIssueIds, setSelectedIssueIds] = useState<string[]>([]);
+  const [activeIssueMenuId, setActiveIssueMenuId] = useState<string | null>(null);
+  const [assignmentDraft, setAssignmentDraft] = useState<{ issueIds: string[]; teamId?: string } | null>(null);
   const deferredSearchQuery = useDeferredValue(searchQuery);
+  const workspaceStatuses = useWorkspaceStatuses();
+  const [collapsedStatusKeys, setCollapsedStatusKeys] = useState<string[]>([]);
 
   const teamQuery = useTeamDetail(activeTeamId);
   const departmentsQuery = useDepartmentsDirectory(
@@ -152,6 +165,7 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
     limit: 30,
   });
   const updateAnyIssueStatus = useUpdateAnyIssueStatus();
+  const deleteAnyIssue = useDeleteAnyIssue();
 
   const departments = departmentsQuery.data?.pages.flatMap((page) => page.items) ?? [];
   const workspaceAssigneeOptions = assigneeOptionsQuery.data?.pages.flatMap((page) => page.items) ?? [];
@@ -197,12 +211,29 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
   const teamLabel = teamQuery.data?.name;
   const pageTitle = title ?? (teamLabel ? `${teamLabel} — Issues` : 'All Issues');
   const calendarDays = useMemo(() => buildCalendarDays(visibleIssues), [visibleIssues]);
+  const visibleIssueIds = useMemo(() => visibleIssues.map((issue) => issue.id), [visibleIssues]);
+  const allVisibleSelected = visibleIssueIds.length > 0 && visibleIssueIds.every((issueId) => selectedIssueIds.includes(issueId));
+  const someVisibleSelected = visibleIssueIds.some((issueId) => selectedIssueIds.includes(issueId));
+  const listStatusGroups = useMemo(
+    () =>
+      workspaceStatuses
+        .map((status) => ({
+          status,
+          items: visibleIssues.filter((issue) => issue.status === status.key),
+        }))
+        .filter((group) => group.items.length > 0),
+    [visibleIssues, workspaceStatuses]
+  );
 
   const toggleAssigneeFilter = (assigneeId: string) => {
     setSelectedAssigneeIds((current) =>
       current.includes(assigneeId) ? current.filter((id) => id !== assigneeId) : [...current, assigneeId]
     );
   };
+
+  useEffect(() => {
+    setSelectedIssueIds((current) => current.filter((issueId) => issues.some((issue) => issue.id === issueId)));
+  }, [issues]);
 
   const handleIssueUpdate = async (issueId: string, newStatus: Status) => {
     try {
@@ -218,81 +249,291 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
     }
   };
 
+  const toggleIssueSelection = (issueId: string) => {
+    setSelectedIssueIds((current) =>
+      current.includes(issueId) ? current.filter((id) => id !== issueId) : [...current, issueId]
+    );
+  };
+
+  const toggleSelectAllVisible = () => {
+    setSelectedIssueIds((current) => {
+      if (allVisibleSelected) {
+        return current.filter((issueId) => !visibleIssueIds.includes(issueId));
+      }
+
+      return [...new Set([...current, ...visibleIssueIds])];
+    });
+  };
+
+  const openAssignDialog = (issueIds: string[]) => {
+    const selectedIssues = issues.filter((issue) => issueIds.includes(issue.id));
+    const teamIds = [...new Set(selectedIssues.map((issue) => issue.teamId).filter(Boolean))];
+
+    if (selectedIssues.length === 0) {
+      showToast('Select at least one issue first.', 'error', 'Validation');
+      return;
+    }
+
+    if (teamIds.length !== 1) {
+      showToast('Selected issues must belong to the same team to add them into a cycle.', 'error', 'Team mismatch');
+      return;
+    }
+
+    setActiveIssueMenuId(null);
+    setAssignmentDraft({ issueIds, teamId: teamIds[0] });
+  };
+
+  const toggleStatusSection = (statusKey: string) => {
+    setCollapsedStatusKeys((current) =>
+      current.includes(statusKey) ? current.filter((key) => key !== statusKey) : [...current, statusKey]
+    );
+  };
+
+  const handleDeleteIssues = async (issueIds: string[]) => {
+    if (!canDelete) {
+      showToast('Delete is restricted to admins and owners.', 'error', 'Permission denied');
+      return;
+    }
+
+    if (issueIds.length === 0) {
+      showToast('Select at least one issue first.', 'error', 'Validation');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      issueIds.length === 1
+        ? 'Delete this issue permanently?'
+        : `Delete ${issueIds.length} selected issues permanently?`
+    );
+    if (!confirmed) return;
+
+    try {
+      await Promise.all(issueIds.map((issueId) => deleteAnyIssue.mutateAsync(issueId)));
+      showToast(
+        `${issueIds.length} issue${issueIds.length === 1 ? '' : 's'} deleted.`,
+        'success'
+      );
+      setSelectedIssueIds((current) => current.filter((issueId) => !issueIds.includes(issueId)));
+      setActiveIssueMenuId(null);
+    } catch (error) {
+      showToast('Failed to delete selected issues.', 'error', 'Delete failed');
+    }
+  };
+
   const renderListView = () => (
     <>
-      <div className="grid grid-cols-[40px_100px_1fr_100px_120px_150px_120px_40px] gap-4 px-6 py-2 border-b border-gray-200 dark:border-border-dark text-[10px] font-bold uppercase tracking-wider text-gray-400 bg-gray-50/50 dark:bg-black/10">
-        <div className="flex justify-center">
-          <ArrowUpDown size={10} />
-        </div>
-        <div>ID</div>
-        <div>Title</div>
-        <div>Type</div>
-        <div>Status</div>
-        <div>Assignee</div>
-        <div>Priority</div>
-        <div />
-      </div>
-
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto px-4 py-5">
         {visibleIssues.length > 0 ? (
-          visibleIssues.map((issue) => {
-            const assignee = issue.assignee;
-            return (
-              <div
-                key={issue.id}
-                onClick={() => setSelectedIssueId(issue.entityId ?? issue.id)}
-                className="grid grid-cols-[40px_100px_1fr_100px_120px_150px_120px_40px] gap-4 px-6 py-3 border-b border-gray-100 dark:border-border-dark/50 hover:bg-gray-50 dark:hover:bg-white/5 cursor-pointer transition-colors group"
-              >
-                <div className="flex justify-center items-center">
-                  <PriorityIcon priority={issue.priority} />
-                </div>
-                <div className="text-xs font-mono text-gray-400 flex items-center">{issue.id}</div>
-                <div className="flex flex-col justify-center min-w-0">
-                  <span className="text-sm font-medium truncate">{issue.title}</span>
-                  <div className="flex gap-1 mt-1 flex-wrap">
-                    {issue.labels.map((label) => (
-                      <LabelChip key={label} label={label} />
-                    ))}
-                  </div>
-                </div>
-                <div className="flex items-center">
-                  <TypeBadge type={issue.type || 'task'} />
-                </div>
-                <div className="flex items-center">
-                  <div className="flex items-center gap-2 text-xs">
-                    <StatusIcon status={issue.status} />
-                    <span>{STATUS_LABELS[issue.status]}</span>
-                  </div>
-                </div>
-                <div className="flex items-center">
-                  {assignee ? (
-                    <div className="flex items-center gap-2 text-xs min-w-0">
-                      {assignee.avatar ? (
-                        <img src={assignee.avatar} className="w-5 h-5 rounded-full" alt={assignee.name} />
-                      ) : (
-                        <div className="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[10px] font-bold">
-                          {assignee.name.charAt(0).toUpperCase()}
+          <div className="space-y-3">
+            {listStatusGroups.map(({ status, items }) => {
+              const isCollapsed = collapsedStatusKeys.includes(status.key);
+              return (
+                <section
+                  key={status.key}
+                  className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-border-dark dark:bg-card-dark"
+                >
+                  <button
+                    type="button"
+                    onClick={() => toggleStatusSection(status.key)}
+                  className="flex w-full items-center justify-between gap-4 px-4 py-2.5 text-left transition-colors hover:bg-gray-50 dark:hover:bg-white/[0.03]"
+                  >
+                    <div className="flex min-w-0 items-center gap-3">
+                      <ChevronDown
+                        size={16}
+                        className={`shrink-0 text-gray-400 transition-transform ${isCollapsed ? '-rotate-90' : 'rotate-0'}`}
+                      />
+                      <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: status.color }} />
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{status.label}</h3>
+                          {status.isFinal && (
+                            <span className="rounded-full bg-green-500/10 px-2 py-0.5 text-[10px] font-bold text-green-500">
+                              Done
+                            </span>
+                          )}
                         </div>
-                      )}
-                      <span className="truncate">{assignee.name}</span>
+                        <p className="mt-0.5 text-xs text-gray-400">
+                          {items.length} issue{items.length === 1 ? '' : 's'}
+                        </p>
+                      </div>
                     </div>
-                  ) : (
-                    <span className="text-xs text-gray-400 italic">Unassigned</span>
-                  )}
-                </div>
-                <div className="flex items-center">
-                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-tighter ${PRIORITY_COLORS[issue.priority]}`}>
-                    {issue.priority}
-                  </span>
-                </div>
-                <div className="flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button type="button" className="p-1.5 rounded hover:bg-gray-200 dark:hover:bg-white/10 text-gray-400">
-                    <MoreHorizontal size={14} />
+                    <div
+                      className="flex items-center gap-3"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={items.every((issue) => selectedIssueIds.includes(issue.id))}
+                        ref={(input) => {
+                          if (input) {
+                            const selectedCount = items.filter((issue) => selectedIssueIds.includes(issue.id)).length;
+                            input.indeterminate = selectedCount > 0 && selectedCount < items.length;
+                          }
+                        }}
+                        onChange={() =>
+                          setSelectedIssueIds((current) => {
+                            const groupIds = items.map((issue) => issue.id);
+                            const allSelected = groupIds.every((issueId) => current.includes(issueId));
+                            if (allSelected) {
+                              return current.filter((issueId) => !groupIds.includes(issueId));
+                            }
+                            return [...new Set([...current, ...groupIds])];
+                          })
+                        }
+                        className="h-4 w-4 rounded border-gray-300 bg-transparent text-primary focus:ring-primary/30"
+                      />
+                    </div>
                   </button>
-                </div>
-              </div>
-            );
-          })
+
+                  {!isCollapsed && (
+                    <div className="border-t border-gray-200 dark:border-border-dark">
+                      <div className="grid grid-cols-[44px_40px_100px_1fr_120px_100px_150px_120px_44px] gap-4 bg-gray-50/60 px-5 py-2 text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:bg-black/10">
+                        <div className="flex justify-center">
+                          <input
+                            type="checkbox"
+                            checked={items.every((issue) => selectedIssueIds.includes(issue.id))}
+                            ref={(input) => {
+                              if (input) {
+                                const selectedCount = items.filter((issue) => selectedIssueIds.includes(issue.id)).length;
+                                input.indeterminate = selectedCount > 0 && selectedCount < items.length;
+                              }
+                            }}
+                            onChange={() =>
+                              setSelectedIssueIds((current) => {
+                                const groupIds = items.map((issue) => issue.id);
+                                const allSelected = groupIds.every((issueId) => current.includes(issueId));
+                                if (allSelected) {
+                                  return current.filter((issueId) => !groupIds.includes(issueId));
+                                }
+                                return [...new Set([...current, ...groupIds])];
+                              })
+                            }
+                            className="h-4 w-4 rounded border-gray-300 bg-transparent text-primary focus:ring-primary/30"
+                          />
+                        </div>
+                        <div className="flex justify-center">
+                          <ArrowUpDown size={10} />
+                        </div>
+                        <div>ID</div>
+                        <div>Title</div>
+                        <div>Workflow</div>
+                        <div>Type</div>
+                        <div>Assignee</div>
+                        <div>Priority</div>
+                        <div />
+                      </div>
+
+                      {items.map((issue) => {
+                        const assignee = issue.assignee;
+                        const isSelected = selectedIssueIds.includes(issue.id);
+                        return (
+                          <div
+                            key={issue.id}
+                            onClick={() => setSelectedIssueId(issue.id)}
+                            className={`grid grid-cols-[44px_40px_100px_1fr_120px_100px_150px_120px_44px] gap-4 border-t border-gray-100 px-5 py-3 transition-colors group dark:border-border-dark/50 ${
+                              isSelected ? 'bg-primary/5 dark:bg-primary/10' : 'hover:bg-gray-50 dark:hover:bg-white/5'
+                            } cursor-pointer`}
+                          >
+                            <div
+                              className="flex items-center justify-center"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                              }}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => toggleIssueSelection(issue.id)}
+                                className="h-4 w-4 rounded border-gray-300 bg-transparent text-primary focus:ring-primary/30"
+                              />
+                            </div>
+                            <div className="flex justify-center items-center">
+                              <PriorityIcon priority={issue.priority} />
+                            </div>
+                            <div className="text-xs font-mono text-gray-400 flex items-center">{issue.id}</div>
+                            <div className="flex flex-col justify-center min-w-0">
+                              <span className="text-sm font-medium truncate">{issue.title}</span>
+                              <div className="flex gap-1 mt-1 flex-wrap">
+                                {issue.labels.map((label) => (
+                                  <LabelChip key={label} label={label} />
+                                ))}
+                              </div>
+                            </div>
+                            <div
+                              className="flex items-center"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                              }}
+                            >
+                              <WorkflowStatusSelect
+                                value={issue.status}
+                                statuses={workspaceStatuses}
+                                onChange={(nextStatus) => {
+                                  void handleIssueUpdate(issue.id, nextStatus);
+                                }}
+                              />
+                            </div>
+                            <div className="flex items-center">
+                              <TypeBadge type={issue.type || 'task'} />
+                            </div>
+                            <div className="flex items-center">
+                              {assignee ? (
+                                <div className="flex items-center gap-2 text-xs min-w-0">
+                                  {assignee.avatar ? (
+                                    <img src={assignee.avatar} className="w-5 h-5 rounded-full" alt={assignee.name} />
+                                  ) : (
+                                    <div className="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[10px] font-bold">
+                                      {assignee.name.charAt(0).toUpperCase()}
+                                    </div>
+                                  )}
+                                  <span className="truncate">{assignee.name}</span>
+                                </div>
+                              ) : (
+                                <span className="text-xs text-gray-400 italic">Unassigned</span>
+                              )}
+                            </div>
+                            <div className="flex items-center">
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-tighter ${PRIORITY_COLORS[issue.priority]}`}>
+                                {issue.priority}
+                              </span>
+                            </div>
+                            <div className="relative flex items-center justify-center opacity-0 transition-opacity group-hover:opacity-100">
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setActiveIssueMenuId((current) => (current === issue.id ? null : issue.id));
+                                }}
+                                className="rounded p-1.5 text-gray-400 hover:bg-gray-200 dark:hover:bg-white/10"
+                              >
+                                <MoreHorizontal size={14} />
+                              </button>
+                              {activeIssueMenuId === issue.id && (
+                                <div className="absolute right-0 top-9 z-20 min-w-[180px] rounded-xl border border-gray-200 bg-white p-1.5 shadow-xl dark:border-border-dark dark:bg-card-dark">
+                                  <button
+                                    type="button"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      openAssignDialog([issue.id]);
+                                    }}
+                                    className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-gray-200 dark:hover:bg-white/5 dark:hover:text-white"
+                                  >
+                                    Add To Cycle
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </section>
+              );
+            })}
+          </div>
         ) : (
           <div className="flex flex-col items-center justify-center h-64 text-gray-400">
             <SearchIcon size={48} className="mb-4 opacity-10" />
@@ -333,7 +574,7 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
                 key={issue.id}
                 onClick={(event) => {
                   event.stopPropagation();
-                  setSelectedIssueId(issue.entityId ?? issue.id);
+                  setSelectedIssueId(issue.id);
                 }}
                 className="px-1.5 py-0.5 rounded bg-primary/10 border border-primary/20 text-[9px] font-medium text-primary truncate cursor-pointer hover:bg-primary/20 transition-colors"
               >
@@ -507,6 +748,64 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
         )}
       </header>
 
+      {viewMode === 'list' && selectedIssueIds.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 bg-white px-6 py-3 dark:border-border-dark dark:bg-bg-dark">
+          <div className="flex items-center gap-3 text-sm">
+            <span className="text-gray-400">{selectedIssueIds.length} selected</span>
+          </div>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setActiveIssueMenuId((current) => (current === '__bulk__' ? null : '__bulk__'))}
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-50 dark:border-border-dark dark:bg-white/5 dark:text-gray-200 dark:hover:bg-white/10"
+            >
+              <MoreHorizontal size={15} />
+              Actions
+            </button>
+            {activeIssueMenuId === '__bulk__' && (
+              <div className="absolute right-0 top-11 z-20 min-w-[220px] rounded-xl border border-gray-200 bg-white p-1.5 shadow-xl dark:border-border-dark dark:bg-card-dark">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveIssueMenuId(null);
+                    navigate('/issues/create');
+                  }}
+                  className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-gray-200 dark:hover:bg-white/5 dark:hover:text-white"
+                >
+                  Add New Issue
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openAssignDialog(selectedIssueIds)}
+                  className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-gray-200 dark:hover:bg-white/5 dark:hover:text-white"
+                >
+                  Add To Cycle
+                </button>
+                {canDelete && (
+                  <button
+                    type="button"
+                    onClick={() => void handleDeleteIssues(selectedIssueIds)}
+                    className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-red-500 transition-colors hover:bg-red-500/10"
+                  >
+                    Remove
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedIssueIds([]);
+                    setActiveIssueMenuId(null);
+                  }}
+                  className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-gray-200 dark:hover:bg-white/5 dark:hover:text-white"
+                >
+                  Clear
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="flex-1 overflow-hidden flex flex-col">
         {viewMode === 'list' && renderListView()}
         {viewMode === 'kanban' && renderKanbanView()}
@@ -525,6 +824,12 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
           </div>
         )}
       </div>
+      <AssignIssuesToCycleDialog
+        open={Boolean(assignmentDraft)}
+        onClose={() => setAssignmentDraft(null)}
+        teamId={assignmentDraft?.teamId}
+        issueIds={assignmentDraft?.issueIds ?? []}
+      />
     </div>
   );
 };

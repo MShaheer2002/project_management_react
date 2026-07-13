@@ -98,9 +98,8 @@ export type CompleteCycleInput = {
 };
 
 export type CarryOverCycleInput = {
-  target: 'NEXT_CYCLE' | 'BACKLOG';
+  mode: 'nextCycle' | 'backlog';
   targetCycleId?: string;
-  issueIds?: string[];
 };
 
 export type ListCycleIssuesInput = {

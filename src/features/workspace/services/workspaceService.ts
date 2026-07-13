@@ -23,7 +23,7 @@ export interface WorkspaceResponse {
   unreadNotifications?: number; // Per-workspace unread count (from GET /workspaces)
   joinedAt?: string;            // When user joined this workspace
   createdAt?: string;
-  customStatuses?: Array<{ key: string; label: string; color: string; order: number; isFinal: boolean }>;
+  customStatuses?: Array<{ key: string; label: string; color: string; order: number; isFinal: boolean; showOnBoard: boolean }>;
 }
 
 export interface CreateWorkspaceInput {
@@ -42,6 +42,7 @@ export interface SendInvitationInput {
   workspaceId: string;
   email: string;
   role: InvitationRole;
+  designation: string;
   teamId: string;
   departmentId?: string;
 }
@@ -50,6 +51,7 @@ export interface InvitationResponse {
   id: string;
   email: string;
   role: InvitationRole;
+  designation?: string | null;
   teamId: string;
   departmentId?: string | null;
   status?: string;
@@ -70,6 +72,7 @@ export interface WorkspaceMemberResponse {
   name: string;
   avatar: string | null;
   role: string;
+  designation?: string | null;
   invitedById?: string | null;
   joinedAt?: string;
   team?: {
@@ -90,6 +93,7 @@ export interface WorkspaceMemberOption {
   name: string;
   email: string;
   role: string;
+  designation?: string | null;
 }
 
 export type WorkspaceMemberSort = 'name:asc' | 'name:desc' | 'joinedAt:asc' | 'joinedAt:desc';
@@ -141,6 +145,7 @@ export interface WorkspaceInvitationResponse {
   id: string;
   email: string;
   role: string;
+  designation?: string | null;
   status: string;
   teamId?: string;
   teamName?: string | null;
@@ -157,6 +162,7 @@ export interface InvitationResolveResponse {
   workspaceSlug: string;
   workspaceLogo?: string | null;
   role: string;
+  designation?: string | null;
   teamName: string;
   departmentName?: string | null;
   invitedEmail: string;

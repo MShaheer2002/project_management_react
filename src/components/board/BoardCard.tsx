@@ -63,7 +63,7 @@ export const BoardCard: React.FC<BoardCardProps> = ({ issue, onClick }) => {
       style={style}
       {...attributes}
       {...listeners}
-      onClick={() => onClick(issue.entityId ?? issue.id)}
+      onClick={() => onClick(issue.id)}
       className={`bg-white dark:bg-card-dark border border-gray-200 dark:border-border-dark rounded-xl p-4 shadow-sm hover:border-primary/30 transition-all cursor-grab active:cursor-grabbing group select-none ${
         isDragging ? 'z-50 shadow-xl scale-[1.02]' : ''
       }`}

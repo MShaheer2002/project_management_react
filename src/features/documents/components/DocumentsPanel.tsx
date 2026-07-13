@@ -611,33 +611,35 @@ export const DocumentsPanel: React.FC<DocumentsPanelProps> = ({
       onDrop={canManage ? handleDrop : undefined}
     >
       {/* Breadcrumbs */}
-      {currentFolderId && (
-        <nav className="mb-3 flex items-center gap-1 text-xs">
-          <button
-            type="button"
-            onClick={() => handleNavigateToFolder(null)}
-            className="text-primary transition-colors hover:text-primary/80"
-          >
-            {title}
-          </button>
-          {breadcrumbs.map((crumb) => (
-            <React.Fragment key={crumb.id}>
-              <ChevronRight size={12} className="text-gray-400 dark:text-text-secondary-dark" />
-              <button
-                type="button"
-                onClick={() => handleNavigateToFolder(crumb.id)}
-                className={
-                  crumb.id === currentFolderId
-                    ? 'text-gray-700 dark:text-text-primary-dark'
-                    : 'text-primary transition-colors hover:text-primary/80'
-                }
-              >
-                {crumb.name}
-              </button>
-            </React.Fragment>
-          ))}
-        </nav>
-      )}
+      <nav className="mb-3 flex items-center gap-1 text-xs">
+        <button
+          type="button"
+          onClick={() => handleNavigateToFolder(null)}
+          className={
+            currentFolderId
+              ? 'text-primary transition-colors hover:text-primary/80'
+              : 'text-gray-700 dark:text-text-primary-dark'
+          }
+        >
+          {title}
+        </button>
+        {breadcrumbs.map((crumb) => (
+          <React.Fragment key={crumb.id}>
+            <ChevronRight size={12} className="text-gray-400 dark:text-text-secondary-dark" />
+            <button
+              type="button"
+              onClick={() => handleNavigateToFolder(crumb.id)}
+              className={
+                crumb.id === currentFolderId
+                  ? 'text-gray-700 dark:text-text-primary-dark'
+                  : 'text-primary transition-colors hover:text-primary/80'
+              }
+            >
+              {crumb.name}
+            </button>
+          </React.Fragment>
+        ))}
+      </nav>
 
       {/* Header */}
       <div className="flex items-center justify-between">

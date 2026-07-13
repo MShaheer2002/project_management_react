@@ -6,6 +6,7 @@ export { IssueAttachmentsField } from './components/IssueAttachmentsField';
 export { IssueCommentsThread } from './components/IssueCommentsThread';
 export { IssueActivityTimeline } from './components/IssueActivityTimeline';
 export { IssueLabelsEditor } from './components/IssueLabelsEditor';
+export { useProjectAssignmentGuard } from './hooks/useProjectAssignmentGuard';
 export {
   issueQueryKeys,
   useAddIssueAttachments,
@@ -16,10 +17,12 @@ export {
   useAttachIssueLabelsAny,
   useAddIssueWatchers,
   useAddIssueWatchersAny,
+  useCheckIssueAssignmentEligibility,
   useCreateIssue,
   useCreateLabel,
   useCreateIssueComment,
   useCreateIssueSubtask,
+  useDeleteAnyIssue,
   useDeleteIssueComment,
   useDeleteLabel,
   useDeleteIssue,
@@ -54,11 +57,13 @@ export type {
   AddIssueDependencyInput,
   AddIssueWatchersInput,
   AttachIssueLabelsInput,
+  CheckIssueAssignmentEligibilityInput,
   CreateLabelInput,
   CreateIssueCommentInput,
   CreateIssueInput,
   CreateIssueSubtaskInput,
   IssueActivityItem,
+  IssueAssignmentEligibility,
   IssueCommentAttachment,
   IssueCommentAttachmentInput,
   IssueAttachmentInput,

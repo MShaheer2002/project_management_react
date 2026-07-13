@@ -197,6 +197,19 @@ export interface CreateIssueInput {
   departmentId?: string | null;
 }
 
+export interface CheckIssueAssignmentEligibilityInput {
+  projectId: string;
+  assigneeId: string;
+}
+
+export interface IssueAssignmentEligibility {
+  projectId: string;
+  projectName: string;
+  workspaceMember: boolean;
+  projectMember: boolean;
+  canAutoAdd: boolean;
+}
+
 export interface UpdateIssueInput {
   title?: string;
   description?: string | null;

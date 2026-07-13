@@ -59,7 +59,9 @@ import {
   IssueSystemParametersPanel,
   useAddIssueDependencyAny,
   useAddIssueWatchersAny,
+  useCheckIssueAssignmentEligibility,
   useCreateIssue,
+  useProjectAssignmentGuard,
   useUpdateAnyIssue,
   useUpdateIssueIntegrationRefsAny,
 } from '@features/issues';
@@ -170,6 +172,8 @@ export const CreateIssuePage: React.FC = () => {
     { enabled: true }
   );
   const createIssue = useCreateIssue();
+  const checkAssignmentEligibility = useCheckIssueAssignmentEligibility();
+  const { dialog: projectAssignmentDialog, openAssignmentDialog, handleAssignmentError } = useProjectAssignmentGuard();
   const updateAnyIssue = useUpdateAnyIssue();
   const addIssueDependencyAny = useAddIssueDependencyAny();
   const addIssueWatchersAny = useAddIssueWatchersAny();
@@ -353,24 +357,24 @@ export const CreateIssuePage: React.FC = () => {
     );
   };
 
-  const handleCreate = async () => {
-    if (!validate()) return;
-    setIsSubmitting(true);
-    try {
-      const cleanSubtasks = subtasks
-        .map((subtask) => ({ ...subtask, title: subtask.title.trim(), isEditing: false }))
-        .filter((subtask) => subtask.title.length > 0)
-        .map(({ isEditing, ...rest }) => rest);
-      const cleanIntegrationRefs = integrationRefs.filter((ref) => ref.label || ref.externalId || ref.url);
-      const cleanAcceptanceCriteria = acceptanceCriteria.trim();
+  const buildCreatePayload = useCallback(() => {
+    const cleanSubtasks = subtasks
+      .map((subtask) => ({ ...subtask, title: subtask.title.trim(), isEditing: false }))
+      .filter((subtask) => subtask.title.length > 0)
+      .map(({ isEditing, ...rest }) => rest);
+    const cleanIntegrationRefs = integrationRefs.filter((ref) => ref.label || ref.externalId || ref.url);
+    const cleanAcceptanceCriteria = acceptanceCriteria.trim();
+    const parsedComplexity = Number.parseInt(estimate, 10);
+    const normalizedComplexity = Number.isNaN(parsedComplexity)
+      ? null
+      : Math.min(5, Math.max(1, parsedComplexity));
+    const templateId = selectedTemplateId && lastAutoAppliedType === type ? selectedTemplateId : undefined;
 
-      const parsedComplexity = Number.parseInt(estimate, 10);
-      const normalizedComplexity = Number.isNaN(parsedComplexity)
-        ? null
-        : Math.min(5, Math.max(1, parsedComplexity));
-      const templateId = selectedTemplateId && lastAutoAppliedType === type ? selectedTemplateId : undefined;
-
-      const createdIssue = await createIssue.mutateAsync({
+    return {
+      cleanSubtasks,
+      cleanIntegrationRefs,
+      cleanAcceptanceCriteria,
+      payload: {
         title: title.trim(),
         description,
         type,
@@ -407,7 +411,37 @@ export const CreateIssuePage: React.FC = () => {
             : undefined,
         notes: type === 'issue' ? notes : undefined,
         departmentId: departmentId || null,
-      });
+      },
+    };
+  }, [
+    acceptanceCriteria,
+    actualBehavior,
+    assigneeId,
+    attachments,
+    departmentId,
+    description,
+    dueDate,
+    dueTime,
+    estimate,
+    expectedBehavior,
+    integrationRefs,
+    lastAutoAppliedType,
+    notes,
+    priority,
+    projectId,
+    relatedIssues,
+    selectedTemplateId,
+    severity,
+    status,
+    stepsToReproduce,
+    subtasks,
+    title,
+    type,
+  ]);
+
+  const finalizeCreate = useCallback(async () => {
+    const { cleanSubtasks, cleanIntegrationRefs, cleanAcceptanceCriteria, payload } = buildCreatePayload();
+    const createdIssue = await createIssue.mutateAsync(payload);
       const createdIssueResourceId = createdIssue.entityId ?? createdIssue.id;
 
       if (selectedLabelIds.length > 0) {
@@ -455,7 +489,6 @@ export const CreateIssuePage: React.FC = () => {
         });
       }
 
-      setIsSubmitting(false);
       showToast(
         cleanSubtasks.length > 0
           ? `Issue created with ${cleanSubtasks.length} subtask${cleanSubtasks.length > 1 ? 's' : ''}`
@@ -463,12 +496,86 @@ export const CreateIssuePage: React.FC = () => {
       );
       localStorage.removeItem(draftKey);
       navigate(`/issues/${createdIssueResourceId}`);
+  }, [
+    addIssueDependencyAny,
+    addIssueWatchersAny,
+    attachIssueLabelsAny,
+    buildCreatePayload,
+    createIssue,
+    draftKey,
+    navigate,
+    parentIssueId,
+    selectedLabelIds,
+    showToast,
+    updateAnyIssue,
+    updateIssueIntegrationRefsAny,
+    watcherIds,
+    dependencies,
+  ]);
+
+  const handleCreate = async () => {
+    if (!validate()) return;
+    setIsSubmitting(true);
+    try {
+      if (assigneeId) {
+        const eligibility = await checkAssignmentEligibility.mutateAsync({
+          projectId,
+          assigneeId,
+        });
+
+        if (!eligibility.projectMember) {
+          openAssignmentDialog({
+            assigneeId,
+            assigneeName: assigneeOptions.find((member) => member.id === assigneeId)?.name ?? 'Selected member',
+            projectId,
+            projectName: eligibility.projectName,
+            canAutoAdd: eligibility.canAutoAdd,
+            confirmLabel: 'Add to project and create issue',
+            retry: async () => {
+              setIsSubmitting(true);
+              try {
+                await finalizeCreate();
+              } finally {
+                setIsSubmitting(false);
+              }
+            },
+          });
+          return;
+        }
+      }
+
+      await finalizeCreate();
     } catch (error) {
-      setIsSubmitting(false);
+      const nextAssignee = assigneeOptions.find((member) => member.id === assigneeId);
+      const didHandleProjectMembership = Boolean(
+        assigneeId
+          && projectId
+          && handleAssignmentError(error, {
+            assigneeId,
+            assigneeName: nextAssignee?.name ?? 'Selected member',
+            projectId,
+            projectName: projectOptions.find((project) => project.id === projectId)?.name ?? 'this project',
+            retry: async () => {
+              setIsSubmitting(true);
+              try {
+                await finalizeCreate();
+              } finally {
+                setIsSubmitting(false);
+              }
+            },
+          }),
+      );
+
+      if (didHandleProjectMembership) {
+        return;
+      }
+
       const apiFieldErrors = getApiFieldErrors(error);
       const projectErrors = apiFieldErrors.projectId?.[0] || apiFieldErrors.project?.[0];
       setErrors(projectErrors ? { project: projectErrors } : {});
       showToast(getApiErrorMessage(error) || 'Failed to create issue.', 'error');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -1272,6 +1379,7 @@ export const CreateIssuePage: React.FC = () => {
           </div>
         )}
       </AnimatePresence>
+      {projectAssignmentDialog}
     </motion.div>
   );
 };

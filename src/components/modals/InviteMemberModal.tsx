@@ -6,7 +6,7 @@ import { useSidebarData } from '@features/sidebar';
 import { useSendInvitation, type InvitationRole } from '@features/workspace';
 import type { ApiAxiosError } from '@shared/services/types';
 import { consumeInviteMemberDraft } from '@shared/utils/inviteMemberDraft';
-import { ChevronDown, Loader2, Mail, Shield, Users, Building2 } from 'lucide-react';
+import { BriefcaseBusiness, ChevronDown, Loader2, Mail, Shield, Users, Building2 } from 'lucide-react';
 
 export const InviteMemberModal: React.FC = () => {
   const { activeModal, setActiveModal, showToast } = useApp();
@@ -14,6 +14,7 @@ export const InviteMemberModal: React.FC = () => {
   const sendInvitation = useSendInvitation();
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<InvitationRole>('MEMBER');
+  const [designation, setDesignation] = useState('');
   const [teamId, setTeamId] = useState('');
   const [departmentId, setDepartmentId] = useState('');
 
@@ -52,6 +53,7 @@ export const InviteMemberModal: React.FC = () => {
   const resetForm = () => {
     setEmail('');
     setRole('MEMBER');
+    setDesignation('');
     setDepartmentId('');
     setTeamId(teams[0]?.id ?? '');
   };
@@ -65,12 +67,14 @@ export const InviteMemberModal: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const trimmedEmail = email.trim().toLowerCase();
-    if (!trimmedEmail || !teamId || !canInviteMembers) return;
+    const trimmedDesignation = designation.trim();
+    if (!trimmedEmail || !trimmedDesignation || !teamId || !canInviteMembers) return;
 
     try {
       const result = await sendInvitation.mutateAsync({
         email: trimmedEmail,
         role,
+        designation: trimmedDesignation,
         teamId,
         departmentId: departmentId || undefined,
       });
@@ -102,7 +106,7 @@ export const InviteMemberModal: React.FC = () => {
   };
 
   const isSubmitting = sendInvitation.isPending;
-  const isDisabled = isSubmitting || !email.trim() || !teamId || !canInviteMembers;
+  const isDisabled = isSubmitting || !email.trim() || !designation.trim() || !teamId || !canInviteMembers;
 
   return (
     <Modal
@@ -143,6 +147,22 @@ export const InviteMemberModal: React.FC = () => {
                 <option value="GUEST">Guest</option>
               </select>
               <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold uppercase tracking-wider text-gray-400">Designation</label>
+            <div className="relative">
+              <BriefcaseBusiness size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Enter the member's designation"
+                value={designation}
+                onChange={(e) => setDesignation(e.target.value)}
+                maxLength={100}
+                className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-border-dark rounded-lg outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm"
+                required
+              />
             </div>
           </div>
 

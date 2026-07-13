@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
@@ -6,6 +6,7 @@ import {
   Activity,
   ArrowUpDown,
   Bug,
+  ChevronDown,
   Building2,
   Calendar,
   CheckCircle2,
@@ -31,16 +32,20 @@ import { KanbanBoard } from '@/components/board/KanbanBoard';
 import { useAuthStore } from '@/app/stores/useAuthStore';
 import { ActivityTimeline, activityQueryKeys } from '@features/activity';
 import {
+  AssignIssuesToCycleDialog,
   useCarryOverCycle,
   useCompleteCycle,
   useCycleDetail,
   useCycleIssues,
   useDeleteCycle,
   usePlanCycleIssues,
+  useRemoveCycleIssue,
   useReopenCycle,
   useUpdateCycle,
 } from '@features/cycles';
 import { useIssueOptions, useUpdateAnyIssueStatus } from '@features/issues';
+import { WorkflowStatusSelect } from '@shared/components/ui/WorkflowStatusSelect';
+import { useWorkspaceStatuses } from '@shared/hooks/useWorkspaceStatuses';
 import { getApiErrorMessage } from '@shared/services';
 import { ISSUE_TYPE_CONFIG, PRIORITY_COLORS, STATUS_LABELS } from '@/constants';
 import type { Issue, IssueType, Priority, Status } from '@/types';
@@ -60,6 +65,50 @@ const formatDateRange = (start: string, end: string) => {
 const progressPercent = (total: number, completed: number) => {
   if (!total) return 0;
   return Math.round((completed / total) * 100);
+};
+
+const CircularMetric: React.FC<{
+  value: number;
+  label: string;
+  tone?: 'primary' | 'neutral';
+  suffix?: string;
+}> = ({ value, label, tone = 'primary', suffix = '%' }) => {
+  const safeValue = Math.max(0, Math.min(100, value));
+  const stroke = tone === 'primary' ? 'var(--color-primary, #5f72ea)' : 'rgb(107 114 128)';
+
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <div className="relative h-24 w-24">
+        <svg viewBox="0 0 100 100" className="h-24 w-24 -rotate-90">
+          <circle cx="50" cy="50" r="42" fill="none" stroke="currentColor" strokeWidth="8" className="text-gray-200 dark:text-white/10" />
+          <circle
+            cx="50"
+            cy="50"
+            r="42"
+            fill="none"
+            stroke={stroke}
+            strokeWidth="8"
+            strokeLinecap="round"
+            strokeDasharray={`${2 * Math.PI * 42}`}
+            strokeDashoffset={`${2 * Math.PI * 42 * (1 - safeValue / 100)}`}
+          />
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <span className="text-lg font-bold tabular-nums text-gray-900 dark:text-gray-100">
+            {safeValue}
+            {suffix}
+          </span>
+        </div>
+      </div>
+      <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-gray-400">{label}</span>
+    </div>
+  );
+};
+
+const toInputDate = (value: string) => value.slice(0, 10);
+const toIsoDateTime = (value: string, fallback: string) => {
+  const [, time = '00:00:00.000Z'] = fallback.split('T');
+  return new Date(`${value}T${time}`).toISOString();
 };
 
 const TypeBadge: React.FC<{ type: IssueType }> = ({ type }) => {
@@ -157,14 +206,20 @@ export const CycleDetailPage: React.FC = () => {
   const { cycleId } = useParams<{ cycleId: string }>();
   const queryClient = useQueryClient();
   const workspaceId = useAuthStore((state) => state.workspace?.id);
+  const workspaceStatuses = useWorkspaceStatuses();
   const { showToast, setActiveModal } = useApp();
-  const [activeTab, setActiveTab] = useState<'overview' | 'issues' | 'activity'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'issues' | 'activity' | 'control'>('overview');
   const [issueView, setIssueView] = useState<'list' | 'board' | 'calendar'>('board');
   const [selectedAssigneeIds, setSelectedAssigneeIds] = useState<string[]>([]);
+  const [selectedIssueIds, setSelectedIssueIds] = useState<string[]>([]);
+  const [activeIssueMenuId, setActiveIssueMenuId] = useState<string | null>(null);
+  const [collapsedStatusKeys, setCollapsedStatusKeys] = useState<string[]>([]);
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
   const [isPlanDialogOpen, setIsPlanDialogOpen] = useState(false);
   const [selectedPlanIssueIds, setSelectedPlanIssueIds] = useState<string[]>([]);
   const [planSearch, setPlanSearch] = useState('');
+  const [controlStartDate, setControlStartDate] = useState('');
+  const [controlEndDate, setControlEndDate] = useState('');
   const deferredPlanSearch = React.useDeferredValue(planSearch);
   const cycleQuery = useCycleDetail(cycleId);
   const cycleIssuesQuery = useCycleIssues(cycleId, { limit: 100 });
@@ -174,6 +229,7 @@ export const CycleDetailPage: React.FC = () => {
   const reopenCycle = useReopenCycle(cycleId);
   const deleteCycle = useDeleteCycle(cycleId);
   const planCycleIssues = usePlanCycleIssues(cycleId);
+  const removeCycleIssue = useRemoveCycleIssue(cycleId);
   const updateIssueStatus = useUpdateAnyIssueStatus();
   const cycle = cycleQuery.data;
   const issueOptionsQuery = useIssueOptions(
@@ -210,6 +266,20 @@ export const CycleDetailPage: React.FC = () => {
     return cycleIssues.filter((issue) => issue.assigneeId && selectedIds.has(issue.assigneeId));
   }, [cycleIssues, selectedAssigneeIds]);
   const visibleCycleIssues = issueView === 'board' ? filteredCycleIssues : cycleIssues;
+  const visibleCycleIssueIds = useMemo(() => visibleCycleIssues.map((issue) => issue.id), [visibleCycleIssues]);
+  const listStatusGroups = useMemo(
+    () =>
+      workspaceStatuses
+        .map((status) => ({
+          status,
+          items: visibleCycleIssues.filter((issue) => issue.status === status.key),
+        }))
+        .filter((group) => group.items.length > 0),
+    [visibleCycleIssues, workspaceStatuses]
+  );
+  const allVisibleCycleIssuesSelected =
+    visibleCycleIssueIds.length > 0 && visibleCycleIssueIds.every((issueId) => selectedIssueIds.includes(issueId));
+  const someVisibleCycleIssuesSelected = visibleCycleIssueIds.some((issueId) => selectedIssueIds.includes(issueId));
   const isActionLoading =
     updateCycle.isPending ||
     completeCycle.isPending ||
@@ -221,6 +291,16 @@ export const CycleDetailPage: React.FC = () => {
     () => issueOptionsQuery.data?.pages.flatMap((page) => page.items) ?? [],
     [issueOptionsQuery.data]
   );
+
+  useEffect(() => {
+    if (!cycle) return;
+    setControlStartDate(toInputDate(cycle.startsAt));
+    setControlEndDate(toInputDate(cycle.endsAt));
+  }, [cycle]);
+
+  useEffect(() => {
+    setSelectedIssueIds((current) => current.filter((issueId) => cycleIssues.some((issue) => issue.id === issueId)));
+  }, [cycleIssues]);
 
   if (cycleQuery.isLoading) {
     return (
@@ -303,6 +383,28 @@ export const CycleDetailPage: React.FC = () => {
     setIsPlanDialogOpen(true);
   };
 
+  const toggleCycleIssueSelection = (issueId: string) => {
+    setSelectedIssueIds((current) =>
+      current.includes(issueId) ? current.filter((id) => id !== issueId) : [...current, issueId]
+    );
+  };
+
+  const toggleSelectAllVisibleCycleIssues = () => {
+    setSelectedIssueIds((current) => {
+      if (allVisibleCycleIssuesSelected) {
+        return current.filter((issueId) => !visibleCycleIssueIds.includes(issueId));
+      }
+
+      return [...new Set([...current, ...visibleCycleIssueIds])];
+    });
+  };
+
+  const toggleStatusSection = (statusKey: string) => {
+    setCollapsedStatusKeys((current) =>
+      current.includes(statusKey) ? current.filter((key) => key !== statusKey) : [...current, statusKey]
+    );
+  };
+
   const handlePlanIssuesScroll = (event: React.UIEvent<HTMLDivElement>) => {
     const target = event.currentTarget;
     const distanceFromBottom = target.scrollHeight - target.scrollTop - target.clientHeight;
@@ -331,6 +433,22 @@ export const CycleDetailPage: React.FC = () => {
     }
   };
 
+  const handleRemoveSelectedCycleIssues = async (issueIds: string[]) => {
+    if (issueIds.length === 0) {
+      showToast('Select at least one issue first.', 'error', 'Validation');
+      return;
+    }
+
+    try {
+      await Promise.all(issueIds.map((issueId) => removeCycleIssue.mutateAsync(issueId)));
+      showToast(`${issueIds.length} issue${issueIds.length === 1 ? '' : 's'} removed from ${cycle.name}.`, 'success');
+      setSelectedIssueIds((current) => current.filter((issueId) => !issueIds.includes(issueId)));
+      setActiveIssueMenuId(null);
+    } catch (error) {
+      showToast(getApiErrorMessage(error) || 'Failed to remove issues from cycle.', 'error', 'Update failed');
+    }
+  };
+
   const runAction = async (callback: () => Promise<unknown>, successMessage: string) => {
     try {
       await callback();
@@ -348,9 +466,18 @@ export const CycleDetailPage: React.FC = () => {
       confirmLabel: 'Carry Over',
       onConfirm: () =>
         runAction(
-          () => carryOverCycle.mutateAsync({ target: 'BACKLOG' }),
+          () => carryOverCycle.mutateAsync({ mode: 'backlog' }),
           'Unfinished issues carried over to backlog.'
         ),
+    });
+  };
+
+  const handleStartCycle = () => {
+    setConfirmAction({
+      title: `Start ${cycle.name}?`,
+      message: 'This will mark the cycle as current for the selected team. Only one current cycle is allowed per team.',
+      confirmLabel: 'Start Cycle',
+      onConfirm: () => runAction(() => updateCycle.mutateAsync({ status: 'CURRENT' }), `${cycle.name} started.`),
     });
   };
 
@@ -392,20 +519,26 @@ export const CycleDetailPage: React.FC = () => {
     });
   };
 
-  const handleEditDates = () => {
-    setConfirmAction({
-      title: 'Shift cycle dates by one week?',
-      message: 'This demo action updates the cycle end date by seven days. A full date editor can reuse the same PATCH endpoint.',
-      confirmLabel: 'Update Dates',
-      onConfirm: () => {
-        const nextEndDate = new Date(cycle.endsAt);
-        nextEndDate.setDate(nextEndDate.getDate() + 7);
-        return runAction(
-          () => updateCycle.mutateAsync({ endsAt: nextEndDate.toISOString() }),
-          'Cycle dates updated.'
-        );
-      },
-    });
+  const handleSaveSchedule = async () => {
+    if (!controlStartDate || !controlEndDate) {
+      showToast('Start and end dates are required.', 'error', 'Validation');
+      return;
+    }
+
+    if (new Date(controlStartDate).getTime() >= new Date(controlEndDate).getTime()) {
+      showToast('End date must be after start date.', 'error', 'Validation');
+      return;
+    }
+
+    try {
+      await updateCycle.mutateAsync({
+        startsAt: toIsoDateTime(controlStartDate, cycle.startsAt),
+        endsAt: toIsoDateTime(controlEndDate, cycle.endsAt),
+      });
+      showToast('Cycle schedule updated.', 'success');
+    } catch (error) {
+      showToast(getApiErrorMessage(error) || 'Failed to update cycle dates.', 'error', 'Cycle update failed');
+    }
   };
 
   return (
@@ -439,6 +572,7 @@ export const CycleDetailPage: React.FC = () => {
           { id: 'overview', label: 'Overview', icon: LayoutGrid },
           { id: 'issues', label: 'Issues', icon: Filter },
           { id: 'activity', label: 'Activity', icon: Activity },
+          { id: 'control', label: 'Control Center', icon: MoreHorizontal },
         ].map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -463,65 +597,6 @@ export const CycleDetailPage: React.FC = () => {
         <div className={activeTab === 'issues' || activeTab === 'activity' ? '-m-6 space-y-0' : 'mx-auto max-w-6xl space-y-5'}>
           {activeTab === 'overview' && (
             <>
-              <section className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 pb-5 dark:border-border-dark/60">
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-gray-400">Cycle Controls</p>
-                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                    Manage the current scope, completion, and cycle dates.
-                  </p>
-                </div>
-                <div className="flex flex-wrap items-center justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={handleEditDates}
-                    disabled={!cycleRules.canEditDates || isActionLoading}
-                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-700 transition-all hover:border-primary/40 hover:bg-gray-50 hover:text-primary dark:border-border-dark dark:bg-white/[0.03] dark:text-gray-200 dark:hover:bg-white/5"
-                  >
-                    <Calendar size={15} />
-                    Edit Dates
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleCarryOver}
-                    disabled={!cycleRules.canCarryOver || remainingIssues === 0 || isActionLoading}
-                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-700 transition-all hover:border-primary/40 hover:bg-gray-50 hover:text-primary dark:border-border-dark dark:bg-white/[0.03] dark:text-gray-200 dark:hover:bg-white/5"
-                  >
-                    <Timer size={15} />
-                    Carry Over
-                  </button>
-                  {cycle.status === 'COMPLETED' ? (
-                    <button
-                      type="button"
-                      onClick={handleReopenCycle}
-                      disabled={isActionLoading}
-                      className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white shadow-lg shadow-primary/20 transition-all hover:bg-primary/90 disabled:opacity-60"
-                    >
-                      <RotateCcw size={15} />
-                      Reopen Cycle
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={handleCompleteCycle}
-                      disabled={!cycleRules.canComplete || isActionLoading}
-                      className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white shadow-lg shadow-primary/20 transition-all hover:bg-primary/90 disabled:opacity-60"
-                    >
-                      <CheckCircle2 size={15} />
-                      Complete Cycle
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={handleDeleteCycle}
-                    disabled={isActionLoading}
-                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm font-bold text-red-500 transition-all hover:bg-red-500 hover:text-white disabled:opacity-60"
-                  >
-                    <Trash2 size={15} />
-                    Delete
-                  </button>
-                </div>
-              </section>
-
               <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-border-dark dark:bg-card-dark">
                 <div className="flex flex-col gap-5">
                   <div className="min-w-0 flex-1">
@@ -625,6 +700,16 @@ export const CycleDetailPage: React.FC = () => {
                     <div className="flex items-center justify-between px-5 py-3">
                       <span className="text-gray-400">Auto move</span>
                       <span className="font-semibold">Manual review</span>
+                    </div>
+                    <div className="flex items-center justify-between px-5 py-3">
+                      <span className="text-gray-400">Controls</span>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('control')}
+                        className="font-semibold text-primary transition-colors hover:text-primary/80"
+                      >
+                        Open Control Center
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -753,88 +838,280 @@ export const CycleDetailPage: React.FC = () => {
 
               {issueView === 'list' && (
                 <>
-                  <div className="grid grid-cols-[40px_100px_1fr_100px_120px_150px_120px_40px] gap-4 border-b border-gray-200 bg-gray-50/50 px-6 py-2 text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:border-border-dark dark:bg-black/10">
-                    <div className="flex justify-center">
-                      <ArrowUpDown size={10} />
+                  {selectedIssueIds.length > 0 && (
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 bg-white px-6 py-3 dark:border-border-dark dark:bg-bg-dark">
+                      <div className="flex items-center gap-3 text-sm">
+                        <span className="text-gray-400">{selectedIssueIds.length} selected</span>
+                      </div>
+                      <div className="relative">
+                        <button
+                          type="button"
+                          onClick={() => setActiveIssueMenuId((current) => (current === '__bulk__' ? null : '__bulk__'))}
+                          className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-50 dark:border-border-dark dark:bg-white/5 dark:text-gray-200 dark:hover:bg-white/10"
+                        >
+                          <MoreHorizontal size={15} />
+                          Actions
+                        </button>
+                        {activeIssueMenuId === '__bulk__' && (
+                          <div className="absolute right-0 top-11 z-20 min-w-[220px] rounded-xl border border-gray-200 bg-white p-1.5 shadow-xl dark:border-border-dark dark:bg-card-dark">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveIssueMenuId(null);
+                                setActiveModal('create-issue');
+                              }}
+                              className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-gray-200 dark:hover:bg-white/5 dark:hover:text-white"
+                            >
+                              Add New Issue
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveIssueMenuId(null);
+                                setIsPlanDialogOpen(true);
+                              }}
+                              className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-gray-200 dark:hover:bg-white/5 dark:hover:text-white"
+                            >
+                              Add Existing Issue
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void handleRemoveSelectedCycleIssues(selectedIssueIds)}
+                              className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-red-500 transition-colors hover:bg-red-500/10"
+                            >
+                              Remove From Cycle
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedIssueIds([]);
+                                setActiveIssueMenuId(null);
+                              }}
+                              className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-gray-200 dark:hover:bg-white/5 dark:hover:text-white"
+                            >
+                              Clear
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <div>ID</div>
-                    <div>Title</div>
-                    <div>Type</div>
-                    <div>Status</div>
-                    <div>Assignee</div>
-                    <div>Priority</div>
-                    <div />
-                  </div>
-
-                  <div className="flex-1 overflow-y-auto">
+                  )}
+                  <div className="flex-1 overflow-y-auto px-4 py-5">
                     {cycleIssuesQuery.isLoading ? (
                       <div className="flex h-64 items-center justify-center text-sm text-gray-400">
                         <Loader2 size={16} className="mr-2 animate-spin" />
                         Loading cycle issues...
                       </div>
                     ) : visibleCycleIssues.length > 0 ? (
-                      visibleCycleIssues.map((issue) => (
-                        <div
-                          key={issue.id}
-                          role="button"
-                          tabIndex={0}
-                          onClick={() => handleOpenIssue(issue.id)}
-                          onKeyDown={(event) => {
-                            if (event.key === 'Enter') handleOpenIssue(issue.id);
-                          }}
-                          className="group grid cursor-pointer grid-cols-[40px_100px_1fr_100px_120px_150px_120px_40px] gap-4 border-b border-gray-100 px-6 py-3 text-left transition-colors hover:bg-gray-50 dark:border-border-dark/50 dark:hover:bg-white/5"
-                        >
-                          <div className="flex items-center justify-center">
-                            <PriorityIcon priority={issue.priority} />
-                          </div>
-                          <div className="flex items-center font-mono text-xs text-gray-400">{issue.id}</div>
-                          <div className="flex min-w-0 flex-col justify-center">
-                            <span className="truncate text-sm font-medium">{issue.title}</span>
-                            <div className="mt-1 flex flex-wrap gap-1">
-                              {issue.labels?.map((label) => (
-                                <span key={label} className="rounded bg-gray-100 px-1.5 py-0.5 text-[9px] text-gray-500 dark:bg-gray-800">
-                                  {label}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                          <div className="flex items-center">
-                            <TypeBadge type={issue.type} />
-                          </div>
-                          <div className="flex items-center">
-                            <div className="flex items-center gap-2 text-xs">
-                              <StatusIcon status={issue.status} />
-                              <span>{STATUS_LABELS[issue.status]}</span>
-                            </div>
-                          </div>
-                          <div className="flex items-center">
-                            {issue.assignee ? (
-                              <div className="flex min-w-0 items-center gap-2 text-xs">
-                                {issue.assignee.avatar ? (
-                                  <img src={issue.assignee.avatar} className="h-5 w-5 rounded-full" alt={issue.assignee.name} />
-                                ) : (
-                                  <div className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
-                                    {issue.assignee.name.charAt(0).toUpperCase()}
+                      <div className="space-y-2.5">
+                        {listStatusGroups.map(({ status, items }) => {
+                          const isCollapsed = collapsedStatusKeys.includes(status.key);
+                          const groupIds = items.map((issue) => issue.id);
+                          const selectedCount = items.filter((issue) => selectedIssueIds.includes(issue.id)).length;
+                          const allGroupSelected = items.length > 0 && selectedCount === items.length;
+
+                          return (
+                            <section
+                              key={status.key}
+                              className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-border-dark dark:bg-card-dark"
+                            >
+                              <button
+                                type="button"
+                                onClick={() => toggleStatusSection(status.key)}
+                                className="flex w-full items-center justify-between gap-4 px-3.5 py-2 text-left transition-colors hover:bg-gray-50 dark:hover:bg-white/[0.03]"
+                              >
+                                <div className="flex min-w-0 items-center gap-3">
+                                  <ChevronDown
+                                    size={16}
+                                    className={`shrink-0 text-gray-400 transition-transform ${isCollapsed ? '-rotate-90' : 'rotate-0'}`}
+                                  />
+                                  <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: status.color }} />
+                                  <div className="min-w-0">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{status.label}</h3>
+                                      {status.isFinal && (
+                                        <span className="rounded-full bg-green-500/10 px-2 py-0.5 text-[10px] font-bold text-green-500">
+                                          Done
+                                        </span>
+                                      )}
+                                    </div>
+                                    <p className="mt-0.5 text-xs text-gray-400">
+                                      {items.length} issue{items.length === 1 ? '' : 's'}
+                                    </p>
                                   </div>
-                                )}
-                                <span className="truncate">{issue.assignee.name}</span>
-                              </div>
-                            ) : (
-                              <span className="text-xs italic text-gray-400">Unassigned</span>
-                            )}
-                          </div>
-                          <div className="flex items-center">
-                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-tighter ${PRIORITY_COLORS[issue.priority]}`}>
-                              {issue.priority}
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-center opacity-0 transition-opacity group-hover:opacity-100">
-                            <span className="rounded p-1.5 text-gray-400 hover:bg-gray-200 dark:hover:bg-white/10">
-                              <MoreHorizontal size={14} />
-                            </span>
-                          </div>
-                        </div>
-                      ))
+                                </div>
+                                <div
+                                  className="flex items-center gap-3"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                  }}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={allGroupSelected}
+                                    ref={(input) => {
+                                      if (input) input.indeterminate = selectedCount > 0 && selectedCount < items.length;
+                                    }}
+                                    onChange={() =>
+                                      setSelectedIssueIds((current) => {
+                                        if (allGroupSelected) {
+                                          return current.filter((issueId) => !groupIds.includes(issueId));
+                                        }
+                                        return [...new Set([...current, ...groupIds])];
+                                      })
+                                    }
+                                    className="h-4 w-4 rounded border-gray-300 bg-transparent text-primary focus:ring-primary/30"
+                                  />
+                                </div>
+                              </button>
+
+                              {!isCollapsed && (
+                                <div className="border-t border-gray-200 dark:border-border-dark">
+                                  <div className="grid grid-cols-[44px_40px_100px_1fr_120px_100px_150px_120px_44px] gap-4 bg-gray-50/60 px-5 py-2 text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:bg-black/10">
+                                    <div className="flex justify-center">
+                                      <input
+                                        type="checkbox"
+                                        checked={allGroupSelected}
+                                        ref={(input) => {
+                                          if (input) input.indeterminate = selectedCount > 0 && selectedCount < items.length;
+                                        }}
+                                        onChange={() =>
+                                          setSelectedIssueIds((current) => {
+                                            if (allGroupSelected) {
+                                              return current.filter((issueId) => !groupIds.includes(issueId));
+                                            }
+                                            return [...new Set([...current, ...groupIds])];
+                                          })
+                                        }
+                                        className="h-4 w-4 rounded border-gray-300 bg-transparent text-primary focus:ring-primary/30"
+                                      />
+                                    </div>
+                                    <div className="flex justify-center">
+                                      <ArrowUpDown size={10} />
+                                    </div>
+                                    <div>ID</div>
+                                    <div>Title</div>
+                                    <div>Workflow</div>
+                                    <div>Type</div>
+                                    <div>Assignee</div>
+                                    <div>Priority</div>
+                                    <div />
+                                  </div>
+
+                                  <div className="divide-y divide-gray-100 dark:divide-border-dark">
+                                    {items.map((issue) => (
+                                      <div
+                                        key={issue.id}
+                                        role="button"
+                                        tabIndex={0}
+                                        onClick={() => handleOpenIssue(issue.id)}
+                                        onKeyDown={(event) => {
+                                          if (event.key === 'Enter') handleOpenIssue(issue.id);
+                                        }}
+                                        className={`group grid cursor-pointer grid-cols-[44px_40px_100px_1fr_120px_100px_150px_120px_44px] gap-4 px-5 py-3 text-left transition-colors ${
+                                          selectedIssueIds.includes(issue.id) ? 'bg-primary/5 dark:bg-primary/10' : 'hover:bg-gray-50 dark:hover:bg-white/5'
+                                        }`}
+                                      >
+                                        <div
+                                          className="flex items-center justify-center"
+                                          onClick={(event) => {
+                                            event.stopPropagation();
+                                          }}
+                                        >
+                                          <input
+                                            type="checkbox"
+                                            checked={selectedIssueIds.includes(issue.id)}
+                                            onChange={() => toggleCycleIssueSelection(issue.id)}
+                                            className="h-4 w-4 rounded border-gray-300 bg-transparent text-primary focus:ring-primary/30"
+                                          />
+                                        </div>
+                                        <div className="flex items-center justify-center">
+                                          <PriorityIcon priority={issue.priority} />
+                                        </div>
+                                        <div className="flex items-center font-mono text-xs text-gray-400">{issue.id}</div>
+                                        <div className="flex min-w-0 flex-col justify-center">
+                                          <span className="truncate text-sm font-medium">{issue.title}</span>
+                                          <div className="mt-1 flex flex-wrap gap-1">
+                                            {issue.labels?.map((label) => (
+                                              <span key={label} className="rounded bg-gray-100 px-1.5 py-0.5 text-[9px] text-gray-500 dark:bg-gray-800">
+                                                {label}
+                                              </span>
+                                            ))}
+                                          </div>
+                                        </div>
+                                        <div
+                                          className="flex items-center"
+                                          onClick={(event) => {
+                                            event.stopPropagation();
+                                          }}
+                                        >
+                                          <WorkflowStatusSelect
+                                            value={issue.status}
+                                            statuses={workspaceStatuses}
+                                            onChange={(nextStatus) => {
+                                              void handleIssueStatusUpdate(issue.id, nextStatus);
+                                            }}
+                                          />
+                                        </div>
+                                        <div className="flex items-center">
+                                          <TypeBadge type={issue.type} />
+                                        </div>
+                                        <div className="flex items-center">
+                                          {issue.assignee ? (
+                                            <div className="flex min-w-0 items-center gap-2 text-xs">
+                                              {issue.assignee.avatar ? (
+                                                <img src={issue.assignee.avatar} className="h-5 w-5 rounded-full" alt={issue.assignee.name} />
+                                              ) : (
+                                                <div className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 text-[10px] font-bold text-primary">
+                                                  {issue.assignee.name.charAt(0).toUpperCase()}
+                                                </div>
+                                              )}
+                                              <span className="truncate">{issue.assignee.name}</span>
+                                            </div>
+                                          ) : (
+                                            <span className="text-xs italic text-gray-400">Unassigned</span>
+                                          )}
+                                        </div>
+                                        <div className="flex items-center">
+                                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-tighter ${PRIORITY_COLORS[issue.priority]}`}>
+                                            {issue.priority}
+                                          </span>
+                                        </div>
+                                        <div className="relative flex items-center justify-center opacity-0 transition-opacity group-hover:opacity-100">
+                                          <button
+                                            type="button"
+                                            onClick={(event) => {
+                                              event.stopPropagation();
+                                              setActiveIssueMenuId((current) => (current === issue.id ? null : issue.id));
+                                            }}
+                                            className="rounded p-1.5 text-gray-400 hover:bg-gray-200 dark:hover:bg-white/10"
+                                          >
+                                            <MoreHorizontal size={14} />
+                                          </button>
+                                          {activeIssueMenuId === issue.id && (
+                                            <div className="absolute right-0 top-9 z-20 min-w-[190px] rounded-xl border border-gray-200 bg-white p-1.5 shadow-xl dark:border-border-dark dark:bg-card-dark">
+                                              <button
+                                                type="button"
+                                                onClick={(event) => {
+                                                  event.stopPropagation();
+                                                  void handleRemoveSelectedCycleIssues([issue.id]);
+                                                }}
+                                                className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-red-500 transition-colors hover:bg-red-500/10"
+                                              >
+                                                Remove From Cycle
+                                              </button>
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </section>
+                          );
+                        })}
+                      </div>
                     ) : (
                       <div className="flex h-64 flex-col items-center justify-center text-gray-400">
                         <SearchX size={48} className="mb-4 opacity-10" />
@@ -900,6 +1177,183 @@ export const CycleDetailPage: React.FC = () => {
               emptyDescription="Only events tagged to this cycle will appear here."
               errorMessage="Failed to load cycle activity."
             />
+          )}
+
+          {activeTab === 'control' && (
+            <section className="mx-auto max-w-5xl space-y-5">
+              <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm dark:border-border-dark dark:bg-card-dark">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-[0.14em] text-gray-400">Cycle status</p>
+                    <h2 className="mt-2 text-xl font-bold">{cycle.name}</h2>
+                    <p className="mt-1 text-sm text-gray-400">
+                      Start, complete, reopen, and carry over work for this cycle from one place.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {cycle.status === 'UPCOMING' && (
+                      <button
+                        type="button"
+                        onClick={handleStartCycle}
+                        disabled={isActionLoading}
+                        className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white shadow-lg shadow-primary/20 transition-all hover:bg-primary/90 disabled:opacity-60"
+                      >
+                        <Timer size={15} />
+                        Start Cycle
+                      </button>
+                    )}
+                    {cycle.status !== 'COMPLETED' ? (
+                      <button
+                        type="button"
+                        onClick={handleCompleteCycle}
+                        disabled={!cycleRules.canComplete || isActionLoading}
+                        className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white shadow-lg shadow-primary/20 transition-all hover:bg-primary/90 disabled:opacity-60"
+                      >
+                        <CheckCircle2 size={15} />
+                        Complete Cycle
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleReopenCycle}
+                        disabled={isActionLoading}
+                        className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white shadow-lg shadow-primary/20 transition-all hover:bg-primary/90 disabled:opacity-60"
+                      >
+                        <RotateCcw size={15} />
+                        Reopen Cycle
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleCarryOver}
+                      disabled={!cycleRules.canCarryOver || remainingIssues === 0 || isActionLoading}
+                      className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-700 transition-all hover:border-primary/40 hover:bg-gray-50 hover:text-primary dark:border-border-dark dark:bg-white/[0.03] dark:text-gray-200 dark:hover:bg-white/5 disabled:opacity-60"
+                    >
+                      <Timer size={15} />
+                      Carry Over
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-5 xl:grid-cols-[0.95fr_1.05fr]">
+                <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-border-dark dark:bg-card-dark">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100">Cycle analytics</h3>
+                      <p className="mt-1 text-xs text-gray-400">A compact read on scope completion and time burn.</p>
+                    </div>
+                    <span className="rounded-full border border-gray-200 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-gray-500 dark:border-border-dark dark:text-gray-300">
+                      {cycle.status.toLowerCase()}
+                    </span>
+                  </div>
+
+                  <div className="mt-6 grid grid-cols-2 gap-4">
+                    <CircularMetric value={progress} label="Scope" tone="primary" />
+                    <CircularMetric value={elapsedPercent} label="Time" tone="neutral" />
+                  </div>
+
+                  <div className="mt-6 grid grid-cols-2 gap-3">
+                    <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-3 dark:border-border-dark dark:bg-white/[0.03]">
+                      <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-gray-400">Done</p>
+                      <p className="mt-2 text-xl font-semibold tabular-nums text-gray-900 dark:text-gray-100">
+                        {cycle.stats.completedIssues}
+                        <span className="ml-1 text-sm text-gray-400">/ {cycle.stats.totalIssues}</span>
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-3 dark:border-border-dark dark:bg-white/[0.03]">
+                      <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-gray-400">Days left</p>
+                      <p className="mt-2 text-xl font-semibold tabular-nums text-gray-900 dark:text-gray-100">{daysLeft}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-5">
+                  <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-border-dark dark:bg-card-dark">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100">Dates</h3>
+                        <p className="mt-1 text-xs text-gray-400">Adjust the cycle window without leaving this page.</p>
+                      </div>
+                    </div>
+                    <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                      <label className="block">
+                        <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-gray-400">Start date</span>
+                        <input
+                          type="date"
+                          value={controlStartDate}
+                          onChange={(event) => setControlStartDate(event.target.value)}
+                          disabled={!cycleRules.canEditDates || isActionLoading}
+                          className="w-full rounded-lg border border-gray-200 bg-transparent px-3 py-2 text-sm outline-none transition-all focus:border-primary/40 focus:ring-1 focus:ring-primary/10 disabled:opacity-60 [color-scheme:light] dark:border-border-dark dark:[color-scheme:dark]"
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-gray-400">End date</span>
+                        <input
+                          type="date"
+                          value={controlEndDate}
+                          onChange={(event) => setControlEndDate(event.target.value)}
+                          disabled={!cycleRules.canEditDates || isActionLoading}
+                          className="w-full rounded-lg border border-gray-200 bg-transparent px-3 py-2 text-sm outline-none transition-all focus:border-primary/40 focus:ring-1 focus:ring-primary/10 disabled:opacity-60 [color-scheme:light] dark:border-border-dark dark:[color-scheme:dark]"
+                        />
+                      </label>
+                    </div>
+                    <div className="mt-4 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={handleSaveSchedule}
+                        disabled={!cycleRules.canEditDates || isActionLoading}
+                        className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-50 hover:border-gray-300 dark:border-border-dark dark:bg-white/[0.03] dark:text-gray-300 dark:hover:bg-white/5 transition-all disabled:opacity-60"
+                      >
+                        Save dates
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-border-dark dark:bg-card-dark">
+                    <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100">Rules</h3>
+                    <div className="mt-4 space-y-3 text-sm">
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-400">Current state</span>
+                        <span className="font-semibold">{cycle.status}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-400">Unfinished issues</span>
+                        <span className="font-semibold">{remainingIssues}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-400">Carry-over available</span>
+                        <span className="font-semibold">{cycleRules.canCarryOver ? 'Yes' : 'No'}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-400">Date edits allowed</span>
+                        <span className="font-semibold">{cycleRules.canEditDates ? 'Yes' : 'No'}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-red-500/20 bg-red-500/[0.03] p-5 shadow-sm dark:border-red-500/20 dark:bg-red-500/[0.04]">
+                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <h3 className="text-sm font-bold text-red-500">Danger zone</h3>
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      Deleting this cycle will remove the cycle record and unassign all linked issues from it.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleDeleteCycle}
+                    disabled={isActionLoading}
+                    className="inline-flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm font-bold text-red-500 transition-all hover:bg-red-500 hover:text-white disabled:opacity-60"
+                  >
+                    <Trash2 size={15} />
+                    Delete Cycle
+                  </button>
+                </div>
+              </div>
+            </section>
           )}
         </div>
       </div>

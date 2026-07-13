@@ -70,6 +70,7 @@ const getNotificationIcon = (type: string) => {
 };
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const ISSUE_KEY_REGEX = /^[A-Z][A-Z0-9]*-\d+$/i;
 
 const isUuid = (value: string) => UUID_REGEX.test(value.trim());
 
@@ -89,12 +90,12 @@ const extractEntityId = (notification: NotificationItem): string | null => {
   const projectId = metadata.projectId;
   const teamId = metadata.teamId;
 
-  if (typeof notification.target.id === 'string' && /^LIN-\d+$/i.test(notification.target.id.trim())) {
+  if (typeof notification.target.id === 'string' && ISSUE_KEY_REGEX.test(notification.target.id.trim())) {
     return notification.target.id.trim();
   }
-  if (typeof entityId === 'string' && /^LIN-\d+$/i.test(entityId.trim())) return entityId.trim();
-  if (typeof issueId === 'string' && /^LIN-\d+$/i.test(issueId.trim())) return issueId.trim();
-  if (notification.target.publicId?.trim() && /^LIN-\d+$/i.test(notification.target.publicId.trim())) {
+  if (typeof entityId === 'string' && ISSUE_KEY_REGEX.test(entityId.trim())) return entityId.trim();
+  if (typeof issueId === 'string' && ISSUE_KEY_REGEX.test(issueId.trim())) return issueId.trim();
+  if (notification.target.publicId?.trim() && ISSUE_KEY_REGEX.test(notification.target.publicId.trim())) {
     return notification.target.publicId.trim();
   }
 

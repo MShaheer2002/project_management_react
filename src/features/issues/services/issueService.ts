@@ -8,11 +8,13 @@ import type {
   AddIssueDependencyInput,
   AddIssueWatchersInput,
   AttachIssueLabelsInput,
+  CheckIssueAssignmentEligibilityInput,
   CreateLabelInput,
   CreateIssueCommentInput,
   CreateIssueInput,
   CreateIssueSubtaskInput,
   IssueActivityItem,
+  IssueAssignmentEligibility,
   IssueCommentAttachment,
   IssueComment,
   IssueCompactOption,
@@ -378,6 +380,17 @@ export const issueService = {
   create: async (input: CreateIssueInput): Promise<IssueDetail> => {
     const { data } = await privateApi.post<ApiResponse<RawIssueDetail>>('/issues', input, mutationConfig);
     return normalizeIssueDetail(data.data);
+  },
+
+  checkAssignmentEligibility: async (
+    input: CheckIssueAssignmentEligibilityInput
+  ): Promise<IssueAssignmentEligibility> => {
+    const { data } = await privateApi.post<ApiResponse<IssueAssignmentEligibility>>(
+      '/issues/assignment-eligibility',
+      input,
+      mutationConfig
+    );
+    return data.data;
   },
 
   update: async (issueId: string, input: UpdateIssueInput): Promise<IssueDetail> => {

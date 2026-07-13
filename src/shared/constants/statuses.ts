@@ -11,11 +11,11 @@ export const STATUS_LABELS: Record<string, string> = {
 
 /** Default workspace statuses — used as fallback when customStatuses is missing/empty. */
 export const DEFAULT_STATUSES: WorkspaceStatus[] = [
-  { key: 'backlog', label: 'Backlog', color: '#9CA3AF', order: 0, isFinal: false },
-  { key: 'todo', label: 'Todo', color: '#9CA3AF', order: 1, isFinal: false },
-  { key: 'in-progress', label: 'In Progress', color: '#3B82F6', order: 2, isFinal: false },
-  { key: 'review', label: 'Review', color: '#A855F7', order: 3, isFinal: false },
-  { key: 'done', label: 'Done', color: '#22C55E', order: 4, isFinal: true },
+  { key: 'backlog', label: 'Backlog', color: '#9CA3AF', order: 0, isFinal: false, showOnBoard: true },
+  { key: 'todo', label: 'Todo', color: '#9CA3AF', order: 1, isFinal: false, showOnBoard: true },
+  { key: 'in-progress', label: 'In Progress', color: '#3B82F6', order: 2, isFinal: false, showOnBoard: true },
+  { key: 'review', label: 'Review', color: '#A855F7', order: 3, isFinal: false, showOnBoard: true },
+  { key: 'done', label: 'Done', color: '#22C55E', order: 4, isFinal: true, showOnBoard: true },
 ];
 
 /** Look up a status label from workspace statuses, falling back to STATUS_LABELS. */

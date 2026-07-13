@@ -159,6 +159,17 @@ export const usePlanCycleIssues = (cycleId: string | undefined) => {
   });
 };
 
+export const useAssignIssuesToCycle = () => {
+  const queryClient = useQueryClient();
+  const workspaceId = useAuthStore((s) => s.workspace?.id);
+
+  return useMutation({
+    mutationFn: ({ cycleId, issueIds }: { cycleId: string; issueIds: string[] }) =>
+      cycleService.planIssues(cycleId, { issueIds }),
+    onSuccess: (_result, variables) => invalidateCycleRelatedQueries(queryClient, workspaceId, variables.cycleId),
+  });
+};
+
 export const useRemoveCycleIssue = (cycleId: string | undefined) => {
   const queryClient = useQueryClient();
   const workspaceId = useAuthStore((s) => s.workspace?.id);

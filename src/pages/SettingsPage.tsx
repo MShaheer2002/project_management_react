@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Check, GripVertical, Loader2, Moon, Pencil, Plus, Save, Sun, Globe, Trash2, X } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Check, Eye, EyeOff, GripVertical, Loader2, Moon, Pencil, Plus, Save, Sun, Globe, Trash2, X } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { DocumentsPanel } from '@features/documents';
 import {
@@ -104,7 +104,7 @@ const WorkflowStatusesEditor: React.FC<{ workspaceId: string; canManage: boolean
     if (!label) return;
     const key = toKebabCase(label);
     if (statuses.some((s) => s.key === key)) { showToast('Status key already exists.', 'error'); return; }
-    update((prev) => [...prev, { key, label, color: STATUS_COLORS[prev.length % STATUS_COLORS.length], order: prev.length, isFinal: false }]);
+    update((prev) => [...prev, { key, label, color: STATUS_COLORS[prev.length % STATUS_COLORS.length], order: prev.length, isFinal: false, showOnBoard: true }]);
     setNewLabel('');
     setAddingNew(false);
   };
@@ -124,6 +124,16 @@ const WorkflowStatusesEditor: React.FC<{ workspaceId: string; canManage: boolean
 
   const handleColorChange = (key: string, color: string) => {
     update((prev) => prev.map((s) => s.key === key ? { ...s, color } : s));
+  };
+
+  const handleToggleBoardVisibility = (key: string) => {
+    const visibleCount = statuses.filter((s) => s.showOnBoard !== false).length;
+    const target = statuses.find((s) => s.key === key);
+    if (target?.showOnBoard !== false && visibleCount <= 1) {
+      showToast('At least one status must stay visible on the board.', 'error');
+      return;
+    }
+    update((prev) => prev.map((s) => s.key === key ? { ...s, showOnBoard: s.showOnBoard === false } : s));
   };
 
   const handleRename = (key: string) => {
@@ -162,7 +172,7 @@ const WorkflowStatusesEditor: React.FC<{ workspaceId: string; canManage: boolean
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400">Workflow</h3>
-          <p className="mt-1 text-xs text-gray-400">Define the statuses issues move through. Drag to reorder.</p>
+          <p className="mt-1 text-xs text-gray-400">Define the statuses issues move through. Drag to reorder and decide which statuses appear on board.</p>
         </div>
         <div className="flex items-center gap-2">
           {canManage && (
@@ -235,6 +245,11 @@ const WorkflowStatusesEditor: React.FC<{ workspaceId: string; canManage: boolean
                 Done
               </span>
             )}
+            {status.showOnBoard === false && (
+              <span className="shrink-0 rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold text-amber-400">
+                List only
+              </span>
+            )}
 
             {/* Actions */}
             {canManage && (
@@ -244,6 +259,14 @@ const WorkflowStatusesEditor: React.FC<{ workspaceId: string; canManage: boolean
                 ) : (
                   <button type="button" onClick={() => { setEditingKey(status.key); setEditLabel(status.label); }} className="rounded p-1 text-gray-400 hover:text-primary"><Pencil size={13} /></button>
                 )}
+                <button
+                  type="button"
+                  onClick={() => handleToggleBoardVisibility(status.key)}
+                  title={status.showOnBoard === false ? 'Show on board' : 'Hide from board'}
+                  className={`rounded p-1 transition-colors ${status.showOnBoard === false ? 'text-amber-400 hover:text-amber-300' : 'text-gray-400 hover:text-amber-400'}`}
+                >
+                  {status.showOnBoard === false ? <EyeOff size={13} /> : <Eye size={13} />}
+                </button>
                 <button
                   type="button"
                   onClick={() => handleToggleFinal(status.key)}
@@ -335,6 +358,7 @@ export const SettingsPage: React.FC = () => {
   const setTheme = useThemeStore((s) => s.setTheme);
   const showToast = useToastStore((s) => s.showToast);
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const currentUser = useAuthStore((s) => s.currentUser);
   const setWorkspace = useAuthStore((s) => s.setWorkspace);
   const setAuth = useAuthStore((s) => s.setAuth);
@@ -359,8 +383,11 @@ export const SettingsPage: React.FC = () => {
     }
   }, [workspace]);
 
+  const settingsTab = searchParams.get('tab') === 'workspace' ? 'workspace' : 'general';
+
   const tabs = [
     { name: 'General', view: 'settings' },
+    { name: 'Workspace', view: 'settings-workspace' },
     { name: 'Members', view: 'members' },
     { name: 'Teams', view: 'teams' },
     { name: 'Billing', view: 'billing' },
@@ -441,159 +468,174 @@ export const SettingsPage: React.FC = () => {
             <button
               key={tab.name}
               onClick={() => {
-                if (tab.view !== 'settings') navigate('/' + tab.view);
+                if (tab.view === 'settings') {
+                  setSearchParams({}, { replace: true });
+                  return;
+                }
+
+                if (tab.view === 'settings-workspace') {
+                  const next = new URLSearchParams(searchParams);
+                  next.set('tab', 'workspace');
+                  setSearchParams(next, { replace: true });
+                  return;
+                }
+
+                navigate('/' + tab.view);
               }}
               className={`pb-4 text-sm font-medium transition-colors relative shrink-0 ${
-                tab.view === 'settings' ? 'text-primary' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200'
+                (tab.view === 'settings' && settingsTab === 'general') || (tab.view === 'settings-workspace' && settingsTab === 'workspace')
+                  ? 'text-primary'
+                  : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200'
               }`}
             >
               {tab.name}
-              {tab.view === 'settings' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />}
+              {((tab.view === 'settings' && settingsTab === 'general') || (tab.view === 'settings-workspace' && settingsTab === 'workspace')) && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
+              )}
             </button>
           ))}
         </div>
 
-        <SettingsSection title="Appearance">
-          <SettingsItem
-            label="Interface Theme"
-            description="Select how Trussen looks to you. Choose a light or dark theme, or mirror your system preferences."
-          >
-            <div className="flex bg-gray-100 dark:bg-white/5 p-1 rounded-xl w-72">
-              {[
-                { value: 'light' as const, label: 'Light', icon: <Sun size={14} /> },
-                { value: 'dark' as const, label: 'Dark', icon: <Moon size={14} /> },
-                { value: 'system' as const, label: 'System', icon: <Globe size={14} /> },
-              ].map((option) => (
-                <button
-                  key={option.value}
-                  onClick={() => setTheme(option.value)}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all ${
-                    theme === option.value
-                      ? 'bg-white dark:bg-gray-800 text-primary shadow-sm'
-                      : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200'
-                  }`}
-                >
-                  {option.icon}
-                  {option.label}
-                </button>
-              ))}
-            </div>
-          </SettingsItem>
-        </SettingsSection>
+        {settingsTab === 'general' ? (
+          <>
+            <SettingsSection title="Appearance">
+              <SettingsItem
+                label="Interface Theme"
+                description="Select how Trussen looks to you. Choose a light or dark theme, or mirror your system preferences."
+              >
+                <div className="flex bg-gray-100 dark:bg-white/5 p-1 rounded-xl w-72">
+                  {[
+                    { value: 'light' as const, label: 'Light', icon: <Sun size={14} /> },
+                    { value: 'dark' as const, label: 'Dark', icon: <Moon size={14} /> },
+                    { value: 'system' as const, label: 'System', icon: <Globe size={14} /> },
+                  ].map((option) => (
+                    <button
+                      key={option.value}
+                      onClick={() => setTheme(option.value)}
+                      className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition-all ${
+                        theme === option.value
+                          ? 'bg-white dark:bg-gray-800 text-primary shadow-sm'
+                          : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200'
+                      }`}
+                    >
+                      {option.icon}
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </SettingsItem>
+            </SettingsSection>
 
-        <SettingsSection title="Workspace Profile">
-          <SettingsItem
-            label="Organization Name"
-            description="This is your workspace's visible name. It will be used in notifications and emails."
-          >
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              disabled={!canManageSettings}
-              className="px-3 py-1.5 bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-border-dark rounded-md text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all w-64 disabled:opacity-60"
-            />
-          </SettingsItem>
-
-          <SettingsItem
-            label="Workspace Logo"
-            description="Optional image URL used for workspace branding."
-          >
-            <input
-              type="url"
-              value={logo}
-              onChange={(e) => setLogo(e.target.value)}
-              disabled={!canManageSettings}
-              placeholder="https://..."
-              className="px-3 py-1.5 bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-border-dark rounded-md text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all w-64 disabled:opacity-60"
-            />
-          </SettingsItem>
-
-          <SettingsItem
-            label="Workspace URL"
-            description="The slug cannot be changed after workspace creation."
-          >
-            <div className="flex items-center">
-              <input
-                type="text"
-                value={workspace?.slug ?? ''}
-                readOnly
-                className="px-3 py-1.5 bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-border-dark rounded-l-md text-sm outline-none w-48 opacity-70"
-              />
-              <span className="px-3 py-1.5 bg-gray-100 dark:bg-gray-800 border border-l-0 border-gray-200 dark:border-border-dark rounded-r-md text-xs text-gray-400">
-                .trussen.app
-              </span>
-            </div>
-          </SettingsItem>
-        </SettingsSection>
-
-        {workspace && canManageSettings && (
-          <WorkflowStatusesEditor workspaceId={workspace.id} canManage={canManageSettings} />
-        )}
-
-        {workspace && canManageSettings && (
-          <UploadPolicySection workspaceId={workspace.id} />
-        )}
-
-        {workspace && (
-          <div className="space-y-4">
-            <div>
-              <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400">Workspace Documents</h3>
-              <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                Workspace docs keep policies, onboarding, and shared references in one place.
-              </p>
-            </div>
-            <DocumentsPanel
-              scope="workspace"
-              workspaceId={workspace.id}
-              entityId={workspace.id}
-              title="Workspace docs"
-              description="Workspace docs keep policies, onboarding, and shared references in one place."
-              emptyTitle="No workspace docs yet"
-              emptyDescription="Add shared references, policies, and onboarding material for everyone in this workspace."
-            />
-          </div>
-        )}
-
-        {canDeleteWorkspace && (
-          <SettingsSection title="Danger Zone">
-            <SettingsItem
-              label="Delete Workspace"
-              description="Permanently delete this workspace and all its data. If this is your only workspace, you will be sent back to onboarding."
-              danger
-            >
-              <div className="space-y-3">
+            <SettingsSection title="Workspace Profile">
+              <SettingsItem
+                label="Organization Name"
+                description="This is your workspace's visible name. It will be used in notifications and emails."
+              >
                 <input
                   type="text"
-                  value={confirmName}
-                  onChange={(e) => setConfirmName(e.target.value)}
-                  placeholder={`Type ${workspace?.name ?? 'workspace name'}`}
-                  className="px-3 py-1.5 bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-border-dark rounded-md text-sm outline-none focus:ring-2 focus:ring-red-500/20 transition-all w-64"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  disabled={!canManageSettings}
+                  className="px-3 py-1.5 bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-border-dark rounded-md text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all w-64 disabled:opacity-60"
                 />
+              </SettingsItem>
+
+              <SettingsItem
+                label="Workspace Logo"
+                description="Optional image URL used for workspace branding."
+              >
+                <input
+                  type="url"
+                  value={logo}
+                  onChange={(e) => setLogo(e.target.value)}
+                  disabled={!canManageSettings}
+                  placeholder="https://..."
+                  className="px-3 py-1.5 bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-border-dark rounded-md text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all w-64 disabled:opacity-60"
+                />
+              </SettingsItem>
+
+              <SettingsItem
+                label="Workspace URL"
+                description="The slug cannot be changed after workspace creation."
+              >
+                <div className="flex items-center">
+                  <input
+                    type="text"
+                    value={workspace?.slug ?? ''}
+                    readOnly
+                    className="px-3 py-1.5 bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-border-dark rounded-l-md text-sm outline-none w-48 opacity-70"
+                  />
+                  <span className="px-3 py-1.5 bg-gray-100 dark:bg-gray-800 border border-l-0 border-gray-200 dark:border-border-dark rounded-r-md text-xs text-gray-400">
+                    .trussen.app
+                  </span>
+                </div>
+              </SettingsItem>
+            </SettingsSection>
+
+            {canManageSettings && (
+              <div className="flex justify-end pt-8">
                 <button
-                  onClick={handleDelete}
-                  disabled={confirmName !== workspace?.name || deleteWorkspace.isPending}
-                  className="flex items-center gap-2 px-4 py-1.5 rounded-md bg-red-500/10 text-red-500 text-xs font-semibold hover:bg-red-500 hover:text-white transition-all disabled:opacity-50 disabled:hover:bg-red-500/10 disabled:hover:text-red-500"
+                  onClick={handleSave}
+                  disabled={updateWorkspace.isPending}
+                  className="flex items-center gap-2 px-6 py-2.5 bg-primary text-white rounded-lg font-bold text-sm hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 disabled:opacity-50"
                 >
-                  {deleteWorkspace.isPending ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-                  Delete Workspace
+                  {updateWorkspace.isPending ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                  Save Changes
                 </button>
               </div>
-            </SettingsItem>
-          </SettingsSection>
-        )}
+            )}
+          </>
+        ) : (
+          <>
+            {workspace && canManageSettings && (
+              <WorkflowStatusesEditor workspaceId={workspace.id} canManage={canManageSettings} />
+            )}
 
-        {canManageSettings && (
-          <div className="flex justify-end pt-8">
-            <button
-              onClick={handleSave}
-              disabled={updateWorkspace.isPending}
-              className="flex items-center gap-2 px-6 py-2.5 bg-primary text-white rounded-lg font-bold text-sm hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 disabled:opacity-50"
-            >
-              {updateWorkspace.isPending ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
-              Save Changes
-            </button>
-          </div>
+            {workspace && canManageSettings && (
+              <UploadPolicySection workspaceId={workspace.id} />
+            )}
+
+            {workspace && (
+              <DocumentsPanel
+                scope="workspace"
+                workspaceId={workspace.id}
+                entityId={workspace.id}
+                title="Workspace docs"
+                description="Workspace docs keep policies, onboarding, and shared references in one place."
+                emptyTitle="No workspace docs yet"
+                emptyDescription="Add shared references, policies, and onboarding material for everyone in this workspace."
+              />
+            )}
+
+            {canDeleteWorkspace && (
+              <SettingsSection title="Danger Zone">
+                <SettingsItem
+                  label="Delete Workspace"
+                  description="Permanently delete this workspace and all its data. If this is your only workspace, you will be sent back to onboarding."
+                  danger
+                >
+                  <div className="space-y-3">
+                    <input
+                      type="text"
+                      value={confirmName}
+                      onChange={(e) => setConfirmName(e.target.value)}
+                      placeholder={`Type ${workspace?.name ?? 'workspace name'}`}
+                      className="px-3 py-1.5 bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-border-dark rounded-md text-sm outline-none focus:ring-2 focus:ring-red-500/20 transition-all w-64"
+                    />
+                    <button
+                      onClick={handleDelete}
+                      disabled={confirmName !== workspace?.name || deleteWorkspace.isPending}
+                      className="flex items-center gap-2 px-4 py-1.5 rounded-md bg-red-500/10 text-red-500 text-xs font-semibold hover:bg-red-500 hover:text-white transition-all disabled:opacity-50 disabled:hover:bg-red-500/10 disabled:hover:text-red-500"
+                    >
+                      {deleteWorkspace.isPending ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                      Delete Workspace
+                    </button>
+                  </div>
+                </SettingsItem>
+              </SettingsSection>
+            )}
+
+          </>
         )}
       </div>
     </div>

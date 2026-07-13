@@ -76,7 +76,7 @@ export const cycleService = {
   },
 
   carryOver: async (cycleId: string, input: CarryOverCycleInput) => {
-    const { data } = await privateApi.post<ApiResponse<{ sourceCycle: CycleDetail; targetCycle?: CycleDetail | null; movedIssues: Issue[]; skipped: Array<{ issueId: string; reason: string }> }>>(
+    const { data } = await privateApi.post<ApiResponse<{ movedIssueCount: number; targetCycleId: string | null; mode: 'nextCycle' | 'backlog' }>>(
       `/cycles/${cycleId}/carry-over`,
       input,
       mutationConfig
@@ -90,7 +90,7 @@ export const cycleService = {
   },
 
   planIssues: async (cycleId: string, input: PlanIssuesInput) => {
-    const { data } = await privateApi.post<ApiResponse<{ cycle: CycleDetail; added: Issue[]; skipped: Array<{ issueId: string; reason: string }> }>>(
+    const { data } = await privateApi.post<ApiResponse<{ added: Issue[]; skipped: Array<{ issueId: string; reason: string }> }>>(
       `/cycles/${cycleId}/issues`,
       input,
       mutationConfig
@@ -99,7 +99,7 @@ export const cycleService = {
   },
 
   removeIssue: async (cycleId: string, issueId: string) => {
-    const { data } = await privateApi.delete<ApiResponse<{ cycle: CycleDetail; removedIssue: Issue }>>(
+    const { data } = await privateApi.delete<ApiResponse<{ issueId: string; cycleId: string; removed: boolean }>>(
       `/cycles/${cycleId}/issues/${issueId}`,
       mutationConfig
     );

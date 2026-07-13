@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Search, UserPlus, MoreHorizontal, Shield, Filter, Building2, Loader2, XCircle } from 'lucide-react';
 import { useSidebarData } from '@features/sidebar';
 import {
@@ -20,6 +20,7 @@ const memberId = (member: WorkspaceMemberResponse) => member.id;
 const memberName = (member: WorkspaceMemberResponse) => member.name || 'Unknown member';
 const memberEmail = (member: WorkspaceMemberResponse) => member.email || '';
 const memberAvatar = (member: WorkspaceMemberResponse) => member.avatar;
+const memberDesignation = (member: WorkspaceMemberResponse) => member.designation?.trim() || '';
 const memberTeams = (member: WorkspaceMemberResponse) => {
   const teams = member.teams?.length ? member.teams : member.team ? [member.team] : [];
   return teams;
@@ -66,6 +67,7 @@ export const MembersPage: React.FC = () => {
   const [roleFilter, setRoleFilter] = useState<'all' | 'owner' | 'admin' | 'member' | 'guest'>('all');
   const [departmentFilter, setDepartmentFilter] = useState<string>('all');
   const [openActionId, setOpenActionId] = useState<string | null>(null);
+  const actionsRef = useRef<HTMLTableCellElement | null>(null);
 
   const canInviteMembers = sidebarData?.permissions.canInviteMembers ?? false;
   const canManageMembers = canInviteMembers;
@@ -81,7 +83,8 @@ export const MembersPage: React.FC = () => {
   const filteredMembers = members.filter((member) => {
     const matchesSearch =
       memberName(member).toLowerCase().includes(search.toLowerCase()) ||
-      memberEmail(member).toLowerCase().includes(search.toLowerCase());
+      memberEmail(member).toLowerCase().includes(search.toLowerCase()) ||
+      memberDesignation(member).toLowerCase().includes(search.toLowerCase());
     const role = toRole(member.role);
     const matchesRole = roleFilter === 'all' || role === roleFilter;
     const matchesDepartment =
@@ -126,6 +129,19 @@ export const MembersPage: React.FC = () => {
       handleMutationError(err, 'Failed to remove member.');
     }
   };
+
+  useEffect(() => {
+    if (!openActionId) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (actionsRef.current?.contains(target)) return;
+      setOpenActionId(null);
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => document.removeEventListener('mousedown', handlePointerDown);
+  }, [openActionId]);
 
   return (
     <div className="flex flex-col h-full">
@@ -234,6 +250,9 @@ export const MembersPage: React.FC = () => {
                           )}
                           <div className="flex flex-col">
                             <span className="font-bold tracking-tight text-gray-700 dark:text-gray-200">{memberName(member)}</span>
+                            {memberDesignation(member) && (
+                              <span className="text-[11px] text-primary font-semibold">{memberDesignation(member)}</span>
+                            )}
                             <span className="text-[11px] text-gray-400 font-medium">{memberEmail(member)}</span>
                           </div>
                         </div>
@@ -256,7 +275,7 @@ export const MembersPage: React.FC = () => {
                       <td className="px-6 py-4 text-gray-400">
                         {member.joinedAt ? new Date(member.joinedAt).toLocaleDateString() : '-'}
                       </td>
-                      <td className="px-6 py-4 text-right relative">
+                      <td ref={openActionId === memberId(member) ? actionsRef : null} className="px-6 py-4 text-right relative">
                         {canManageMembers && !isOwner && !isSelf && (
                           <>
                             <button
@@ -267,7 +286,9 @@ export const MembersPage: React.FC = () => {
                             </button>
                             {openActionId === memberId(member) && (
                               <div className="absolute right-6 top-10 z-50 w-44 rounded-lg bg-white dark:bg-card-dark border border-gray-200 dark:border-border-dark shadow-xl py-1">
-                                {(['ADMIN', 'MEMBER', 'GUEST'] as InvitationRole[]).map((nextRole) => (
+                                {(['ADMIN', 'MEMBER', 'GUEST'] as InvitationRole[])
+                                  .filter((nextRole) => nextRole.toLowerCase() !== role)
+                                  .map((nextRole) => (
                                   <button
                                     key={nextRole}
                                     onClick={() => handleRoleChange(member, nextRole)}
@@ -310,7 +331,11 @@ export const MembersPage: React.FC = () => {
                     <div>
                       <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">{invite.email}</p>
                       <p className="text-xs text-gray-400">
-                        {invite.role.toLowerCase()} · {invite.teamName || 'No team'}{invite.departmentName ? ` · ${invite.departmentName}` : ''}
+                        {invite.role.toLowerCase()}
+                        {invite.designation ? ` · ${invite.designation}` : ''}
+                        {' · '}
+                        {invite.teamName || 'No team'}
+                        {invite.departmentName ? ` · ${invite.departmentName}` : ''}
                       </p>
                     </div>
                     <button

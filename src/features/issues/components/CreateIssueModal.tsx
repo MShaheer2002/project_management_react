@@ -12,7 +12,8 @@ import { useProjectOptions } from '@features/projects';
 import { useWorkspaceMemberOptions } from '@features/workspace';
 import { RichTextEditor } from '@/components/RichTextEditor';
 import { IssueAttachmentsField } from './IssueAttachmentsField';
-import { useCreateIssue } from '../hooks/useIssueData';
+import { useCheckIssueAssignmentEligibility, useCreateIssue } from '../hooks/useIssueData';
+import { useProjectAssignmentGuard } from '../hooks/useProjectAssignmentGuard';
 
 const issueSchema = z.object({
   title: z.string().min(1, 'Title is required').max(100, 'Title is too long'),
@@ -42,8 +43,10 @@ export const CreateIssueModal: React.FC = () => {
     { enabled: activeModal === 'create-issue' }
   );
   const createIssue = useCreateIssue();
+  const checkAssignmentEligibility = useCheckIssueAssignmentEligibility();
   const projectOptions = projectOptionsQuery.data?.pages.flatMap((page) => page.items) ?? [];
   const assigneeOptions = assigneeOptionsQuery.data?.pages.flatMap((page) => page.items) ?? [];
+  const { dialog: projectAssignmentDialog, openAssignmentDialog, handleAssignmentError } = useProjectAssignmentGuard();
   
   const {
     register,
@@ -76,33 +79,84 @@ export const CreateIssueModal: React.FC = () => {
   }, [projectOptions, setValue, watch]);
 
   const onSubmit = async (data: IssueFormData) => {
+    const payload = {
+      title: data.title,
+      description: data.description || '',
+      type: data.type,
+      status: 'todo' as const,
+      priority: data.priority,
+      assigneeId: data.assigneeId || null,
+      projectId: data.projectId,
+      severity: data.type === 'bug' ? data.severity : undefined,
+      dueDate: data.dueDate || null,
+      attachments: attachments.map((attachment) => ({
+        fileName: attachment.fileName,
+        contentType: attachment.contentType,
+        size: attachment.size,
+        kind: attachment.kind,
+        key: attachment.key,
+        assetUrl: attachment.assetUrl ?? null,
+        reference: attachment.reference,
+      })),
+    };
+
     try {
-      await createIssue.mutateAsync({
-        title: data.title,
-        description: data.description || '',
-        type: data.type,
-        status: 'todo',
-        priority: data.priority,
-        assigneeId: data.assigneeId || null,
-        projectId: data.projectId,
-        severity: data.type === 'bug' ? data.severity : undefined,
-        dueDate: data.dueDate || null,
-        attachments: attachments.map((attachment) => ({
-          fileName: attachment.fileName,
-          contentType: attachment.contentType,
-          size: attachment.size,
-          kind: attachment.kind,
-          key: attachment.key,
-          assetUrl: attachment.assetUrl ?? null,
-          reference: attachment.reference,
-        })),
-      });
+      if (data.assigneeId) {
+        const eligibility = await checkAssignmentEligibility.mutateAsync({
+          projectId: data.projectId,
+          assigneeId: data.assigneeId,
+        });
+
+        if (!eligibility.projectMember) {
+          openAssignmentDialog({
+            assigneeId: data.assigneeId,
+            assigneeName: assigneeOptions.find((member) => member.id === data.assigneeId)?.name ?? 'Selected member',
+            projectId: data.projectId,
+            projectName: eligibility.projectName,
+            canAutoAdd: eligibility.canAutoAdd,
+            confirmLabel: 'Add to project and create issue',
+            retry: async () => {
+              await createIssue.mutateAsync(payload);
+              showToast('Issue added successfully');
+              setActiveModal(null);
+              reset();
+              setAttachments([]);
+            },
+          });
+          return;
+        }
+      }
+
+      await createIssue.mutateAsync(payload);
 
       showToast('Issue added successfully');
       setActiveModal(null);
       reset();
       setAttachments([]);
     } catch (error) {
+      const nextAssignee = assigneeOptions.find((member) => member.id === data.assigneeId);
+      const didHandleProjectMembership = Boolean(
+        data.assigneeId
+          && data.projectId
+          && handleAssignmentError(error, {
+            assigneeId: data.assigneeId,
+            assigneeName: nextAssignee?.name ?? 'Selected member',
+            projectId: data.projectId,
+            projectName: projectOptions.find((project) => project.id === data.projectId)?.name ?? 'this project',
+            retry: async () => {
+              await createIssue.mutateAsync(payload);
+              showToast('Issue added successfully');
+              setActiveModal(null);
+              reset();
+              setAttachments([]);
+            },
+          }),
+      );
+
+      if (didHandleProjectMembership) {
+        return;
+      }
+
       showToast(getApiErrorMessage(error) || 'Failed to create issue.', 'error');
     }
   };
@@ -280,6 +334,7 @@ export const CreateIssueModal: React.FC = () => {
           </button>
         </div>
       </form>
+      {projectAssignmentDialog}
     </Modal>
   );
 };

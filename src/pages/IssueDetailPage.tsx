@@ -36,6 +36,7 @@ import { useOpenViewUploadUrl } from '@features/upload';
 import { AttachmentMediaPreview } from '@features/upload';
 import { useWorkspaceMemberOptions } from '@features/workspace';
 import { useIssueSocketRoom } from '@features/notifications';
+import { AssignIssuesToCycleDialog } from '@features/cycles';
 import {
   IssueAttachmentsField,
   IssueActivityTimeline,
@@ -45,6 +46,7 @@ import {
   useAddIssueAttachments,
   useDeleteIssue,
   useIssueDetail,
+  useProjectAssignmentGuard,
   useRemoveIssueAttachment,
   useUpdateIssue,
   useUpdateIssueStatus,
@@ -158,6 +160,9 @@ export const IssueDetailPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'comments' | 'activity'>('comments');
   const [isAttachmentComposerOpen, setIsAttachmentComposerOpen] = useState(false);
   const [newAttachments, setNewAttachments] = useState<IssueAttachment[]>([]);
+  const [isIssueMenuOpen, setIsIssueMenuOpen] = useState(false);
+  const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);
+  const { dialog: projectAssignmentDialog, handleAssignmentError } = useProjectAssignmentGuard();
   useIssueSocketRoom(issueId);
 
   const issueQuery = useIssueDetail(issueId);
@@ -187,7 +192,7 @@ export const IssueDetailPage: React.FC = () => {
     setIsAttachmentComposerOpen(false);
   }, [issue?.id]);
 
-  const displayIssueId = issue?.id || issueId || '';
+  const displayIssueId = issue?.id || (/^[A-Z]+-\d+$/i.test(issueId ?? '') ? issueId ?? '' : '');
   const canDelete = canDeleteIssues(role);
   const assigneeOptions = useMemo(() => {
     const items = assigneeOptionsQuery.data?.pages.flatMap((page) => page.items) ?? [];
@@ -228,6 +233,11 @@ export const IssueDetailPage: React.FC = () => {
     }
   };
 
+  const handleOpenAssignDialog = () => {
+    setIsIssueMenuOpen(false);
+    setIsAssignDialogOpen(true);
+  };
+
   const workspaceStatuses = useWorkspaceStatuses();
 
   const handleStatusChange = async (nextStatus: Status) => {
@@ -253,6 +263,24 @@ export const IssueDetailPage: React.FC = () => {
       await updateIssue.mutateAsync({ assigneeId: nextAssigneeId || null });
       showToast(nextAssigneeId ? 'Assignee updated.' : 'Issue unassigned.', 'success');
     } catch (error) {
+      const nextAssignee = assigneeOptions.find((member) => member.id === nextAssigneeId);
+      const didHandleProjectMembership = nextAssigneeId
+        && issue.projectId
+        && handleAssignmentError(error, {
+          assigneeId: nextAssigneeId,
+          assigneeName: nextAssignee?.name ?? 'Selected member',
+          projectId: issue.projectId,
+          projectName: issue.project?.name ?? 'this project',
+          retry: async () => {
+            await updateIssue.mutateAsync({ assigneeId: nextAssigneeId });
+            showToast('Assignee updated.', 'success');
+          },
+        });
+
+      if (didHandleProjectMembership) {
+        return;
+      }
+
       showToast(getApiErrorMessage(error) || 'Failed to update assignee.', 'error');
     }
   };
@@ -418,16 +446,27 @@ export const IssueDetailPage: React.FC = () => {
               {deleteIssue.isPending ? <Loader2 size={18} className="animate-spin" /> : <Trash2 size={18} />}
             </button>
           )}
-          {!canDelete && (
+          <div className="relative">
             <button
               type="button"
-              className="rounded-md p-1.5 text-gray-300 dark:text-gray-600"
-              title="Delete is restricted to admins and owners"
-              disabled
+              onClick={() => setIsIssueMenuOpen((current) => !current)}
+              className="rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-100 dark:hover:bg-white/5"
+              title="Issue actions"
             >
               <MoreHorizontal size={18} />
             </button>
-          )}
+            {isIssueMenuOpen && issue && (
+              <div className="absolute right-0 top-10 z-20 min-w-[180px] rounded-xl border border-gray-200 bg-white p-1.5 shadow-xl dark:border-border-dark dark:bg-card-dark">
+                <button
+                  type="button"
+                  onClick={handleOpenAssignDialog}
+                  className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-gray-200 dark:hover:bg-white/5 dark:hover:text-white"
+                >
+                  Add To Cycle
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </header>
 
@@ -765,6 +804,15 @@ export const IssueDetailPage: React.FC = () => {
           </div>
         </aside>
       </div>
+      {issue && (
+        <AssignIssuesToCycleDialog
+          open={isAssignDialogOpen}
+          onClose={() => setIsAssignDialogOpen(false)}
+          teamId={issue.teamId}
+          issueIds={[issue.id]}
+        />
+      )}
+      {projectAssignmentDialog}
     </motion.div>
   );
 };

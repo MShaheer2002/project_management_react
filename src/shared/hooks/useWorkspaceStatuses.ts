@@ -12,7 +12,12 @@ export const useWorkspaceStatuses = (): WorkspaceStatus[] => {
 
   return useMemo(() => {
     if (customStatuses && customStatuses.length > 0) {
-      return [...customStatuses].sort((a, b) => a.order - b.order);
+      return [...customStatuses]
+        .map((status) => ({
+          ...status,
+          showOnBoard: status.showOnBoard !== false,
+        }))
+        .sort((a, b) => a.order - b.order);
     }
     return DEFAULT_STATUSES;
   }, [customStatuses]);

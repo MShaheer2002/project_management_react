@@ -19,6 +19,17 @@ const mutationConfig = {
   skipGlobalErrorToast: true,
 } as AxiosRequestConfig & { skipGlobalErrorToast: boolean };
 
+const toInputDate = (value: string | null): string | null => {
+  if (!value) return null;
+  return value.slice(0, 10);
+};
+
+const normalizeProject = <T extends ProjectSummary | ProjectDetail>(project: T): T => ({
+  ...project,
+  startDate: toInputDate(project.startDate),
+  targetDate: toInputDate(project.targetDate),
+});
+
 export const projectService = {
   listDirectory: async (params: ListProjectsInput = {}): Promise<ProjectListResult<ProjectSummary>> => {
     const { data } = await privateApi.get<ApiPaginatedResponse<ProjectSummary>>('/projects', {
@@ -29,7 +40,7 @@ export const projectService = {
     });
 
     return {
-      items: data.data,
+      items: data.data.map(normalizeProject),
       meta: data.meta,
     };
   },
@@ -50,12 +61,12 @@ export const projectService = {
 
   getById: async (projectId: string): Promise<ProjectDetail> => {
     const { data } = await privateApi.get<ApiResponse<ProjectDetail>>(`/projects/${projectId}`);
-    return data.data;
+    return normalizeProject(data.data);
   },
 
   create: async (input: CreateProjectInput): Promise<ProjectDetail> => {
     const { data } = await privateApi.post<ApiResponse<ProjectDetail>>('/projects', input, mutationConfig);
-    return data.data;
+    return normalizeProject(data.data);
   },
 
   update: async (projectId: string, input: UpdateProjectInput): Promise<ProjectDetail> => {
@@ -64,7 +75,7 @@ export const projectService = {
       input,
       mutationConfig
     );
-    return data.data;
+    return normalizeProject(data.data);
   },
 
   delete: async (projectId: string): Promise<void> => {

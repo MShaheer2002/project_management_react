@@ -1,9 +1,12 @@
-import React, { useDeferredValue, useMemo, useState } from 'react';
+import React, { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle,
+  ArrowUpDown,
   Bug,
+  ChevronDown,
   CheckCircle2,
   CheckSquare,
+  Clock,
   Filter,
   Kanban,
   List,
@@ -16,11 +19,14 @@ import { useAuthStore } from '@/app/stores/useAuthStore';
 import { useApp } from '../AppContext';
 import { PRIORITY_COLORS, ISSUE_TYPE_CONFIG } from '../constants';
 import { getStatusLabel, isStatusFinal } from '@shared/constants/statuses';
+import { canDeleteIssues } from '@shared/permissions';
+import { WorkflowStatusSelect } from '@shared/components/ui/WorkflowStatusSelect';
 import { useWorkspaceStatuses } from '@shared/hooks/useWorkspaceStatuses';
 import { formatCalendarDate } from '@shared/utils/date';
 import { Issue, IssueType, Status } from '../types';
 import { KanbanBoard } from '../components/board/KanbanBoard';
-import { useIssuesDirectory, useUpdateAnyIssueStatus } from '@/features/issues';
+import { useDeleteAnyIssue, useIssuesDirectory, useUpdateAnyIssueStatus } from '@/features/issues';
+import { AssignIssuesToCycleDialog } from '@features/cycles';
 
 const TypeBadge: React.FC<{ type: IssueType }> = ({ type }) => {
   const config = ISSUE_TYPE_CONFIG[type];
@@ -36,13 +42,19 @@ const TypeBadge: React.FC<{ type: IssueType }> = ({ type }) => {
 
 export const MyIssuesPage: React.FC = () => {
   const currentUser = useAuthStore((s) => s.currentUser);
+  const role = useAuthStore((s) => s.workspace?.role);
   const workspaceStatuses = useWorkspaceStatuses();
   const { setSelectedIssueId, showToast } = useApp();
   const navigate = useNavigate();
+  const canDelete = canDeleteIssues(role);
   const [activeTab, setActiveTab] = useState<'assigned' | 'created' | 'completed'>('assigned');
   const [viewMode, setViewMode] = useState<'list' | 'board'>('board');
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<IssueType | 'all'>('all');
+  const [selectedIssueIds, setSelectedIssueIds] = useState<string[]>([]);
+  const [activeIssueMenuId, setActiveIssueMenuId] = useState<string | null>(null);
+  const [assignmentDraft, setAssignmentDraft] = useState<{ issueIds: string[]; teamId?: string } | null>(null);
+  const [collapsedStatusKeys, setCollapsedStatusKeys] = useState<string[]>([]);
   const deferredSearch = useDeferredValue(search);
 
   const finalStatusKeys = workspaceStatuses.filter((s) => s.isFinal).map((s) => s.key);
@@ -59,6 +71,7 @@ export const MyIssuesPage: React.FC = () => {
     { enabled: Boolean(currentUser?.id) }
   );
   const updateAnyIssueStatus = useUpdateAnyIssueStatus();
+  const deleteAnyIssue = useDeleteAnyIssue();
 
   const allIssues = useMemo(() => {
     const issuesById = new Map<string, Issue>();
@@ -76,6 +89,23 @@ export const MyIssuesPage: React.FC = () => {
     }
     return allIssues;
   }, [activeTab, allIssues, workspaceStatuses]);
+  const visibleIssueIds = useMemo(() => myIssues.map((issue) => issue.id), [myIssues]);
+  const allVisibleSelected = visibleIssueIds.length > 0 && visibleIssueIds.every((issueId) => selectedIssueIds.includes(issueId));
+  const someVisibleSelected = visibleIssueIds.some((issueId) => selectedIssueIds.includes(issueId));
+  const listStatusGroups = useMemo(
+    () =>
+      workspaceStatuses
+        .map((status) => ({
+          status,
+          items: myIssues.filter((issue) => issue.status === status.key),
+        }))
+        .filter((group) => group.items.length > 0),
+    [myIssues, workspaceStatuses]
+  );
+
+  useEffect(() => {
+    setSelectedIssueIds((current) => current.filter((issueId) => myIssues.some((issue) => issue.id === issueId)));
+  }, [myIssues]);
 
   const handleIssueUpdate = async (issueId: string, newStatus: Status) => {
     try {
@@ -88,59 +118,277 @@ export const MyIssuesPage: React.FC = () => {
     }
   };
 
+  const toggleIssueSelection = (issueId: string) => {
+    setSelectedIssueIds((current) =>
+      current.includes(issueId) ? current.filter((id) => id !== issueId) : [...current, issueId]
+    );
+  };
+
+  const toggleSelectAllVisible = () => {
+    setSelectedIssueIds((current) => {
+      if (allVisibleSelected) {
+        return current.filter((issueId) => !visibleIssueIds.includes(issueId));
+      }
+
+      return [...new Set([...current, ...visibleIssueIds])];
+    });
+  };
+
+  const openAssignDialog = (issueIds: string[]) => {
+    const selectedIssues = myIssues.filter((issue) => issueIds.includes(issue.id));
+    const teamIds = [...new Set(selectedIssues.map((issue) => issue.teamId).filter(Boolean))];
+
+    if (selectedIssues.length === 0) {
+      showToast('Select at least one issue first.', 'error', 'Validation');
+      return;
+    }
+
+    if (teamIds.length !== 1) {
+      showToast('Selected issues must belong to the same team to add them into a cycle.', 'error', 'Team mismatch');
+      return;
+    }
+
+    setActiveIssueMenuId(null);
+    setAssignmentDraft({ issueIds, teamId: teamIds[0] });
+  };
+
+  const toggleStatusSection = (statusKey: string) => {
+    setCollapsedStatusKeys((current) =>
+      current.includes(statusKey) ? current.filter((key) => key !== statusKey) : [...current, statusKey]
+    );
+  };
+
+  const handleDeleteIssues = async (issueIds: string[]) => {
+    if (!canDelete) {
+      showToast('Delete is restricted to admins and owners.', 'error', 'Permission denied');
+      return;
+    }
+
+    if (issueIds.length === 0) {
+      showToast('Select at least one issue first.', 'error', 'Validation');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      issueIds.length === 1
+        ? 'Delete this issue permanently?'
+        : `Delete ${issueIds.length} selected issues permanently?`
+    );
+    if (!confirmed) return;
+
+    try {
+      await Promise.all(issueIds.map((issueId) => deleteAnyIssue.mutateAsync(issueId)));
+      showToast(`${issueIds.length} issue${issueIds.length === 1 ? '' : 's'} deleted.`, 'success');
+      setSelectedIssueIds((current) => current.filter((issueId) => !issueIds.includes(issueId)));
+      setActiveIssueMenuId(null);
+    } catch {
+      showToast('Failed to delete selected issues.', 'error', 'Delete failed');
+    }
+  };
+
   const renderListView = () => (
-    <div className="flex-1 overflow-y-auto">
+    <div className="flex-1 overflow-y-auto px-4 py-5">
       {myIssues.length > 0 ? (
-        <div className="divide-y divide-gray-100 dark:divide-border-dark">
-          {myIssues.map((issue) => (
-            <div
-              key={issue.id}
-              onClick={() => setSelectedIssueId(issue.entityId ?? issue.id)}
-              className="px-6 py-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-white/5 cursor-pointer transition-colors group"
-            >
-              <div className="flex items-center gap-4 flex-1 min-w-0">
-                <div className={`w-2 h-2 rounded-full shrink-0 ${issue.priority === 'urgent' ? 'bg-red-500' : 'bg-primary'}`} />
-                <div className="flex flex-col min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium truncate">{issue.title}</span>
-                    <TypeBadge type={issue.type || 'task'} />
+        <div className="space-y-3">
+          {listStatusGroups.map(({ status, items }) => {
+            const isCollapsed = collapsedStatusKeys.includes(status.key);
+            const groupIds = items.map((issue) => issue.id);
+            const selectedCount = items.filter((issue) => selectedIssueIds.includes(issue.id)).length;
+            const allGroupSelected = items.length > 0 && selectedCount === items.length;
+
+            return (
+              <section
+                key={status.key}
+                className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-border-dark dark:bg-card-dark"
+              >
+                <button
+                  type="button"
+                  onClick={() => toggleStatusSection(status.key)}
+                  className="flex w-full items-center justify-between gap-4 px-4 py-2.5 text-left transition-colors hover:bg-gray-50 dark:hover:bg-white/[0.03]"
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    <ChevronDown
+                      size={16}
+                      className={`shrink-0 text-gray-400 transition-transform ${isCollapsed ? '-rotate-90' : 'rotate-0'}`}
+                    />
+                    <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: status.color }} />
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+                          {status.label}
+                        </h3>
+                        {status.isFinal && (
+                          <span className="rounded-full bg-green-500/10 px-2 py-0.5 text-[10px] font-bold text-green-500">
+                            Done
+                          </span>
+                        )}
+                      </div>
+                      <p className="mt-0.5 text-xs text-gray-400">
+                        {items.length} issue{items.length === 1 ? '' : 's'}
+                      </p>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 mt-1 text-[10px] text-gray-400 font-mono uppercase flex-wrap">
-                    <span>{issue.id}</span>
-                    <span>•</span>
-                    <span>{issue.project?.name || 'No Project'}</span>
-                    <span>•</span>
-                    <span>{getStatusLabel(workspaceStatuses, issue.status)}</span>
-                    {(issue.subtaskStats?.total || issue.subtasks?.length) ? (
-                      <>
-                        <span>•</span>
-                        <span>
-                          {issue.subtaskStats?.completed ?? issue.subtasks?.filter((subtask) => subtask.completed).length ?? 0}/
-                          {issue.subtaskStats?.total ?? issue.subtasks?.length ?? 0} subtasks
-                        </span>
-                      </>
-                    ) : null}
+                  <div
+                    className="flex items-center gap-3"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={allGroupSelected}
+                      ref={(input) => {
+                        if (input) input.indeterminate = selectedCount > 0 && selectedCount < items.length;
+                      }}
+                      onChange={() =>
+                        setSelectedIssueIds((current) => {
+                          if (allGroupSelected) {
+                            return current.filter((issueId) => !groupIds.includes(issueId));
+                          }
+                          return [...new Set([...current, ...groupIds])];
+                        })
+                      }
+                      className="h-4 w-4 rounded border-gray-300 bg-transparent text-primary focus:ring-primary/30"
+                    />
                   </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-6 shrink-0">
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-tighter ${PRIORITY_COLORS[issue.priority]}`}>
-                  {issue.priority}
-                </span>
-                <span className="text-xs text-gray-400 w-24 text-right">
-                  {formatCalendarDate(issue.dueDate, undefined, { year: 'numeric', month: 'numeric', day: 'numeric' })}
-                </span>
-                <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button type="button" className="p-1 rounded hover:bg-gray-200 dark:hover:bg-white/10 text-gray-400">
-                    <CheckCircle2 size={16} />
-                  </button>
-                  <button type="button" className="p-1 rounded hover:bg-gray-200 dark:hover:bg-white/10 text-gray-400">
-                    <MoreHorizontal size={16} />
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
+                </button>
+
+                {!isCollapsed && (
+                  <div className="border-t border-gray-200 dark:border-border-dark">
+                    <div className="grid grid-cols-[44px_32px_1fr_120px_120px_120px_44px] gap-4 bg-gray-50/60 px-5 py-2 text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:bg-black/10">
+                      <div className="flex justify-center">
+                        <input
+                          type="checkbox"
+                          checked={allGroupSelected}
+                          ref={(input) => {
+                            if (input) input.indeterminate = selectedCount > 0 && selectedCount < items.length;
+                          }}
+                          onChange={() =>
+                            setSelectedIssueIds((current) => {
+                              if (allGroupSelected) {
+                                return current.filter((issueId) => !groupIds.includes(issueId));
+                              }
+                              return [...new Set([...current, ...groupIds])];
+                            })
+                          }
+                          className="h-4 w-4 rounded border-gray-300 bg-transparent text-primary focus:ring-primary/30"
+                        />
+                      </div>
+                      <div className="flex justify-center">
+                        <ArrowUpDown size={10} />
+                      </div>
+                      <div>Title</div>
+                      <div>Workflow</div>
+                      <div>Priority</div>
+                      <div>Due Date</div>
+                      <div />
+                    </div>
+
+                    <div className="divide-y divide-gray-100 dark:divide-border-dark">
+                      {items.map((issue) => (
+                        <div
+                          key={issue.id}
+                          onClick={() => setSelectedIssueId(issue.id)}
+                          className={`grid grid-cols-[44px_32px_1fr_120px_120px_120px_44px] items-center gap-4 px-5 py-4 transition-colors group ${
+                            selectedIssueIds.includes(issue.id)
+                              ? 'bg-primary/5 dark:bg-primary/10'
+                              : 'hover:bg-gray-50 dark:hover:bg-white/5'
+                          } cursor-pointer`}
+                        >
+                          <div
+                            className="flex justify-center"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={selectedIssueIds.includes(issue.id)}
+                              onChange={() => toggleIssueSelection(issue.id)}
+                              className="h-4 w-4 rounded border-gray-300 bg-transparent text-primary focus:ring-primary/30"
+                            />
+                          </div>
+                          <div className="flex justify-center">
+                            <div className={`h-2 w-2 rounded-full shrink-0 ${issue.priority === 'urgent' ? 'bg-red-500' : 'bg-primary'}`} />
+                          </div>
+                          <div className="flex items-center gap-4 min-w-0">
+                            <div className="flex flex-col min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium truncate">{issue.title}</span>
+                                <TypeBadge type={issue.type || 'task'} />
+                              </div>
+                              <div className="mt-1 flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase text-gray-400">
+                                <span>{issue.id}</span>
+                                <span>•</span>
+                                <span>{issue.project?.name || 'No Project'}</span>
+                                {(issue.subtaskStats?.total || issue.subtasks?.length) ? (
+                                  <>
+                                    <span>•</span>
+                                    <span>
+                                      {issue.subtaskStats?.completed ?? issue.subtasks?.filter((subtask) => subtask.completed).length ?? 0}/
+                                      {issue.subtaskStats?.total ?? issue.subtasks?.length ?? 0} subtasks
+                                    </span>
+                                  </>
+                                ) : null}
+                              </div>
+                            </div>
+                          </div>
+                          <div
+                            className="flex items-center"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                            }}
+                          >
+                            <WorkflowStatusSelect
+                              value={issue.status}
+                              statuses={workspaceStatuses}
+                              onChange={(nextStatus) => {
+                                void handleIssueUpdate(issue.id, nextStatus);
+                              }}
+                            />
+                          </div>
+                          <div className="flex items-center shrink-0">
+                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-tighter ${PRIORITY_COLORS[issue.priority]}`}>
+                              {issue.priority}
+                            </span>
+                          </div>
+                          <div className="flex items-center text-xs text-gray-400">
+                            {formatCalendarDate(issue.dueDate, undefined, { year: 'numeric', month: 'numeric', day: 'numeric' })}
+                          </div>
+                          <div className="relative flex items-center justify-center opacity-0 transition-opacity group-hover:opacity-100">
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setActiveIssueMenuId((current) => (current === issue.id ? null : issue.id));
+                              }}
+                              className="p-1 rounded text-gray-400 hover:bg-gray-200 dark:hover:bg-white/10"
+                            >
+                              <MoreHorizontal size={16} />
+                            </button>
+                            {activeIssueMenuId === issue.id && (
+                              <div className="absolute right-0 top-9 z-20 min-w-[180px] rounded-xl border border-gray-200 bg-white p-1.5 shadow-xl dark:border-border-dark dark:bg-card-dark">
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    openAssignDialog([issue.id]);
+                                  }}
+                                  className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-gray-200 dark:hover:bg-white/5 dark:hover:text-white"
+                                >
+                                  Add To Cycle
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </section>
+            );
+          })}
         </div>
       ) : (
         <div className="flex flex-col items-center justify-center h-full text-center p-8">
@@ -239,6 +487,64 @@ export const MyIssuesPage: React.FC = () => {
         </div>
       </header>
 
+      {viewMode === 'list' && selectedIssueIds.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 bg-white px-6 py-3 dark:border-border-dark dark:bg-bg-dark">
+          <div className="flex items-center gap-3 text-sm">
+            <span className="text-gray-400">{selectedIssueIds.length} selected</span>
+          </div>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setActiveIssueMenuId((current) => (current === '__bulk__' ? null : '__bulk__'))}
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-50 dark:border-border-dark dark:bg-white/5 dark:text-gray-200 dark:hover:bg-white/10"
+            >
+              <MoreHorizontal size={15} />
+              Actions
+            </button>
+            {activeIssueMenuId === '__bulk__' && (
+              <div className="absolute right-0 top-11 z-20 min-w-[220px] rounded-xl border border-gray-200 bg-white p-1.5 shadow-xl dark:border-border-dark dark:bg-card-dark">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveIssueMenuId(null);
+                    navigate('/issues/create');
+                  }}
+                  className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-gray-200 dark:hover:bg-white/5 dark:hover:text-white"
+                >
+                  Add New Issue
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openAssignDialog(selectedIssueIds)}
+                  className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-gray-200 dark:hover:bg-white/5 dark:hover:text-white"
+                >
+                  Add To Cycle
+                </button>
+                {canDelete && (
+                  <button
+                    type="button"
+                    onClick={() => void handleDeleteIssues(selectedIssueIds)}
+                    className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-red-500 transition-colors hover:bg-red-500/10"
+                  >
+                    Remove
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedIssueIds([]);
+                    setActiveIssueMenuId(null);
+                  }}
+                  className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-gray-200 dark:hover:bg-white/5 dark:hover:text-white"
+                >
+                  Clear
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="flex gap-8 px-6 border-b border-gray-200 dark:border-border-dark bg-gray-50/50 dark:bg-black/10 shrink-0">
         <button
           onClick={() => setActiveTab('assigned')}
@@ -288,6 +594,12 @@ export const MyIssuesPage: React.FC = () => {
           </div>
         )}
       </div>
+      <AssignIssuesToCycleDialog
+        open={Boolean(assignmentDraft)}
+        onClose={() => setAssignmentDraft(null)}
+        teamId={assignmentDraft?.teamId}
+        issueIds={assignmentDraft?.issueIds ?? []}
+      />
     </div>
   );
 };

@@ -7,6 +7,7 @@ export interface WorkspaceStatus {
   color: string;
   order: number;
   isFinal: boolean;
+  showOnBoard: boolean;
 }
 export type UserRole = 'owner' | 'admin' | 'member' | 'guest';
 export type IssueType = 'task' | 'bug' | 'issue';

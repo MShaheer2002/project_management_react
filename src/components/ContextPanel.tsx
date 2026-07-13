@@ -31,6 +31,7 @@ import { useOpenViewUploadUrl } from '@features/upload';
 import { AttachmentMediaPreview } from '@features/upload';
 import { useWorkspaceMemberOptions } from '@features/workspace';
 import { useIssueSocketRoom } from '@features/notifications';
+import { AssignIssuesToCycleDialog } from '@features/cycles';
 import {
   IssueActivityTimeline,
   IssueCommentsThread,
@@ -38,6 +39,7 @@ import {
   SubtaskList,
   useDeleteIssue,
   useIssueDetail,
+  useProjectAssignmentGuard,
   useUpdateIssue,
   useUpdateIssueStatus,
 } from '@features/issues';
@@ -68,12 +70,16 @@ export const ContextPanel: React.FC = () => {
   const canDelete = canDeleteIssues(role);
 
   const [activeTab, setActiveTab] = useState<'comments' | 'activity'>('comments');
+  const [isIssueMenuOpen, setIsIssueMenuOpen] = useState(false);
+  const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);
+  const { dialog: projectAssignmentDialog, handleAssignmentError } = useProjectAssignmentGuard();
   useIssueSocketRoom(selectedIssueId || undefined);
 
   const issueQuery = useIssueDetail(selectedIssueId || undefined);
   const issue = issueQuery.data;
   const errorCode = getApiErrorCode(issueQuery.error);
   const issueResourceId = issue?.entityId ?? selectedIssueId ?? undefined;
+  const displayIssueId = issue?.id ?? (/^[A-Z]+-\d+$/i.test(selectedIssueId ?? '') ? selectedIssueId ?? '' : '');
   const assigneeOptionsQuery = useWorkspaceMemberOptions(
     {
       sort: 'name:asc',
@@ -161,6 +167,24 @@ export const ContextPanel: React.FC = () => {
       await updateIssue.mutateAsync({ assigneeId: assigneeId || null });
       showToast(assigneeId ? 'Assignee updated.' : 'Issue unassigned.', 'success');
     } catch (error) {
+      const nextAssignee = assigneeOptions.find((member) => member.id === assigneeId);
+      const didHandleProjectMembership = assigneeId
+        && issue?.projectId
+        && handleAssignmentError(error, {
+          assigneeId,
+          assigneeName: nextAssignee?.name ?? 'Selected member',
+          projectId: issue.projectId,
+          projectName: issue.project?.name ?? 'this project',
+          retry: async () => {
+            await updateIssue.mutateAsync({ assigneeId });
+            showToast('Assignee updated.', 'success');
+          },
+        });
+
+      if (didHandleProjectMembership) {
+        return;
+      }
+
       showToast(getApiErrorMessage(error) || 'Failed to update assignee.', 'error');
     }
   };
@@ -183,6 +207,11 @@ export const ContextPanel: React.FC = () => {
     }
   };
 
+  const handleOpenAssignDialog = () => {
+    setIsIssueMenuOpen(false);
+    setIsAssignDialogOpen(true);
+  };
+
   return (
     <motion.div
       initial={{ x: '100%' }}
@@ -194,12 +223,12 @@ export const ContextPanel: React.FC = () => {
       <div className="flex items-center justify-between border-b border-gray-200 px-6 py-4 dark:border-border-dark">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 text-xs font-mono text-gray-400">
-            <span>{issue?.id || selectedIssueId}</span>
+            <span>{displayIssueId}</span>
           </div>
           <div className="h-4 w-px bg-gray-200 dark:bg-border-dark" />
           <button
             onClick={() => {
-              navigate(`/issues/${issue?.entityId || selectedIssueId}`);
+              navigate(`/issues/${issue?.id || selectedIssueId}`);
               setSelectedIssueId(null);
             }}
             className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-400 transition-colors hover:text-primary"
@@ -218,9 +247,26 @@ export const ContextPanel: React.FC = () => {
               {deleteIssue.isPending ? <History size={18} className="animate-spin" /> : <Trash2 size={18} />}
             </button>
           )}
-          <button className="rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-100 dark:hover:bg-white/5">
-            <MoreHorizontal size={18} />
-          </button>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setIsIssueMenuOpen((current) => !current)}
+              className="rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-100 dark:hover:bg-white/5"
+            >
+              <MoreHorizontal size={18} />
+            </button>
+            {isIssueMenuOpen && issue && (
+              <div className="absolute right-0 top-10 z-20 min-w-[180px] rounded-xl border border-gray-200 bg-white p-1.5 shadow-xl dark:border-border-dark dark:bg-card-dark">
+                <button
+                  type="button"
+                  onClick={handleOpenAssignDialog}
+                  className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-gray-200 dark:hover:bg-white/5 dark:hover:text-white"
+                >
+                  Add To Cycle
+                </button>
+              </div>
+            )}
+          </div>
           <button
             onClick={() => setSelectedIssueId(null)}
             className="rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-100 dark:hover:bg-white/5"
@@ -507,6 +553,15 @@ export const ContextPanel: React.FC = () => {
           </div>
         )}
       </div>
+      {issue && (
+        <AssignIssuesToCycleDialog
+          open={isAssignDialogOpen}
+          onClose={() => setIsAssignDialogOpen(false)}
+          teamId={issue.teamId}
+          issueIds={[issue.id]}
+        />
+      )}
+      {projectAssignmentDialog}
     </motion.div>
   );
 };

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@clerk/clerk-react';
 import { useAuthStore } from '@/app/stores/useAuthStore';
@@ -29,6 +29,7 @@ export const TopNavbar: React.FC = () => {
   const theme = useThemeStore((s) => s.theme);
   const setTheme = useThemeStore((s) => s.setTheme);
   const [isUserMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement | null>(null);
   const navigate = useNavigate();
   const unreadNotifications = useUnreadNotificationsCount({ enabled: true });
   const unreadCount = unreadNotifications.data?.unread ?? 0;
@@ -40,6 +41,19 @@ export const TopNavbar: React.FC = () => {
     useAuthStore.getState().clear();
     await signOut({ redirectUrl: '/login' });
   };
+
+  useEffect(() => {
+    if (!isUserMenuOpen) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (userMenuRef.current?.contains(target)) return;
+      setUserMenuOpen(false);
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => document.removeEventListener('mousedown', handlePointerDown);
+  }, [isUserMenuOpen]);
 
   return (
     <header className="h-14 border-b border-gray-200 dark:border-border-dark bg-white/80 dark:bg-bg-dark/80 backdrop-blur-md flex items-center justify-between px-6 sticky top-0 z-30">
@@ -90,7 +104,7 @@ export const TopNavbar: React.FC = () => {
           <span className="hidden sm:inline">Ask Trussen</span>
         </button>
 
-        <div className="relative">
+        <div ref={userMenuRef} className="relative">
           <button
             onClick={() => setUserMenuOpen(!isUserMenuOpen)}
             className="flex items-center gap-2 p-1 rounded-full hover:bg-gray-100 dark:hover:bg-white/5 transition-colors"
@@ -107,7 +121,6 @@ export const TopNavbar: React.FC = () => {
           <AnimatePresence>
             {isUserMenuOpen && (
               <>
-                <div className="fixed inset-0 z-40" onClick={() => setUserMenuOpen(false)} />
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95, y: 10 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}

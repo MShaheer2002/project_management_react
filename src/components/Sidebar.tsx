@@ -177,17 +177,23 @@ export const Sidebar: React.FC = () => {
   const [isWorkspaceMenuOpen, setIsWorkspaceMenuOpen] = useState(false);
   const [teamsOpen, setTeamsOpen] = useState(true);
   const [orgOpen, setOrgOpen] = useState(false);
+  const [workspaceLogoFailed, setWorkspaceLogoFailed] = useState(false);
   const [expandedTeamIds, setExpandedTeamIds] = useState<Set<string>>(
     () => new Set()
   );
   const [teamsFlyoutOpen, setTeamsFlyoutOpen] = useState(false);
   const [orgFlyoutOpen, setOrgFlyoutOpen] = useState(false);
+  const workspaceMenuRef = useRef<HTMLDivElement>(null);
   const teamsFlyoutButtonRef = useRef<HTMLButtonElement>(null);
   const orgFlyoutButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     setExpandedTeamIds(new Set(sidebarTeams.map((team) => team.id)));
   }, [sidebarTeams]);
+
+  useEffect(() => {
+    setWorkspaceLogoFailed(false);
+  }, [displayOrganization?.logo]);
 
   const toggleTeamExpanded = (id: string) => {
     setExpandedTeamIds(prev => {
@@ -204,6 +210,19 @@ export const Sidebar: React.FC = () => {
       setOrgFlyoutOpen(false);
     }
   }, [isSidebarCollapsed]);
+
+  useEffect(() => {
+    if (!isWorkspaceMenuOpen) return;
+
+    const onDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (workspaceMenuRef.current?.contains(target)) return;
+      setIsWorkspaceMenuOpen(false);
+    };
+
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [isWorkspaceMenuOpen]);
 
   const cycleTheme = () => {
     if (theme === 'light') setTheme('dark');
@@ -307,7 +326,7 @@ export const Sidebar: React.FC = () => {
       {/* Workspace */}
       <div className="px-2 pt-2 pb-1">
         {!isSidebarCollapsed ? (
-          <div className="relative">
+          <div ref={workspaceMenuRef} className="relative">
             <button
               type="button"
               onClick={() => setIsWorkspaceMenuOpen(!isWorkspaceMenuOpen)}
@@ -317,9 +336,17 @@ export const Sidebar: React.FC = () => {
                   : 'hover:bg-black/[0.04] dark:hover:bg-white/[0.05]'
               }`}
             >
-              <div className="w-8 h-8 rounded-md bg-primary flex items-center justify-center text-white text-xs font-semibold shrink-0">
+              <div className="w-8 h-8 rounded-md bg-primary flex items-center justify-center text-white text-xs font-semibold shrink-0 overflow-hidden">
                 {isInitialSidebarLoading && !displayOrganization ? (
                   <span className="w-3.5 h-3.5 rounded bg-white/35 animate-pulse" />
+                ) : displayOrganization?.logo && !workspaceLogoFailed ? (
+                  <img
+                    src={displayOrganization.logo}
+                    alt={displayOrganization.name}
+                    className="h-full w-full object-cover"
+                    referrerPolicy="no-referrer"
+                    onError={() => setWorkspaceLogoFailed(true)}
+                  />
                 ) : (
                   displayOrganization?.name.charAt(0)
                 )}
@@ -389,10 +416,20 @@ export const Sidebar: React.FC = () => {
           <button
             type="button"
             onClick={() => setIsWorkspaceMenuOpen(!isWorkspaceMenuOpen)}
-            className={`w-10 h-10 mx-auto flex items-center justify-center rounded-lg bg-primary text-white text-xs font-semibold transition-transform duration-150 active:scale-[0.96] ${focusMinimal}`}
+            className={`w-10 h-10 mx-auto flex items-center justify-center rounded-lg bg-primary text-white text-xs font-semibold transition-transform duration-150 active:scale-[0.96] overflow-hidden ${focusMinimal}`}
             title={displayOrganization?.name ?? 'Workspace'}
           >
-            {displayOrganization?.name.charAt(0)}
+            {displayOrganization?.logo && !workspaceLogoFailed ? (
+              <img
+                src={displayOrganization.logo}
+                alt={displayOrganization.name}
+                className="h-full w-full object-cover"
+                referrerPolicy="no-referrer"
+                onError={() => setWorkspaceLogoFailed(true)}
+              />
+            ) : (
+              displayOrganization?.name.charAt(0)
+            )}
           </button>
         )}
       </div>

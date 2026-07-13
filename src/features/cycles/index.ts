@@ -1,5 +1,6 @@
 export {
   cycleQueryKeys,
+  useAssignIssuesToCycle,
   useCarryOverCycle,
   useCompleteCycle,
   useCreateCycle,
@@ -13,6 +14,7 @@ export {
   useReopenCycle,
   useUpdateCycle,
 } from './hooks/useCycleData';
+export { AssignIssuesToCycleDialog } from './components';
 export { cycleService } from './services/cycleService';
 export type {
   CarryOverCycleInput,

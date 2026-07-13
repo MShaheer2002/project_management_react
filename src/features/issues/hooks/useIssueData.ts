@@ -12,10 +12,12 @@ import type {
   AddIssueDependencyInput,
   AddIssueWatchersInput,
   AttachIssueLabelsInput,
+  CheckIssueAssignmentEligibilityInput,
   CreateLabelInput,
   CreateIssueCommentInput,
   CreateIssueInput,
   CreateIssueSubtaskInput,
+  IssueAssignmentEligibility,
   ListIssueActivityInput,
   ListIssueCommentsInput,
   ListLabelsInput,
@@ -215,6 +217,13 @@ export const useCreateIssue = () => {
   });
 };
 
+export const useCheckIssueAssignmentEligibility = () => {
+  return useMutation({
+    mutationFn: (input: CheckIssueAssignmentEligibilityInput): Promise<IssueAssignmentEligibility> =>
+      issueService.checkAssignmentEligibility(input),
+  });
+};
+
 export const useUpdateIssue = (issueId: string | undefined) => {
   const queryClient = useQueryClient();
   const workspaceId = useAuthStore((s) => s.workspace?.id);
@@ -255,6 +264,18 @@ export const useDeleteIssue = (issueId: string | undefined) => {
   return useMutation({
     mutationFn: () => issueService.delete(issueId!),
     onSuccess: () => {
+      invalidateIssueRelatedQueries(queryClient, workspaceId, issueId);
+    },
+  });
+};
+
+export const useDeleteAnyIssue = () => {
+  const queryClient = useQueryClient();
+  const workspaceId = useAuthStore((s) => s.workspace?.id);
+
+  return useMutation({
+    mutationFn: (issueId: string) => issueService.delete(issueId),
+    onSuccess: (_result, issueId) => {
       invalidateIssueRelatedQueries(queryClient, workspaceId, issueId);
     },
   });

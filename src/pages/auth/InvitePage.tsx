@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useUser } from '@clerk/clerk-react';
-import { AlertCircle, Building2, CheckCircle2, Loader2, Mail, Shield, Users } from 'lucide-react';
+import { AlertCircle, BriefcaseBusiness, Building2, CheckCircle2, Loader2, Mail, Shield, Users } from 'lucide-react';
 import { Logo } from './shared';
 import { useAuthStore } from '@/app/stores/useAuthStore';
 import { useToastStore } from '@/app/stores/useToastStore';
@@ -190,6 +190,9 @@ export const InvitePage: React.FC = () => {
 
                   <div className="grid gap-3 text-sm">
                     <InviteDetail icon={<Shield size={15} />} label="Role" value={invite.role.toLowerCase()} />
+                    {invite.designation && (
+                      <InviteDetail icon={<BriefcaseBusiness size={15} />} label="Designation" value={invite.designation} />
+                    )}
                     <InviteDetail icon={<Users size={15} />} label="Team" value={invite.teamName} />
                     <InviteDetail icon={<Building2 size={15} />} label="Department" value={invite.departmentName || 'No department'} />
                     <InviteDetail icon={<Mail size={15} />} label="Invited email" value={invite.invitedEmail} />

@@ -42,7 +42,8 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
 }) => {
   const defaultStatuses = useWorkspaceStatuses();
   const resolvedStatuses = statusesProp ?? defaultStatuses;
-  const COLUMNS = resolvedStatuses.map((s) => s.key);
+  const boardStatuses = resolvedStatuses.filter((status) => status.showOnBoard !== false);
+  const COLUMNS = boardStatuses.map((s) => s.key);
   const { setSelectedIssueId } = useApp();
   const [activeIssue, setActiveIssue] = useState<Issue | null>(null);
   const [localIssues, setLocalIssues] = useState<Issue[]>(issues);
@@ -226,7 +227,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
       <div className="kanban-scroll flex-1 overflow-x-auto p-6 bg-gray-50/30 dark:bg-black/10">
         <div className="flex gap-6 h-full min-w-max">
           {COLUMNS.map((status) => {
-            const statusConfig = resolvedStatuses.find((s) => s.key === status);
+            const statusConfig = boardStatuses.find((s) => s.key === status);
             return (
               <BoardColumn
                 key={status}
