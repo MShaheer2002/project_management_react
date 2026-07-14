@@ -1,4 +1,5 @@
 export {
+  useAssignIssueToCycle,
   cycleQueryKeys,
   useAssignIssuesToCycle,
   useCarryOverCycle,
@@ -12,6 +13,7 @@ export {
   usePlanCycleIssues,
   useRemoveCycleIssue,
   useReopenCycle,
+  useUnassignIssueFromCycle,
   useUpdateCycle,
 } from './hooks/useCycleData';
 export { AssignIssuesToCycleDialog } from './components';

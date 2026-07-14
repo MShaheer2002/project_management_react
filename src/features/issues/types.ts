@@ -176,6 +176,7 @@ export interface CreateIssueInput {
   description?: string;
   type: Issue['type'];
   projectId: string;
+  cycleId?: string | null;
   templateId?: string | null;
   templateDraftId?: string | null;
   priority: Priority;
@@ -213,6 +214,7 @@ export interface IssueAssignmentEligibility {
 export interface UpdateIssueInput {
   title?: string;
   description?: string | null;
+  type?: Issue['type'];
   priority?: Priority;
   status?: Status;
   assigneeId?: string | null;

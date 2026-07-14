@@ -57,6 +57,12 @@ type RawIssueTeamSummary = {
   name: string;
 };
 
+type RawIssueCycleSummary = {
+  id: string;
+  name: string;
+  status: IssueSummary['cycle'] extends { status: infer T } ? T : string;
+};
+
 type RawIssueDepartmentSummary = {
   id: string;
   name: string;
@@ -128,11 +134,13 @@ type RawIssueSummary = {
   assigneeId?: string | null;
   projectId: string;
   teamId: string;
+  cycleId?: string | null;
   departmentId?: string | null;
   creator?: RawIssueUserSummary;
   assignee?: RawIssueUserSummary | null;
   project?: RawIssueProjectSummary;
   team?: RawIssueTeamSummary;
+  cycle?: RawIssueCycleSummary | null;
   department?: RawIssueDepartmentSummary | null;
   subtaskStats?: {
     total: number;
@@ -243,6 +251,7 @@ const normalizeIssueSummary = (issue: RawIssueSummary): IssueSummary => ({
   assigneeId: issue.assigneeId ?? undefined,
   projectId: issue.projectId,
   teamId: issue.teamId,
+  cycleId: issue.cycleId ?? undefined,
   departmentId: issue.departmentId ?? issue.department?.id ?? undefined,
   creator: issue.creator
     ? {
@@ -272,6 +281,13 @@ const normalizeIssueSummary = (issue: RawIssueSummary): IssueSummary => ({
         name: issue.team.name,
       }
     : undefined,
+  cycle: issue.cycle
+    ? {
+        id: issue.cycle.id,
+        name: issue.cycle.name,
+        status: issue.cycle.status,
+      }
+    : null,
   department: issue.department
     ? {
         id: issue.department.id,

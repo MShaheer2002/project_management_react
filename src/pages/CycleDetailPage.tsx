@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, createSearchParams } from 'react-router-dom';
 import {
   AlertCircle,
   Activity,
@@ -207,7 +207,7 @@ export const CycleDetailPage: React.FC = () => {
   const queryClient = useQueryClient();
   const workspaceId = useAuthStore((state) => state.workspace?.id);
   const workspaceStatuses = useWorkspaceStatuses();
-  const { showToast, setActiveModal } = useApp();
+  const { showToast } = useApp();
   const [activeTab, setActiveTab] = useState<'overview' | 'issues' | 'activity' | 'control'>('overview');
   const [issueView, setIssueView] = useState<'list' | 'board' | 'calendar'>('board');
   const [selectedAssigneeIds, setSelectedAssigneeIds] = useState<string[]>([]);
@@ -356,6 +356,18 @@ export const CycleDetailPage: React.FC = () => {
         { label: 'In Progress', value: cycle.stats.inProgressIssues, color: 'bg-blue-500' },
         { label: 'Todo', value: cycle.stats.todoIssues, color: 'bg-gray-500' },
       ]);
+
+  const preferredProjectId = cycle.issueBreakdown?.byProject?.[0]?.projectId ?? '';
+
+  const openCreateIssueForCycle = (status?: Status) => {
+    const params = createSearchParams({
+      ...(preferredProjectId ? { projectId: preferredProjectId } : {}),
+      teamId: cycle.teamId,
+      cycleId: cycle.id,
+      ...(status ? { status } : {}),
+    });
+    navigate(`/issues/create?${params.toString()}`);
+  };
 
   const handleOpenIssue = (issueId: string) => {
     navigate(`/issues/${issueId}`);
@@ -858,7 +870,7 @@ export const CycleDetailPage: React.FC = () => {
                               type="button"
                               onClick={() => {
                                 setActiveIssueMenuId(null);
-                                setActiveModal('create-issue');
+                                openCreateIssueForCycle();
                               }}
                               className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-gray-200 dark:hover:bg-white/5 dark:hover:text-white"
                             >
@@ -1129,7 +1141,7 @@ export const CycleDetailPage: React.FC = () => {
                     onIssueUpdate={handleIssueStatusUpdate}
                     onNewIssue={(status) => {
                       showToast(`Planning a ${STATUS_LABELS[status]} issue for ${cycle.name}.`, 'info');
-                      setActiveModal('create-issue');
+                      openCreateIssueForCycle(status);
                     }}
                   />
                 </div>
@@ -1376,7 +1388,7 @@ export const CycleDetailPage: React.FC = () => {
               </div>
               <button
                 type="button"
-                onClick={() => setActiveModal('create-issue')}
+                onClick={() => openCreateIssueForCycle()}
                 className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-bold text-gray-500 hover:border-primary/40 hover:text-primary dark:border-border-dark"
               >
                 <Plus size={14} />

@@ -170,6 +170,26 @@ export const useAssignIssuesToCycle = () => {
   });
 };
 
+export const useAssignIssueToCycle = (issueId: string | undefined) => {
+  const queryClient = useQueryClient();
+  const workspaceId = useAuthStore((s) => s.workspace?.id);
+
+  return useMutation({
+    mutationFn: (cycleId: string) => cycleService.assignIssue(issueId!, cycleId),
+    onSuccess: (issue) => invalidateCycleRelatedQueries(queryClient, workspaceId, issue.cycleId ?? undefined),
+  });
+};
+
+export const useUnassignIssueFromCycle = (issueId: string | undefined) => {
+  const queryClient = useQueryClient();
+  const workspaceId = useAuthStore((s) => s.workspace?.id);
+
+  return useMutation({
+    mutationFn: () => cycleService.unassignIssue(issueId!),
+    onSuccess: (issue) => invalidateCycleRelatedQueries(queryClient, workspaceId, issue.cycleId ?? undefined),
+  });
+};
+
 export const useRemoveCycleIssue = (cycleId: string | undefined) => {
   const queryClient = useQueryClient();
   const workspaceId = useAuthStore((s) => s.workspace?.id);

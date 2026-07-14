@@ -1,11 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import DOMPurify from 'dompurify';
-import { AiMarkdown } from '@features/ai/components/AiMarkdown';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   AlertCircle,
   Bug,
   Calendar,
+  CalendarRange,
   Clock3,
   CheckCircle2,
   CheckSquare,
@@ -14,7 +14,6 @@ import {
   Copy,
   ExternalLink,
   Loader2,
-  MoreHorizontal,
   Paperclip,
   Plus,
   Share2,
@@ -25,48 +24,42 @@ import {
 import { AnimatePresence, motion } from 'motion/react';
 import { useAuthStore } from '@/app/stores/useAuthStore';
 import { useApp } from '@/AppContext';
+import { normalizeRichTextValue, RichTextEditor } from '@/components/RichTextEditor';
 import { PRIORITY_COLORS, ISSUE_TYPE_CONFIG } from '@/constants';
 import { getStatusLabel } from '@shared/constants/statuses';
 import { useWorkspaceStatuses } from '@shared/hooks/useWorkspaceStatuses';
 import { canDeleteIssues } from '@shared/permissions';
-import { LabelChip } from '@shared/components/ui/LabelChip';
 import { getApiErrorCode, getApiErrorMessage } from '@shared/services';
 import { normalizeDateForInput, normalizeTimeForInput } from '@shared/utils/date';
 import { useOpenViewUploadUrl } from '@features/upload';
 import { AttachmentMediaPreview } from '@features/upload';
 import { useWorkspaceMemberOptions } from '@features/workspace';
 import { useIssueSocketRoom } from '@features/notifications';
-import { AssignIssuesToCycleDialog } from '@features/cycles';
+import { useAssignIssueToCycle, useCycles, useUnassignIssueFromCycle } from '@features/cycles';
 import {
   IssueAttachmentsField,
   IssueActivityTimeline,
+  IssueSystemParametersPanel,
   IssueCommentsThread,
   IssueLabelsEditor,
   IssueRelationsSection,
   IssueSystemContextSection,
   SubtaskList,
+  useAddIssueDependency,
   useAddIssueAttachments,
+  useAddIssueWatchers,
   useDeleteIssue,
   useIssueDetail,
   useProjectAssignmentGuard,
+  useRemoveIssueDependency,
   useRemoveIssueAttachment,
+  useRemoveIssueWatcher,
   useUpdateIssue,
+  useUpdateIssueIntegrationRefs,
   useUpdateIssueStatus,
 } from '@features/issues';
 import { IssueGitHubActivity, IssueFigmaDesigns } from '@features/integrations';
-import type { IssueAttachment, IssueType, Priority, Status } from '@/types';
-
-const TypeBadge: React.FC<{ type: IssueType }> = ({ type }) => {
-  const config = ISSUE_TYPE_CONFIG[type];
-  return (
-    <span className={`flex items-center gap-1.5 rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${config.color}`}>
-      {type === 'task' && <CheckSquare size={12} />}
-      {type === 'bug' && <Bug size={12} />}
-      {type === 'issue' && <Zap size={12} />}
-      {config.label}
-    </span>
-  );
-};
+import type { IssueAttachment, IssueDependency, IssueIntegrationRef, IssueType, Priority, Status } from '@/types';
 
 const FieldLabel: React.FC<{ icon: React.ReactNode; children: React.ReactNode }> = ({ icon, children }) => (
   <div className="flex items-center gap-2 text-gray-400">
@@ -80,6 +73,12 @@ const AvatarFallback: React.FC<{ name: string; className?: string }> = ({ name, 
     <span className="text-xs font-bold">{name.charAt(0).toUpperCase()}</span>
   </div>
 );
+
+const ISSUE_LONGFORM_CARD =
+  'rounded-2xl border border-gray-200 bg-white px-5 py-4 dark:border-border-dark dark:bg-white/[0.03]';
+
+const ISSUE_LONGFORM_RICH_TEXT =
+  'text-[15px] leading-8 text-gray-700 dark:text-gray-300 [&_h1]:mb-5 [&_h1]:text-4xl [&_h1]:font-bold [&_h1]:tracking-tight [&_h2]:mb-4 [&_h2]:text-[2rem] [&_h2]:font-bold [&_h2]:tracking-tight [&_h3]:mb-3 [&_h3]:text-[1.6rem] [&_h3]:font-semibold [&_p]:my-0 [&_p+p]:mt-5 [&_ul]:my-5 [&_ul]:list-disc [&_ul]:pl-8 [&_ol]:my-5 [&_ol]:list-decimal [&_ol]:pl-8 [&_li]:my-2 [&_blockquote]:my-5 [&_blockquote]:border-l-2 [&_blockquote]:border-primary/30 [&_blockquote]:pl-4 [&_code]:rounded [&_code]:bg-gray-100 [&_code]:px-1.5 [&_code]:py-0.5 dark:[&_code]:bg-white/10 [&_pre]:overflow-x-auto [&_pre]:rounded-xl [&_pre]:bg-black/5 [&_pre]:p-4 dark:[&_pre]:bg-black/20 [&_strong]:font-semibold [&_a]:text-primary';
 
 const PrioritySelect: React.FC<{
   value: Priority;
@@ -132,22 +131,12 @@ const renderRichText = (value: string | undefined, fallback: string) => {
     return <p className="text-base leading-relaxed text-gray-500 dark:text-gray-400">{fallback}</p>;
   }
 
-  const trimmed = value.trim();
-  const looksLikeHtml = /<[^>]+>/.test(trimmed);
-
-  if (!looksLikeHtml) {
-    return (
-      <AiMarkdown
-        content={trimmed}
-        className="text-base leading-relaxed text-gray-700 dark:text-gray-300"
-      />
-    );
-  }
+  const normalized = normalizeRichTextValue(value);
 
   return (
     <div
-      className="text-base leading-relaxed text-gray-700 dark:text-gray-300 [&_a]:text-primary [&_code]:rounded [&_code]:bg-gray-100 [&_code]:px-1 [&_code]:py-0.5 dark:[&_code]:bg-white/10"
-      dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(value) }}
+      className={`rich-text-content ${ISSUE_LONGFORM_RICH_TEXT}`}
+      dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(normalized) }}
     />
   );
 };
@@ -162,8 +151,27 @@ export const IssueDetailPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'comments' | 'activity'>('comments');
   const [isAttachmentComposerOpen, setIsAttachmentComposerOpen] = useState(false);
   const [newAttachments, setNewAttachments] = useState<IssueAttachment[]>([]);
-  const [isIssueMenuOpen, setIsIssueMenuOpen] = useState(false);
-  const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [isEditingDescription, setIsEditingDescription] = useState(false);
+  const [isEditingSteps, setIsEditingSteps] = useState(false);
+  const [isEditingExpected, setIsEditingExpected] = useState(false);
+  const [isEditingActual, setIsEditingActual] = useState(false);
+  const [isEditingAcceptance, setIsEditingAcceptance] = useState(false);
+  const [titleDraft, setTitleDraft] = useState('');
+  const [descriptionDraft, setDescriptionDraft] = useState('');
+  const [stepsDraft, setStepsDraft] = useState('');
+  const [expectedDraft, setExpectedDraft] = useState('');
+  const [actualDraft, setActualDraft] = useState('');
+  const [acceptanceDraft, setAcceptanceDraft] = useState('');
+  const [systemParentIssueId, setSystemParentIssueId] = useState('');
+  const [systemDependencies, setSystemDependencies] = useState<IssueDependency[]>([]);
+  const [systemWatcherIds, setSystemWatcherIds] = useState<string[]>([]);
+  const [systemIntegrationRefs, setSystemIntegrationRefs] = useState<IssueIntegrationRef[]>([]);
+  const descriptionEditorRef = useRef<HTMLDivElement | null>(null);
+  const stepsEditorRef = useRef<HTMLDivElement | null>(null);
+  const expectedEditorRef = useRef<HTMLDivElement | null>(null);
+  const actualEditorRef = useRef<HTMLDivElement | null>(null);
+  const acceptanceEditorRef = useRef<HTMLDivElement | null>(null);
   const { dialog: projectAssignmentDialog, handleAssignmentError } = useProjectAssignmentGuard();
   useIssueSocketRoom(issueId);
 
@@ -180,10 +188,25 @@ export const IssueDetailPage: React.FC = () => {
   );
   const updateIssue = useUpdateIssue(issueResourceId);
   const updateIssueStatus = useUpdateIssueStatus(issueResourceId);
+  const updateIssueIntegrationRefs = useUpdateIssueIntegrationRefs(issueResourceId);
   const deleteIssue = useDeleteIssue(issueResourceId);
+  const assignIssueToCycle = useAssignIssueToCycle(issueResourceId);
+  const addIssueDependency = useAddIssueDependency(issueResourceId);
   const addIssueAttachments = useAddIssueAttachments(issueResourceId);
+  const addIssueWatchers = useAddIssueWatchers(issueResourceId);
+  const removeIssueDependency = useRemoveIssueDependency(issueResourceId);
   const removeIssueAttachment = useRemoveIssueAttachment(issueResourceId);
+  const removeIssueWatcher = useRemoveIssueWatcher(issueResourceId);
+  const unassignIssueFromCycle = useUnassignIssueFromCycle(issueResourceId);
   const openViewUploadUrl = useOpenViewUploadUrl();
+  const cyclesQuery = useCycles(
+    {
+      teamId: issue?.teamId,
+      sort: 'startsAt:desc',
+      limit: 50,
+    },
+    { enabled: Boolean(issue?.teamId) }
+  );
 
   useEffect(() => {
     setSelectedIssueId(null);
@@ -194,8 +217,42 @@ export const IssueDetailPage: React.FC = () => {
     setIsAttachmentComposerOpen(false);
   }, [issue?.id]);
 
+  useEffect(() => {
+    setTitleDraft(issue?.title ?? '');
+    setDescriptionDraft(issue?.description ?? '');
+    setStepsDraft(issue?.stepsToReproduce ?? '');
+    setExpectedDraft(issue?.expectedBehavior ?? '');
+    setActualDraft(issue?.actualBehavior ?? '');
+    setAcceptanceDraft(issue?.acceptanceCriteria ?? '');
+    setSystemParentIssueId(issue?.parent?.id ?? '');
+    setSystemDependencies((issue?.dependencies ?? []).map((dependency) => ({ issueId: dependency.issueId, relation: dependency.relation })));
+    setSystemWatcherIds((issue?.watchers ?? []).map((watcher) => watcher.id));
+    setSystemIntegrationRefs(issue?.integrationRefs ?? []);
+    setIsEditingTitle(false);
+    setIsEditingDescription(false);
+    setIsEditingSteps(false);
+    setIsEditingExpected(false);
+    setIsEditingActual(false);
+    setIsEditingAcceptance(false);
+  }, [
+    issue?.acceptanceCriteria,
+    issue?.actualBehavior,
+    issue?.description,
+    issue?.expectedBehavior,
+    issue?.id,
+    issue?.integrationRefs,
+    issue?.parent?.id,
+    issue?.stepsToReproduce,
+    issue?.title,
+    issue?.watchers,
+  ]);
+
   const displayIssueId = issue?.id || (/^[A-Z]+-\d+$/i.test(issueId ?? '') ? issueId ?? '' : '');
   const canDelete = canDeleteIssues(role);
+  const availableCycles = useMemo(
+    () => (cyclesQuery.data?.pages.flatMap((page) => page.items) ?? []).filter((cycle) => cycle.status !== 'COMPLETED'),
+    [cyclesQuery.data]
+  );
   const assigneeOptions = useMemo(() => {
     const items = assigneeOptionsQuery.data?.pages.flatMap((page) => page.items) ?? [];
     if (!issue?.assignee) return items;
@@ -233,11 +290,6 @@ export const IssueDetailPage: React.FC = () => {
     } catch (error) {
       showToast(getApiErrorMessage(error) || 'Failed to delete issue.', 'error');
     }
-  };
-
-  const handleOpenAssignDialog = () => {
-    setIsIssueMenuOpen(false);
-    setIsAssignDialogOpen(true);
   };
 
   const workspaceStatuses = useWorkspaceStatuses();
@@ -304,6 +356,324 @@ export const IssueDetailPage: React.FC = () => {
       showToast(getApiErrorMessage(error) || 'Failed to update due time.', 'error');
     }
   };
+
+  const handleTypeChange = async (nextType: IssueType) => {
+    try {
+      await updateIssue.mutateAsync({ type: nextType });
+      showToast('Type updated.', 'success');
+    } catch (error) {
+      showToast(getApiErrorMessage(error) || 'Failed to update type.', 'error');
+    }
+  };
+
+  const handleCycleChange = async (nextCycleId: string) => {
+    try {
+      if (!nextCycleId) {
+        await unassignIssueFromCycle.mutateAsync();
+        showToast('Issue moved back to backlog.', 'success');
+        return;
+      }
+      await assignIssueToCycle.mutateAsync(nextCycleId);
+      showToast('Cycle updated.', 'success');
+    } catch (error) {
+      showToast(getApiErrorMessage(error) || 'Failed to update cycle.', 'error');
+    }
+  };
+
+  const handleTitleSave = async () => {
+    const nextTitle = titleDraft.trim();
+    if (!nextTitle) {
+      showToast('Issue title cannot be empty.', 'error');
+      setTitleDraft(issue.title);
+      setIsEditingTitle(false);
+      return;
+    }
+
+    if (nextTitle === issue.title) {
+      setIsEditingTitle(false);
+      return;
+    }
+
+    try {
+      await updateIssue.mutateAsync({ title: nextTitle });
+      setIsEditingTitle(false);
+      showToast('Title updated.', 'success');
+    } catch (error) {
+      showToast(getApiErrorMessage(error) || 'Failed to update title.', 'error');
+    }
+  };
+
+  const handleDescriptionSave = async () => {
+    const normalizedCurrent = (issue.description ?? '').trim();
+    const normalizedNext = descriptionDraft.trim();
+
+    if (normalizedCurrent === normalizedNext) {
+      setIsEditingDescription(false);
+      return;
+    }
+
+    try {
+      await updateIssue.mutateAsync({ description: normalizedNext ? descriptionDraft : null });
+      setIsEditingDescription(false);
+      showToast(normalizedNext ? 'Description updated.' : 'Description cleared.', 'success');
+    } catch (error) {
+      showToast(getApiErrorMessage(error) || 'Failed to update description.', 'error');
+    }
+  };
+
+  const handleTextFieldSave = async (
+    field: 'stepsToReproduce' | 'expectedBehavior' | 'actualBehavior' | 'acceptanceCriteria',
+    nextValue: string,
+    currentValue: string | null | undefined,
+    stopEditing: () => void,
+    label: string
+  ) => {
+    const normalizedCurrent = (currentValue ?? '').trim();
+    const normalizedNext = nextValue.trim();
+
+    if (normalizedCurrent === normalizedNext) {
+      stopEditing();
+      return;
+    }
+
+    try {
+      await updateIssue.mutateAsync({ [field]: normalizedNext ? nextValue : null });
+      stopEditing();
+      showToast(`${label} updated.`, 'success');
+    } catch (error) {
+      showToast(getApiErrorMessage(error) || `Failed to update ${label.toLowerCase()}.`, 'error');
+    }
+  };
+
+  const handleParentIssueChange = async (nextParentIssueId: string) => {
+    const normalizedNext = nextParentIssueId || '';
+    if (normalizedNext === systemParentIssueId) {
+      return;
+    }
+
+    const previousParentIssueId = systemParentIssueId;
+    setSystemParentIssueId(normalizedNext);
+
+    try {
+      await updateIssue.mutateAsync({ parentIssueId: normalizedNext || null });
+      showToast(normalizedNext ? 'Parent issue updated.' : 'Parent issue cleared.', 'success');
+    } catch (error) {
+      setSystemParentIssueId(previousParentIssueId);
+      showToast(getApiErrorMessage(error) || 'Failed to update parent issue.', 'error');
+    }
+  };
+
+  const handleDependenciesChange = async (nextDependencies: IssueDependency[]) => {
+    const previousDependencies = systemDependencies;
+    setSystemDependencies(nextDependencies);
+
+    const previousMap = new Map(previousDependencies.map((dependency) => [dependency.issueId, dependency.relation]));
+    const nextMap = new Map(nextDependencies.map((dependency) => [dependency.issueId, dependency.relation]));
+    const removed = previousDependencies.filter((dependency) => !nextMap.has(dependency.issueId));
+    const added = nextDependencies.filter((dependency) => !previousMap.has(dependency.issueId));
+    const changed = nextDependencies.filter((dependency) => {
+      const previousRelation = previousMap.get(dependency.issueId);
+      return previousRelation && previousRelation !== dependency.relation;
+    });
+
+    try {
+      for (const dependency of removed) {
+        await removeIssueDependency.mutateAsync(dependency.issueId);
+      }
+
+      for (const dependency of changed) {
+        await removeIssueDependency.mutateAsync(dependency.issueId);
+        await addIssueDependency.mutateAsync({ issueId: dependency.issueId, relation: dependency.relation });
+      }
+
+      for (const dependency of added) {
+        await addIssueDependency.mutateAsync({ issueId: dependency.issueId, relation: dependency.relation });
+      }
+
+      showToast('Dependencies updated.', 'success');
+    } catch (error) {
+      setSystemDependencies(previousDependencies);
+      showToast(getApiErrorMessage(error) || 'Failed to update dependencies.', 'error');
+    }
+  };
+
+  const handleWatcherIdsChange = async (nextWatcherIds: string[]) => {
+    const previousWatcherIds = systemWatcherIds;
+    setSystemWatcherIds(nextWatcherIds);
+
+    const previousSet = new Set(previousWatcherIds);
+    const nextSet = new Set(nextWatcherIds);
+    const addedUserIds = nextWatcherIds.filter((watcherId) => !previousSet.has(watcherId));
+    const removedUserIds = previousWatcherIds.filter((watcherId) => !nextSet.has(watcherId));
+
+    try {
+      if (addedUserIds.length > 0) {
+        await addIssueWatchers.mutateAsync({ userIds: addedUserIds });
+      }
+
+      for (const watcherId of removedUserIds) {
+        await removeIssueWatcher.mutateAsync(watcherId);
+      }
+
+      showToast('Watchers updated.', 'success');
+    } catch (error) {
+      setSystemWatcherIds(previousWatcherIds);
+      showToast(getApiErrorMessage(error) || 'Failed to update watchers.', 'error');
+    }
+  };
+
+  const handleIntegrationRefsChange = async (nextIntegrationRefs: IssueIntegrationRef[]) => {
+    const previousIntegrationRefs = systemIntegrationRefs;
+    setSystemIntegrationRefs(nextIntegrationRefs);
+
+    try {
+      await updateIssueIntegrationRefs.mutateAsync({ integrationRefs: nextIntegrationRefs });
+      showToast('Integration references updated.', 'success');
+    } catch (error) {
+      setSystemIntegrationRefs(previousIntegrationRefs);
+      showToast(getApiErrorMessage(error) || 'Failed to update integration references.', 'error');
+    }
+  };
+
+  useEffect(() => {
+    if (!isEditingDescription) return undefined;
+
+    const handlePointerDown = (event: MouseEvent | TouchEvent) => {
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (descriptionEditorRef.current?.contains(target)) return;
+      void handleDescriptionSave();
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setDescriptionDraft(issue.description ?? '');
+        setIsEditingDescription(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('touchstart', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('touchstart', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [handleDescriptionSave, isEditingDescription, issue?.description]);
+
+  useEffect(() => {
+    if (!isEditingSteps) return undefined;
+
+    const handlePointerDown = (event: MouseEvent | TouchEvent) => {
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (stepsEditorRef.current?.contains(target)) return;
+      void handleTextFieldSave('stepsToReproduce', stepsDraft, issue.stepsToReproduce, () => setIsEditingSteps(false), 'Steps to reproduce');
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setStepsDraft(issue.stepsToReproduce ?? '');
+        setIsEditingSteps(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('touchstart', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('touchstart', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isEditingSteps, issue?.stepsToReproduce, stepsDraft, updateIssue]);
+
+  useEffect(() => {
+    if (!isEditingExpected) return undefined;
+
+    const handlePointerDown = (event: MouseEvent | TouchEvent) => {
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (expectedEditorRef.current?.contains(target)) return;
+      void handleTextFieldSave('expectedBehavior', expectedDraft, issue.expectedBehavior, () => setIsEditingExpected(false), 'Expected behavior');
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setExpectedDraft(issue.expectedBehavior ?? '');
+        setIsEditingExpected(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('touchstart', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('touchstart', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [expectedDraft, isEditingExpected, issue?.expectedBehavior, updateIssue]);
+
+  useEffect(() => {
+    if (!isEditingActual) return undefined;
+
+    const handlePointerDown = (event: MouseEvent | TouchEvent) => {
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (actualEditorRef.current?.contains(target)) return;
+      void handleTextFieldSave('actualBehavior', actualDraft, issue.actualBehavior, () => setIsEditingActual(false), 'Actual behavior');
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setActualDraft(issue.actualBehavior ?? '');
+        setIsEditingActual(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('touchstart', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('touchstart', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [actualDraft, isEditingActual, issue?.actualBehavior, updateIssue]);
+
+  useEffect(() => {
+    if (!isEditingAcceptance) return undefined;
+
+    const handlePointerDown = (event: MouseEvent | TouchEvent) => {
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (acceptanceEditorRef.current?.contains(target)) return;
+      void handleTextFieldSave('acceptanceCriteria', acceptanceDraft, issue.acceptanceCriteria, () => setIsEditingAcceptance(false), 'Acceptance criteria');
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setAcceptanceDraft(issue.acceptanceCriteria ?? '');
+        setIsEditingAcceptance(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('touchstart', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('touchstart', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [acceptanceDraft, isEditingAcceptance, issue?.acceptanceCriteria, updateIssue]);
 
   const handleAddAttachments = async () => {
     if (!issue || newAttachments.length === 0) {
@@ -448,27 +818,6 @@ export const IssueDetailPage: React.FC = () => {
               {deleteIssue.isPending ? <Loader2 size={18} className="animate-spin" /> : <Trash2 size={18} />}
             </button>
           )}
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setIsIssueMenuOpen((current) => !current)}
-              className="rounded-md p-1.5 text-gray-400 transition-colors hover:bg-gray-100 dark:hover:bg-white/5"
-              title="Issue actions"
-            >
-              <MoreHorizontal size={18} />
-            </button>
-            {isIssueMenuOpen && issue && (
-              <div className="absolute right-0 top-10 z-20 min-w-[180px] rounded-xl border border-gray-200 bg-white p-1.5 shadow-xl dark:border-border-dark dark:bg-card-dark">
-                <button
-                  type="button"
-                  onClick={handleOpenAssignDialog}
-                  className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-gray-200 dark:hover:bg-white/5 dark:hover:text-white"
-                >
-                  Add To Cycle
-                </button>
-              </div>
-            )}
-          </div>
         </div>
       </header>
 
@@ -477,7 +826,18 @@ export const IssueDetailPage: React.FC = () => {
           <div className="mx-auto max-w-3xl space-y-10">
             <div className="space-y-6">
               <div className="flex flex-wrap items-center gap-3">
-                <TypeBadge type={issue.type || 'task'} />
+                <div className="relative group">
+                  <select
+                    value={issue.type || 'task'}
+                    onChange={(event) => void handleTypeChange(event.target.value as IssueType)}
+                    className={`cursor-pointer appearance-none rounded px-2 py-0.5 pr-6 text-[10px] font-bold uppercase tracking-wider outline-none transition-all hover:opacity-90 ${ISSUE_TYPE_CONFIG[issue.type || 'task'].color}`}
+                  >
+                    <option value="task">Task</option>
+                    <option value="bug">Bug</option>
+                    <option value="issue">Issue</option>
+                  </select>
+                  <ChevronDown size={12} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-current opacity-70" />
+                </div>
                 <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-gray-400">
                   <span>Created by</span>
                   <div className="flex items-center gap-1.5 text-gray-900 dark:text-gray-100">
@@ -493,53 +853,167 @@ export const IssueDetailPage: React.FC = () => {
                 </div>
               </div>
 
-              <h1 className="text-3xl font-bold tracking-tight text-gray-900 dark:text-gray-100">{issue.title}</h1>
+              <div className="space-y-3">
+                {isEditingTitle ? (
+                  <div className="rounded-xl border border-gray-200/80 px-1 dark:border-border-dark">
+                    <input
+                      type="text"
+                      value={titleDraft}
+                      onChange={(event) => setTitleDraft(event.target.value)}
+                      onBlur={() => void handleTitleSave()}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' && !event.shiftKey) {
+                          event.preventDefault();
+                          void handleTitleSave();
+                        }
+                        if (event.key === 'Escape') {
+                          setTitleDraft(issue.title);
+                          setIsEditingTitle(false);
+                        }
+                      }}
+                      autoFocus
+                      className="w-full border-none bg-transparent px-0 py-0 text-3xl font-bold tracking-tight text-gray-900 outline-none ring-0 dark:text-gray-100"
+                    />
+                  </div>
+                ) : (
+                  <h1
+                    onClick={() => setIsEditingTitle(true)}
+                    className="cursor-text text-3xl font-bold tracking-tight text-gray-900 transition-colors hover:text-primary dark:text-gray-100 dark:hover:text-primary"
+                  >
+                    {issue.title}
+                  </h1>
+                )}
+              </div>
             </div>
 
             <div className="space-y-4">
               <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400">Description</h3>
-              <div className="rounded-xl p-4 -mx-4 transition-colors hover:bg-gray-50 dark:hover:bg-white/5">
-                {renderRichText(issue.description, 'No description provided.')}
+              <div className="-mx-4">
+                {isEditingDescription ? (
+                  <div
+                    ref={descriptionEditorRef}
+                    className={ISSUE_LONGFORM_CARD}
+                  >
+                    <RichTextEditor
+                      value={descriptionDraft}
+                      onChange={setDescriptionDraft}
+                      placeholder="Add issue details, context, and requirements..."
+                      minHeight="220px"
+                      variant="inline"
+                      interpretMarkdown
+                      contentClassName={ISSUE_LONGFORM_RICH_TEXT}
+                    />
+                  </div>
+                ) : (
+                  <div
+                    onClick={() => setIsEditingDescription(true)}
+                    className={`cursor-text ${ISSUE_LONGFORM_CARD}`}
+                  >
+                    {renderRichText(issue.description, 'Click to add description.')}
+                  </div>
+                )}
               </div>
             </div>
 
             {issue.type === 'bug' && (
               <div className="space-y-8 border-t border-gray-100 pt-8 dark:border-border-dark">
-                {issue.stepsToReproduce && (
-                  <div className="space-y-3">
-                    <h4 className="text-sm font-bold uppercase tracking-wider text-gray-400">Steps to Reproduce</h4>
-                    <div className="rounded-xl bg-gray-50 p-4 text-sm leading-relaxed text-gray-600 dark:bg-white/5 dark:text-gray-400">
-                      <p className="whitespace-pre-wrap">{issue.stepsToReproduce}</p>
+                <div className="space-y-3">
+                  <h4 className="text-sm font-bold uppercase tracking-wider text-gray-400">Steps to Reproduce</h4>
+                  {isEditingSteps ? (
+                    <div ref={stepsEditorRef} className={ISSUE_LONGFORM_CARD}>
+                      <RichTextEditor
+                        value={stepsDraft}
+                        onChange={setStepsDraft}
+                        placeholder="Click to add steps to reproduce."
+                        minHeight="180px"
+                        variant="inline"
+                        interpretMarkdown
+                        contentClassName={ISSUE_LONGFORM_RICH_TEXT}
+                      />
                     </div>
-                  </div>
-                )}
+                  ) : (
+                    <div
+                      onClick={() => setIsEditingSteps(true)}
+                      className={`cursor-text ${ISSUE_LONGFORM_CARD}`}
+                    >
+                      {renderRichText(issue.stepsToReproduce, 'Click to add steps to reproduce.')}
+                    </div>
+                  )}
+                </div>
                 <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
-                  {issue.expectedBehavior && (
-                    <div className="space-y-3">
-                      <h4 className="text-sm font-bold uppercase tracking-wider text-gray-400">Expected Behavior</h4>
-                      <div className="rounded-xl border border-emerald-500/10 bg-emerald-500/5 p-4 text-sm leading-relaxed text-gray-600 dark:text-gray-400">
-                        <p className="whitespace-pre-wrap">{issue.expectedBehavior}</p>
+                  <div className="space-y-3">
+                    <h4 className="text-sm font-bold uppercase tracking-wider text-gray-400">Expected Behavior</h4>
+                    {isEditingExpected ? (
+                      <div ref={expectedEditorRef} className={ISSUE_LONGFORM_CARD}>
+                        <RichTextEditor
+                          value={expectedDraft}
+                          onChange={setExpectedDraft}
+                          placeholder="Click to add expected behavior."
+                          minHeight="180px"
+                          variant="inline"
+                          interpretMarkdown
+                          contentClassName={ISSUE_LONGFORM_RICH_TEXT}
+                        />
                       </div>
-                    </div>
-                  )}
-                  {issue.actualBehavior && (
-                    <div className="space-y-3">
-                      <h4 className="text-sm font-bold uppercase tracking-wider text-gray-400">Actual Behavior</h4>
-                      <div className="rounded-xl border border-red-500/10 bg-red-500/5 p-4 text-sm leading-relaxed text-gray-600 dark:text-gray-400">
-                        <p className="whitespace-pre-wrap">{issue.actualBehavior}</p>
+                    ) : (
+                      <div
+                        onClick={() => setIsEditingExpected(true)}
+                        className={`cursor-text ${ISSUE_LONGFORM_CARD}`}
+                      >
+                        {renderRichText(issue.expectedBehavior, 'Click to add expected behavior.')}
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
+                  <div className="space-y-3">
+                    <h4 className="text-sm font-bold uppercase tracking-wider text-gray-400">Actual Behavior</h4>
+                    {isEditingActual ? (
+                      <div ref={actualEditorRef} className={ISSUE_LONGFORM_CARD}>
+                        <RichTextEditor
+                          value={actualDraft}
+                          onChange={setActualDraft}
+                          placeholder="Click to add actual behavior."
+                          minHeight="180px"
+                          variant="inline"
+                          interpretMarkdown
+                          contentClassName={ISSUE_LONGFORM_RICH_TEXT}
+                        />
+                      </div>
+                    ) : (
+                      <div
+                        onClick={() => setIsEditingActual(true)}
+                        className={`cursor-text ${ISSUE_LONGFORM_CARD}`}
+                      >
+                        {renderRichText(issue.actualBehavior, 'Click to add actual behavior.')}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
 
-            {issue.type === 'issue' && issue.acceptanceCriteria && (
+            {issue.type === 'issue' && (
               <div className="space-y-4 border-t border-gray-100 pt-8 dark:border-border-dark">
                 <h4 className="text-sm font-bold uppercase tracking-wider text-gray-400">Acceptance Criteria</h4>
-                <div className="rounded-xl border border-primary/10 bg-primary/[0.04] p-4 text-sm leading-relaxed text-gray-600 dark:text-gray-400">
-                  <p className="whitespace-pre-wrap">{issue.acceptanceCriteria}</p>
-                </div>
+                {isEditingAcceptance ? (
+                  <div ref={acceptanceEditorRef} className={ISSUE_LONGFORM_CARD}>
+                    <RichTextEditor
+                      value={acceptanceDraft}
+                      onChange={setAcceptanceDraft}
+                      placeholder="Click to add acceptance criteria."
+                      minHeight="180px"
+                      variant="inline"
+                      interpretMarkdown
+                      contentClassName={ISSUE_LONGFORM_RICH_TEXT}
+                    />
+                  </div>
+                ) : (
+                  <div
+                    onClick={() => setIsEditingAcceptance(true)}
+                    className={`cursor-text ${ISSUE_LONGFORM_CARD}`}
+                  >
+                    {renderRichText(issue.acceptanceCriteria, 'Click to add acceptance criteria.')}
+                  </div>
+                )}
               </div>
             )}
 
@@ -720,8 +1194,8 @@ export const IssueDetailPage: React.FC = () => {
           </div>
         </div>
 
-        <aside className="hidden w-[320px] shrink-0 border-l border-gray-200 bg-gray-50/70 p-6 dark:border-border-dark dark:bg-black/20 xl:block">
-          <div className="space-y-6">
+        <aside className="hidden h-full w-[320px] shrink-0 overflow-y-auto border-l border-gray-200 bg-gray-50/70 p-6 scrollbar-hide dark:border-border-dark dark:bg-black/20 xl:block">
+          <div className="space-y-6 pb-8">
             <div className="grid grid-cols-[110px_1fr] gap-y-5 text-sm">
               <FieldLabel icon={<CheckCircle2 size={14} />}>Status</FieldLabel>
               <StatusSelect
@@ -775,6 +1249,24 @@ export const IssueDetailPage: React.FC = () => {
               <div className="text-xs font-medium text-gray-500 dark:text-gray-400">
                 {issue.attachments.length} attached
               </div>
+
+              <FieldLabel icon={<CalendarRange size={14} />}>Cycle</FieldLabel>
+              <div className="relative group">
+                <select
+                  value={issue.cycleId || ''}
+                  onChange={(event) => void handleCycleChange(event.target.value)}
+                  disabled={cyclesQuery.isLoading || assignIssueToCycle.isPending || unassignIssueFromCycle.isPending}
+                  className="w-full cursor-pointer appearance-none rounded-lg border border-transparent bg-transparent px-2 py-1 text-xs font-medium outline-none transition-all hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60 dark:hover:bg-white/5"
+                >
+                  <option value="">{cyclesQuery.isLoading ? 'Loading cycles...' : 'Backlog / No cycle'}</option>
+                  {availableCycles.map((cycle) => (
+                    <option key={cycle.id} value={cycle.id}>
+                      {cycle.name}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown size={12} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 opacity-0 transition-opacity group-hover:opacity-100" />
+              </div>
             </div>
 
             <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-border-dark dark:bg-card-dark">
@@ -812,17 +1304,23 @@ export const IssueDetailPage: React.FC = () => {
                 />
               </div>
             </div>
+
+            <div className="h-px bg-gray-100 dark:bg-border-dark" />
+
+            <IssueSystemParametersPanel
+              projectId={issue.projectId}
+              parentIssueId={systemParentIssueId}
+              dependencies={systemDependencies}
+              watcherIds={systemWatcherIds}
+              integrationRefs={systemIntegrationRefs}
+              onParentIssueIdChange={(nextParentIssueId) => void handleParentIssueChange(nextParentIssueId)}
+              onDependenciesChange={(nextDependencies) => void handleDependenciesChange(nextDependencies)}
+              onWatcherIdsChange={(nextWatcherIds) => void handleWatcherIdsChange(nextWatcherIds)}
+              onIntegrationRefsChange={(nextIntegrationRefs) => void handleIntegrationRefsChange(nextIntegrationRefs)}
+            />
           </div>
         </aside>
       </div>
-      {issue && (
-        <AssignIssuesToCycleDialog
-          open={isAssignDialogOpen}
-          onClose={() => setIsAssignDialogOpen(false)}
-          teamId={issue.teamId}
-          issueIds={[issue.id]}
-        />
-      )}
       {projectAssignmentDialog}
     </motion.div>
   );

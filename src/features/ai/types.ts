@@ -22,8 +22,27 @@ export interface AiGeneratedIssue {
   severity: 'low' | 'medium' | 'high' | null;
   acceptanceCriteria: string | null;
   notes: string | null;
+  previewSuggestions: Array<{
+    type: 'LABEL' | 'DUPLICATE' | 'ASSIGNEE';
+    title: string;
+    message: string;
+    confidence: number | null;
+    payload: Record<string, unknown>;
+  }>;
   aiModel: string;
   tokensUsed: number;
+}
+
+export interface AiDraftSuggestion {
+  type: 'LABEL' | 'DUPLICATE' | 'ASSIGNEE';
+  title: string;
+  message: string;
+  confidence: number | null;
+  payload: Record<string, unknown>;
+}
+
+export interface AiDraftSuggestionsResponse {
+  suggestions: AiDraftSuggestion[];
 }
 
 /** AI needs more context from the user */

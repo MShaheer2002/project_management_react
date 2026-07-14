@@ -33,6 +33,7 @@ export const TopNavbar: React.FC = () => {
   const navigate = useNavigate();
   const unreadNotifications = useUnreadNotificationsCount({ enabled: true });
   const unreadCount = unreadNotifications.data?.unread ?? 0;
+  const unreadBadgeLabel = unreadCount > 9 ? '9+' : String(unreadCount);
 
   /** Logout — clear store + Clerk sign-out */
   const handleLogout = async () => {
@@ -87,7 +88,9 @@ export const TopNavbar: React.FC = () => {
         >
           <Bell size={18} />
           {unreadCount > 0 && (
-            <span className="absolute top-2 right-2 w-2 h-2 bg-primary rounded-full border-2 border-white dark:border-bg-dark" />
+            <span className="absolute -right-1 -top-1 inline-flex min-w-[18px] items-center justify-center rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-bold leading-none text-white shadow-sm">
+              {unreadBadgeLabel}
+            </span>
           )}
         </button>
 

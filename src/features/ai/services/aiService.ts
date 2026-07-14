@@ -5,6 +5,7 @@ import type {
   AiAssistResponse,
   AiChatEventType,
   AiConversation,
+  AiDraftSuggestionsResponse,
   AiGenerateIssueResponse,
   AiMessage,
   AiModelInfo,
@@ -39,6 +40,21 @@ export const aiService = {
   }): Promise<AiGenerateIssueResponse> => {
     const { data } = await privateApi.post<ApiResponse<AiGenerateIssueResponse>>(
       '/ai/generate-issue',
+      input,
+      { timeout: 60000 },
+    );
+    return data.data;
+  },
+
+  getDraftSuggestions: async (input: {
+    title: string;
+    description?: string;
+    projectId?: string;
+    assigneeId?: string | null;
+    currentLabels?: string[];
+  }): Promise<AiDraftSuggestionsResponse> => {
+    const { data } = await privateApi.post<ApiResponse<AiDraftSuggestionsResponse>>(
+      '/ai/draft-suggestions',
       input,
       { timeout: 60000 },
     );

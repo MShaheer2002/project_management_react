@@ -45,10 +45,11 @@ import { LabelChip } from '@shared/components/ui/LabelChip';
 import { getApiFieldErrors, getApiErrorMessage } from '@shared/services';
 import { addDaysToDateInput, normalizeDateForInput, normalizeTimeForInput } from '@shared/utils/date';
 import { useDepartmentOptions } from '@features/department';
+import { useCycles } from '@features/cycles';
 import { useActiveTemplates } from '@features/templates';
 import { useProjectOptions } from '@features/projects';
 import { useWorkspaceMemberOptions } from '@features/workspace';
-import { AiIssueGenerator } from '@features/ai';
+import { AiIssueGenerator, IssueGenerationSuggestions, useGenerateDraftSuggestions } from '@features/ai';
 import type { AiGeneratedIssue } from '@features/ai';
 import {
   IssueLabelRow,
@@ -75,6 +76,7 @@ type IssueDraftSnapshot = {
   description?: string;
   type?: IssueType;
   projectId?: string;
+  cycleId?: string;
   priority?: Priority;
   status?: Status;
   templateId?: string;
@@ -109,12 +111,14 @@ export const CreateIssuePage: React.FC = () => {
   const workspaceId = useAuthStore((s) => s.workspace?.id);
   const workspaceStatuses = useWorkspaceStatuses();
   const draftKey = `issue_draft:${workspaceId ?? 'unknown'}`;
+  const scopedTeamId = searchParams.get('teamId') || undefined;
 
   // Form State
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [type, setType] = useState<IssueType>('task');
   const [projectId, setProjectId] = useState('');
+  const [cycleId, setCycleId] = useState('');
   const [priority, setPriority] = useState<Priority>('medium');
   const [status, setStatus] = useState<Status>('todo');
   const [assigneeId, setAssigneeId] = useState<string | undefined>(undefined);
@@ -151,9 +155,11 @@ export const CreateIssuePage: React.FC = () => {
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [showLabelDropdown, setShowLabelDropdown] = useState(false);
   const [showComplexityDialog, setShowComplexityDialog] = useState(false);
+  const [aiPreviewSuggestions, setAiPreviewSuggestions] = useState<AiGeneratedIssue['previewSuggestions']>([]);
   const [newSubtask, setNewSubtask] = useState('');
   const labelRef = useRef<HTMLDivElement>(null);
   const projectOptionsQuery = useProjectOptions({
+    teamId: scopedTeamId,
     sort: 'name:asc',
     limit: 100,
   });
@@ -172,6 +178,7 @@ export const CreateIssuePage: React.FC = () => {
     { enabled: true }
   );
   const createIssue = useCreateIssue();
+  const generateDraftSuggestions = useGenerateDraftSuggestions();
   const checkAssignmentEligibility = useCheckIssueAssignmentEligibility();
   const { dialog: projectAssignmentDialog, openAssignmentDialog, handleAssignmentError } = useProjectAssignmentGuard();
   const updateAnyIssue = useUpdateAnyIssue();
@@ -189,12 +196,29 @@ export const CreateIssuePage: React.FC = () => {
     { enabled: true }
   );
   const projectOptions = projectOptionsQuery.data?.pages.flatMap((page) => page.items) ?? [];
+  const selectedProject = useMemo(
+    () => projectOptions.find((project) => project.id === projectId) ?? null,
+    [projectId, projectOptions],
+  );
+  const cyclesQuery = useCycles(
+    {
+      teamId: selectedProject?.teamId,
+      sort: 'number:desc',
+      limit: 50,
+    },
+    { enabled: Boolean(selectedProject?.teamId) }
+  );
+  const availableCycles = useMemo(
+    () => (cyclesQuery.data?.pages.flatMap((page) => page.items) ?? []).filter((cycle) => cycle.status !== 'COMPLETED'),
+    [cyclesQuery.data],
+  );
   const departmentOptions = departmentOptionsQuery.data?.pages.flatMap((page) => page.items) ?? [];
   const assigneeOptions = assigneeOptionsQuery.data?.pages.flatMap((page) => page.items) ?? [];
   const labels = labelsQuery.data?.pages.flatMap((page) => page.items) ?? [];
   const issueDraftFromRoute = (location.state as { issueDraft?: IssueDraftSnapshot } | null)?.issueDraft ?? null;
   const activeTemplatesQuery = useActiveTemplates({});
   const activeTemplates = activeTemplatesQuery.data ?? [];
+  const cycleParam = searchParams.get('cycleId');
   const effectiveTemplate = useMemo(() => {
     return activeTemplates.find((template) => template.issueType === type) ?? null;
   }, [activeTemplates, type]);
@@ -207,6 +231,7 @@ export const CreateIssuePage: React.FC = () => {
     setDescription(draft.description || '');
     setType(draft.type || 'task');
     setProjectId(draft.projectId || '');
+    setCycleId(draft.cycleId || '');
     setPriority(draft.priority || 'medium');
     setStatus(draft.status || 'todo');
     setAssigneeId(draft.assigneeId || undefined);
@@ -245,19 +270,32 @@ export const CreateIssuePage: React.FC = () => {
 
   useEffect(() => {
     if (projectOptions.length === 0) return;
+    const projectParam = searchParams.get('projectId');
 
     setProjectId((current) => {
+      if (projectParam && projectOptions.some((option) => option.id === projectParam)) {
+        return projectParam;
+      }
+
       if (current && projectOptions.some((option) => option.id === current)) {
         return current;
       }
 
       return projectOptions[0].id;
     });
-  }, [projectOptions]);
+  }, [projectOptions, searchParams]);
+
+  useEffect(() => {
+    if (!cycleId) return;
+    if (cyclesQuery.isLoading) return;
+    if (availableCycles.some((cycle) => cycle.id === cycleId)) return;
+    setCycleId('');
+  }, [availableCycles, cycleId, cyclesQuery.isLoading]);
 
   useEffect(() => {
     const statusParam = searchParams.get('status');
     const projectParam = searchParams.get('projectId');
+    const cycleParam = searchParams.get('cycleId');
 
     if (statusParam && workspaceStatuses.some((s) => s.key === statusParam)) {
       setStatus(statusParam as Status);
@@ -266,7 +304,18 @@ export const CreateIssuePage: React.FC = () => {
     if (projectParam) {
       setProjectId(projectParam);
     }
-  }, [searchParams]);
+
+    if (cycleParam) {
+      setCycleId(cycleParam);
+    }
+  }, [searchParams, workspaceStatuses]);
+
+  useEffect(() => {
+    if (!cycleParam || cyclesQuery.isLoading) return;
+    if (!availableCycles.some((cycle) => cycle.id === cycleParam)) return;
+    if (cycleId === cycleParam) return;
+    setCycleId(cycleParam);
+  }, [availableCycles, cycleId, cycleParam, cyclesQuery.isLoading]);
 
   const resetTemplateDrivenState = (nextType: IssueType) => {
     lastAppliedRef.current = null;
@@ -278,6 +327,7 @@ export const CreateIssuePage: React.FC = () => {
     setStatus('todo');
     setEstimate(nextType === 'task' ? '1' : '');
     setSelectedLabelIds([]);
+    setCycleId('');
     setSubtasks([]);
     setStepsToReproduce('');
     setExpectedBehavior('');
@@ -383,6 +433,7 @@ export const CreateIssuePage: React.FC = () => {
         priority,
         assigneeId: assigneeId || null,
         projectId,
+        cycleId: cycleId || null,
         labels: [],
         dueDate: dueDate || null,
         dueTime: dueTime || null,
@@ -418,6 +469,7 @@ export const CreateIssuePage: React.FC = () => {
     actualBehavior,
     assigneeId,
     attachments,
+    cycleId,
     departmentId,
     description,
     dueDate,
@@ -640,6 +692,7 @@ export const CreateIssuePage: React.FC = () => {
       description,
       type,
       projectId,
+      cycleId,
       priority,
       status,
       templateId,
@@ -668,7 +721,7 @@ export const CreateIssuePage: React.FC = () => {
       setIsSaving(false);
       setLastSaved(new Date());
     }, 800);
-  }, [title, description, type, projectId, priority, status, selectedTemplateId, lastAutoAppliedType, assigneeId, departmentId, dueDate, dueTime, estimate, selectedLabelIds, subtasks, stepsToReproduce, expectedBehavior, actualBehavior, severity, acceptanceCriteria, relatedIssues, notes, parentIssueId, dependencies, watcherIds, integrationRefs, attachments]);
+  }, [title, description, type, projectId, cycleId, priority, status, selectedTemplateId, lastAutoAppliedType, assigneeId, departmentId, dueDate, dueTime, estimate, selectedLabelIds, subtasks, stepsToReproduce, expectedBehavior, actualBehavior, severity, acceptanceCriteria, relatedIssues, notes, parentIssueId, dependencies, watcherIds, integrationRefs, attachments]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -759,6 +812,7 @@ export const CreateIssuePage: React.FC = () => {
                 setType(data.type);
                 setPriority(data.priority);
                 setDescription(data.description);
+                setAiPreviewSuggestions([]);
 
                 if (data.suggestedAssigneeId) setAssigneeId(data.suggestedAssigneeId);
                 if (data.suggestedProjectId) setProjectId(data.suggestedProjectId);
@@ -811,6 +865,33 @@ export const CreateIssuePage: React.FC = () => {
                   }));
                   setIntegrationRefs((prev) => [...prev, ...figmaRefs]);
                 }
+
+                void generateDraftSuggestions.mutateAsync({
+                  title: data.title,
+                  description: data.description,
+                  projectId: data.suggestedProjectId ?? undefined,
+                  assigneeId: data.suggestedAssigneeId,
+                  currentLabels: data.suggestedLabels,
+                }).then((result) => {
+                  setAiPreviewSuggestions(result.suggestions);
+                }).catch(() => {
+                  setAiPreviewSuggestions([]);
+                });
+              }}
+            />
+
+            <IssueGenerationSuggestions
+              suggestions={aiPreviewSuggestions}
+              isLoading={generateDraftSuggestions.isPending}
+              selectedLabelNames={selectedLabels.map((label) => label.name)}
+              selectedAssigneeId={assigneeId}
+              onApplyLabel={(labelName) => {
+                const match = labels.find((label) => label.name.toLowerCase() === labelName.toLowerCase());
+                if (!match) return;
+                setSelectedLabelIds((current) => (current.includes(match.id) ? current : [...current, match.id]));
+              }}
+              onApplyAssignee={(userId) => {
+                setAssigneeId(userId);
               }}
             />
 
@@ -1098,6 +1179,34 @@ export const CreateIssuePage: React.FC = () => {
                         )}
                       </select>
                       <ChevronDown size={14} className="absolute right-5 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-600 pointer-events-none group-hover:text-primary transition-colors" />
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-bold uppercase tracking-[0.15em] text-gray-400 flex items-center gap-2.5">
+                      <CalendarIcon size={13} className="text-primary" /> Cycle
+                    </label>
+                    <div className="relative group">
+                      <select
+                        value={cycleId}
+                        onChange={(e) => setCycleId(e.target.value)}
+                        className="w-full bg-gray-50 dark:bg-white/5 border border-transparent px-5 py-4 text-sm font-medium rounded-2xl shadow-sm outline-none appearance-none focus:ring-2 focus:ring-primary/20 transition-all group-hover:bg-gray-100 dark:group-hover:bg-white/10"
+                        disabled={!projectId || cyclesQuery.isLoading}
+                      >
+                        <option value="">
+                          {cyclesQuery.isLoading
+                            ? 'Loading cycles...'
+                            : availableCycles.length > 0
+                              ? 'Backlog / No cycle'
+                              : 'No open cycles'}
+                        </option>
+                        {availableCycles.map((cycle) => (
+                          <option key={cycle.id} value={cycle.id}>
+                            {cycle.name} · {cycle.status.toLowerCase()}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown size={14} className="absolute right-5 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-600 pointer-events-none" />
                     </div>
                   </div>
 

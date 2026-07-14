@@ -30,3 +30,24 @@ export const useGenerateIssue = () => {
     },
   });
 };
+
+export const useGenerateDraftSuggestions = () => {
+  const showToast = useToastStore((s) => s.showToast);
+
+  return useMutation({
+    mutationFn: (input: {
+      title: string;
+      description?: string;
+      projectId?: string;
+      assigneeId?: string | null;
+      currentLabels?: string[];
+    }) => aiService.getDraftSuggestions(input),
+    onError: (err: ApiAxiosError) => {
+      console.error('[AI Draft Suggestions Error]', err.response?.data || err.message);
+      showToast(
+        err.response?.data?.error?.message || 'AI suggestions could not be loaded.',
+        'error',
+      );
+    },
+  });
+};

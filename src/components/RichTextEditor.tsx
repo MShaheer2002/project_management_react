@@ -18,6 +18,9 @@ interface RichTextEditorProps {
   placeholder?: string;
   minHeight?: string;
   className?: string;
+  variant?: 'default' | 'inline';
+  interpretMarkdown?: boolean;
+  contentClassName?: string;
 }
 
 const escapeHtml = (value: string) =>
@@ -103,11 +106,17 @@ const markdownToEditorHtml = (value: string) => {
   return blocks.join('');
 };
 
-const normalizeEditorValue = (value: string) => {
+export const normalizeRichTextValue = (value: string) => {
   if (!value) return '';
   if (looksLikeHtml(value)) return value;
   if (looksLikeMarkdown(value)) return markdownToEditorHtml(value);
   return value;
+};
+
+const normalizePlainTextValue = (value: string) => {
+  if (!value) return '';
+  if (looksLikeHtml(value)) return value;
+  return escapeHtml(value).replace(/\n/g, '<br />');
 };
 
 export const RichTextEditor: React.FC<RichTextEditorProps> = ({ 
@@ -115,7 +124,10 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   onChange, 
   placeholder = 'Write something visual...', 
   minHeight = '300px',
-  className = ''
+  className = '',
+  variant = 'default',
+  interpretMarkdown = true,
+  contentClassName = '',
 }) => {
   const editorRef = useRef<HTMLDivElement>(null);
   const [isFocused, setIsFocused] = useState(false);
@@ -123,11 +135,11 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
 
   // Sync state to editor only once or when value is changed externally (rare)
   useEffect(() => {
-    const normalizedValue = normalizeEditorValue(value);
+    const normalizedValue = interpretMarkdown ? normalizeRichTextValue(value) : normalizePlainTextValue(value);
     if (editorRef.current && editorRef.current.innerHTML !== normalizedValue) {
       editorRef.current.innerHTML = normalizedValue;
     }
-  }, [value]);
+  }, [interpretMarkdown, value]);
 
   const handleInput = useCallback(() => {
     if (editorRef.current) {
@@ -201,6 +213,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   };
 
   const isEmpty = !value || value === '<br>' || value === '';
+  const isInline = variant === 'inline';
 
   return (
     <div className={`relative flex flex-col group transition-all ${className}`}>
@@ -235,16 +248,18 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       </AnimatePresence>
 
       {/* Surface Indicator */}
-      <div 
-        className={`absolute inset-0 rounded-2xl border-2 transition-all duration-300 pointer-events-none ${
-          isFocused ? 'border-primary/30 shadow-lg shadow-primary/5 ring-2 ring-primary/10' : 'border-gray-200 dark:border-border-dark'
-        }`} 
-      />
+      {!isInline && (
+        <div 
+          className={`absolute inset-0 rounded-2xl border-2 transition-all duration-300 pointer-events-none ${
+            isFocused ? 'border-primary/30 shadow-lg shadow-primary/5 ring-2 ring-primary/10' : 'border-gray-200 dark:border-border-dark'
+          }`} 
+        />
+      )}
 
       {/* Professional Editor Surface */}
-      <div className="relative p-8 overflow-hidden rounded-2xl bg-white dark:bg-transparent">
+      <div className={`relative overflow-hidden rounded-2xl ${isInline ? 'bg-transparent p-0' : 'bg-white p-8 dark:bg-transparent'}`}>
         {isEmpty && !isFocused && (
-          <div className="absolute top-8 left-8 text-gray-400 dark:text-gray-600 font-medium italic text-base pointer-events-none">
+          <div className={`absolute text-gray-400 dark:text-gray-600 font-medium italic text-base pointer-events-none ${isInline ? 'left-0 top-0' : 'left-8 top-8'}`}>
             {placeholder}
           </div>
         )}
@@ -263,7 +278,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
           }}
           onSelect={handleSelection}
           onKeyDown={handleKeyDown}
-          className="rich-text-content w-full bg-transparent border-none outline-none min-h-[300px] text-[15px] leading-7 text-gray-800 dark:text-gray-100 placeholder:text-gray-300 dark:placeholder:text-gray-700 font-sans selection:bg-primary/30"
+          className={`rich-text-content w-full bg-transparent border-none outline-none font-sans selection:bg-primary/30 ${isInline ? 'min-h-[220px] text-base leading-relaxed text-gray-700 dark:text-gray-300 [&_a]:text-primary [&_code]:rounded [&_code]:bg-gray-100 [&_code]:px-1 [&_code]:py-0.5 [&_p]:my-0 [&_p+ol]:mt-4 [&_p+ul]:mt-4 [&_ol]:my-4 [&_ol]:pl-8 [&_ul]:my-4 [&_ul]:pl-8 [&_li]:my-2 dark:[&_code]:bg-white/10' : 'min-h-[300px] text-[15px] leading-7 text-gray-800 dark:text-gray-100'} ${contentClassName} placeholder:text-gray-300 dark:placeholder:text-gray-700`}
           style={{ minHeight }}
         />
       </div>

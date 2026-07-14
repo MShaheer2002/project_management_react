@@ -74,6 +74,12 @@ export interface IssueEntitySummary {
   name: string;
 }
 
+export interface IssueCycleSummary {
+  id: string;
+  name: string;
+  status: 'UPCOMING' | 'CURRENT' | 'COMPLETED';
+}
+
 export interface IssueDepartmentSummary {
   id: string;
   name: string;
@@ -112,6 +118,7 @@ export interface Issue {
   creatorId: string;
   projectId: string;
   teamId: string;
+  cycleId?: string | null;
   labels: string[];
   dueDate?: string;
   dueTime?: string;
@@ -146,6 +153,7 @@ export interface Issue {
   assignee?: IssueUserSummary | null;
   project?: IssueEntitySummary;
   team?: IssueEntitySummary;
+  cycle?: IssueCycleSummary | null;
   department?: IssueDepartmentSummary | null;
 }
 

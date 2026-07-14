@@ -276,7 +276,7 @@ export const IssueSystemParametersPanel: React.FC<IssueSystemParametersPanelProp
               <ChevronRight size={13} />
             </span>
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Parent Linkage</p>
+              <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Parent Issue</p>
               <p className="mt-0.5 text-xs text-gray-400">{parentSummary}</p>
             </div>
           </div>
@@ -289,7 +289,7 @@ export const IssueSystemParametersPanel: React.FC<IssueSystemParametersPanelProp
               <AlertCircle size={13} />
             </span>
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Sub-Dependencies</p>
+              <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Dependencies</p>
               <p className="mt-0.5 text-xs text-gray-400">{dependencySummary}</p>
             </div>
           </div>
@@ -302,7 +302,7 @@ export const IssueSystemParametersPanel: React.FC<IssueSystemParametersPanelProp
               <Users size={13} />
             </span>
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Watchers (Group)</p>
+              <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Watchers</p>
               <p className="mt-0.5 text-xs text-gray-400">{watcherSummary}</p>
             </div>
           </div>
@@ -315,7 +315,7 @@ export const IssueSystemParametersPanel: React.FC<IssueSystemParametersPanelProp
               <LinkIcon size={13} />
             </span>
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Integration Ref</p>
+              <p className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Integration References</p>
               <p className="mt-0.5 text-xs text-gray-400">{integrationSummary}</p>
             </div>
           </div>
@@ -326,7 +326,7 @@ export const IssueSystemParametersPanel: React.FC<IssueSystemParametersPanelProp
       <AnimatePresence>
         {activeDialog === 'parent' && (
           <MiniDialog
-            title="Parent linkage"
+            title="Parent issue"
             subtitle="Link this issue under one parent issue."
             onClose={() => setActiveDialog(null)}
           >

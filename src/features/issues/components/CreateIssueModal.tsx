@@ -8,6 +8,7 @@ import { ISSUE_TYPE_CONFIG } from '@/constants';
 import { Priority, IssueType, Severity, IssueAttachment } from '@/types';
 import { Tag, ChevronDown, Loader2, CheckSquare, Bug, Zap } from 'lucide-react';
 import { getApiErrorMessage } from '@shared/services';
+import { useCycles } from '@features/cycles';
 import { useProjectOptions } from '@features/projects';
 import { useWorkspaceMemberOptions } from '@features/workspace';
 import { RichTextEditor } from '@/components/RichTextEditor';
@@ -20,6 +21,7 @@ const issueSchema = z.object({
   description: z.string().optional(),
   type: z.enum(['task', 'bug', 'issue']),
   projectId: z.string().min(1, 'Project is required'),
+  cycleId: z.string().optional(),
   priority: z.enum(['low', 'medium', 'high', 'urgent']),
   assigneeId: z.string().optional(),
   dueDate: z.string().optional(),
@@ -45,6 +47,16 @@ export const CreateIssueModal: React.FC = () => {
   const createIssue = useCreateIssue();
   const checkAssignmentEligibility = useCheckIssueAssignmentEligibility();
   const projectOptions = projectOptionsQuery.data?.pages.flatMap((page) => page.items) ?? [];
+  const selectedProject = projectOptions.find((project) => project.id === watch('projectId'));
+  const cyclesQuery = useCycles(
+    {
+      teamId: selectedProject?.teamId,
+      sort: 'number:desc',
+      limit: 50,
+    },
+    { enabled: activeModal === 'create-issue' && Boolean(selectedProject?.teamId) }
+  );
+  const availableCycles = (cyclesQuery.data?.pages.flatMap((page) => page.items) ?? []).filter((cycle) => cycle.status !== 'COMPLETED');
   const assigneeOptions = assigneeOptionsQuery.data?.pages.flatMap((page) => page.items) ?? [];
   const { dialog: projectAssignmentDialog, openAssignmentDialog, handleAssignmentError } = useProjectAssignmentGuard();
   
@@ -60,6 +72,7 @@ export const CreateIssueModal: React.FC = () => {
     resolver: zodResolver(issueSchema),
     defaultValues: {
       projectId: '',
+      cycleId: '',
       priority: 'medium',
       assigneeId: '',
       title: '',
@@ -71,6 +84,13 @@ export const CreateIssueModal: React.FC = () => {
   });
 
   const selectedType = watch('type');
+
+  React.useEffect(() => {
+    const currentCycleId = watch('cycleId');
+    if (!currentCycleId) return;
+    if (availableCycles.some((cycle) => cycle.id === currentCycleId)) return;
+    setValue('cycleId', '');
+  }, [availableCycles, setValue, watch]);
 
   React.useEffect(() => {
     if (projectOptions.length === 0) return;
@@ -87,6 +107,7 @@ export const CreateIssueModal: React.FC = () => {
       priority: data.priority,
       assigneeId: data.assigneeId || null,
       projectId: data.projectId,
+      cycleId: data.cycleId || null,
       severity: data.type === 'bug' ? data.severity : undefined,
       dueDate: data.dueDate || null,
       attachments: attachments.map((attachment) => ({
@@ -275,6 +296,31 @@ export const CreateIssueModal: React.FC = () => {
                 <option value="medium">Medium</option>
                 <option value="high">High</option>
                 <option value="urgent">Urgent</option>
+              </select>
+              <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Cycle</label>
+            <div className="relative">
+              <select
+                {...register('cycleId')}
+                className="w-full pl-3 pr-10 py-2 bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-border-dark rounded-lg outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm appearance-none"
+                disabled={!selectedProject || cyclesQuery.isLoading}
+              >
+                <option value="">
+                  {cyclesQuery.isLoading
+                    ? 'Loading cycles...'
+                    : availableCycles.length > 0
+                      ? 'Backlog / No cycle'
+                      : 'No open cycles'}
+                </option>
+                {availableCycles.map((cycle) => (
+                  <option key={cycle.id} value={cycle.id}>
+                    {cycle.name} · {cycle.status.toLowerCase()}
+                  </option>
+                ))}
               </select>
               <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
             </div>

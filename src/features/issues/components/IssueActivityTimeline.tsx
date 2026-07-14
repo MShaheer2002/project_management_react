@@ -39,6 +39,86 @@ const readNamed = (value: unknown) => {
   return typeof maybeName === 'string' && maybeName.trim() ? maybeName : null;
 };
 
+const readIssueRef = (value: unknown) => {
+  if (!value || typeof value !== 'object') return null;
+  const maybeId = (value as { id?: unknown }).id;
+  const maybeTitle = (value as { title?: unknown }).title;
+  return {
+    id: typeof maybeId === 'string' ? maybeId : null,
+    title: typeof maybeTitle === 'string' ? maybeTitle : null,
+  };
+};
+
+const readStringArray = (value: unknown) => {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+};
+
+const areStringArraysEqual = (left: string[], right: string[]) => {
+  if (left.length !== right.length) return false;
+  return left.every((value, index) => value === right[index]);
+};
+
+const isNoopActivity = (item: {
+  type: string;
+  metadata?: Record<string, unknown>;
+}) => {
+  const metadata = item.metadata ?? {};
+  const activityType = typeof metadata.activityKind === 'string' ? metadata.activityKind : item.type;
+
+  if (activityType === 'ISSUE_ASSIGNEE_CHANGED') {
+    const fromId = typeof metadata.fromAssigneeId === 'string' ? metadata.fromAssigneeId : null;
+    const toId = typeof metadata.toAssigneeId === 'string' ? metadata.toAssigneeId : null;
+    const fromName = readNamed(metadata.fromAssignee);
+    const toName = readNamed(metadata.toAssignee);
+
+    if (fromId === toId) return true;
+    if (!fromId && !toId) return true;
+    if (fromName && toName && fromName === toName) return true;
+  }
+
+  if (activityType === 'ISSUE_STATUS_CHANGED') {
+    return metadata.fromStatus === metadata.toStatus;
+  }
+
+  if (activityType === 'ISSUE_PRIORITY_CHANGED') {
+    return metadata.fromPriority === metadata.toPriority;
+  }
+
+  if (activityType === 'ISSUE_DUE_DATE_CHANGED') {
+    return metadata.fromDueDate === metadata.toDueDate;
+  }
+
+  if (activityType === 'ISSUE_DUE_TIME_CHANGED') {
+    return metadata.fromDueTime === metadata.toDueTime;
+  }
+
+  if (activityType === 'ISSUE_ESTIMATE_CHANGED') {
+    return metadata.fromEstimate === metadata.toEstimate;
+  }
+
+  if (activityType === 'ISSUE_TITLE_CHANGED') {
+    return metadata.fromTitle === metadata.toTitle;
+  }
+
+  if (activityType === 'ISSUE_PARENT_CHANGED') {
+    const fromParent = readIssueRef(metadata.fromParent);
+    const toParent = readIssueRef(metadata.toParent);
+    return (fromParent?.id ?? null) === (toParent?.id ?? null);
+  }
+
+  if (activityType === 'ISSUE_LABELS_CHANGED') {
+    const beforeLabels = readStringArray(metadata.previousLabels).slice().sort();
+    const afterLabels = readStringArray(metadata.labels).slice().sort();
+    if (beforeLabels.length === 0 && afterLabels.length === 0) return true;
+    if (beforeLabels.length > 0 && afterLabels.length > 0) {
+      return areStringArraysEqual(beforeLabels, afterLabels);
+    }
+  }
+
+  return false;
+};
+
 const toTitle = (value: string) =>
   value
     .toLowerCase()
@@ -51,10 +131,18 @@ const getActivityMessage = (item: {
   message: string;
   actor?: { name: string };
   metadata?: Record<string, unknown>;
+  issueId?: string;
 }) => {
   const actor = item.actor?.name ?? 'Someone';
+  const activityType = typeof item.metadata?.activityKind === 'string' ? item.metadata.activityKind : item.type;
+  const issuePublicId =
+    typeof item.metadata?.issuePublicId === 'string'
+      ? item.metadata.issuePublicId
+      : typeof item.issueId === 'string'
+        ? item.issueId
+        : 'this issue';
 
-  if (item.type === 'ISSUE_STATUS_CHANGED') {
+  if (activityType === 'ISSUE_STATUS_CHANGED') {
     const fromStatus = getStatusLabel(item.metadata?.fromStatus);
     const toStatus = getStatusLabel(item.metadata?.toStatus);
     if (fromStatus && toStatus) {
@@ -65,7 +153,7 @@ const getActivityMessage = (item: {
     }
   }
 
-  if (item.type === 'ISSUE_PRIORITY_CHANGED') {
+  if (activityType === 'ISSUE_PRIORITY_CHANGED') {
     const fromPriority = item.metadata?.fromPriority;
     const toPriority = item.metadata?.toPriority;
     if (typeof fromPriority === 'string' && typeof toPriority === 'string') {
@@ -73,13 +161,73 @@ const getActivityMessage = (item: {
     }
   }
 
-  if (item.type === 'ISSUE_ASSIGNEE_CHANGED') {
-    const fromAssignee = readNamed(item.metadata?.fromAssignee) ?? 'Unassigned';
-    const toAssignee = readNamed(item.metadata?.toAssignee) ?? 'Unassigned';
-    return `${actor} reassigned issue from ${fromAssignee} to ${toAssignee}`;
+  if (activityType === 'ISSUE_ASSIGNEE_CHANGED') {
+    const fromAssignee = readNamed(item.metadata?.fromAssignee);
+    const toAssignee = readNamed(item.metadata?.toAssignee);
+    if (!fromAssignee && !toAssignee) {
+      return `${actor} updated the assignee`;
+    }
+    return `${actor} reassigned issue from ${fromAssignee ?? 'Unassigned'} to ${toAssignee ?? 'Unassigned'}`;
   }
 
-  if (item.type === 'ISSUE_SCOPE_CHANGED') {
+  if (activityType === 'ISSUE_ADDED_TO_CYCLE') {
+    const cycleName = typeof item.metadata?.cycleName === 'string' ? item.metadata.cycleName : 'a cycle';
+    return `${actor} added ${issuePublicId} to ${cycleName}`;
+  }
+
+  if (activityType === 'ISSUE_REMOVED_FROM_CYCLE') {
+    const cycleName = typeof item.metadata?.cycleName === 'string' ? item.metadata.cycleName : 'a cycle';
+    return `${actor} removed ${issuePublicId} from ${cycleName}`;
+  }
+
+  if (activityType === 'ISSUE_TITLE_CHANGED') {
+    return `${actor} renamed the issue`;
+  }
+
+  if (activityType === 'ISSUE_DESCRIPTION_CHANGED') {
+    return `${actor} updated the description`;
+  }
+
+  if (activityType === 'ISSUE_TYPE_CHANGED') {
+    const fromType = typeof item.metadata?.fromType === 'string' ? toTitle(item.metadata.fromType) : null;
+    const toType = typeof item.metadata?.toType === 'string' ? toTitle(item.metadata.toType) : null;
+    if (fromType && toType) return `${actor} changed type from ${fromType} to ${toType}`;
+    return `${actor} changed the issue type`;
+  }
+
+  if (activityType === 'ISSUE_DUE_DATE_CHANGED') {
+    const toDueDate = typeof item.metadata?.toDueDate === 'string' ? item.metadata.toDueDate : null;
+    return toDueDate ? `${actor} changed the due date to ${toDueDate}` : `${actor} cleared the due date`;
+  }
+
+  if (activityType === 'ISSUE_DUE_TIME_CHANGED') {
+    const toDueTime = typeof item.metadata?.toDueTime === 'string' ? item.metadata.toDueTime : null;
+    return toDueTime ? `${actor} changed the due time to ${toDueTime}` : `${actor} cleared the due time`;
+  }
+
+  if (activityType === 'ISSUE_ESTIMATE_CHANGED') {
+    const toEstimate = item.metadata?.toEstimate;
+    return typeof toEstimate === 'number'
+      ? `${actor} set the estimate to ${toEstimate} pt${toEstimate === 1 ? '' : 's'}`
+      : `${actor} cleared the estimate`;
+  }
+
+  if (activityType === 'ISSUE_PARENT_CHANGED') {
+    const toParent = readIssueRef(item.metadata?.toParent);
+    if (toParent?.id) {
+      return `${actor} linked parent issue ${toParent.id}`;
+    }
+    return `${actor} removed the parent issue`;
+  }
+
+  if (activityType === 'ISSUE_LABELS_CHANGED') {
+    const labels = readStringArray(item.metadata?.labels);
+    return labels.length > 0
+      ? `${actor} updated labels to ${labels.join(', ')}`
+      : `${actor} cleared all labels`;
+  }
+
+  if (activityType === 'ISSUE_SCOPE_CHANGED') {
     const fromProject = readNamed(item.metadata?.fromProject);
     const toProject = readNamed(item.metadata?.toProject);
     if (fromProject && toProject) {
@@ -87,19 +235,52 @@ const getActivityMessage = (item: {
     }
   }
 
-  if (item.type === 'COMMENT_CREATED') {
+  if (activityType === 'ISSUE_DEPENDENCY_ADDED') {
+    const relatedIssue = readIssueRef(item.metadata?.relatedIssue);
+    const relation = typeof item.metadata?.relation === 'string' ? item.metadata.relation : 'related';
+    const relationLabel = relation === 'blocked-by' ? 'blocked by' : relation === 'blocks' ? 'blocks' : 'related to';
+    if (relatedIssue?.id) {
+      return `${actor} marked ${issuePublicId} as ${relationLabel} ${relatedIssue.id}`;
+    }
+    return `${actor} updated dependencies`;
+  }
+
+  if (activityType === 'ISSUE_DEPENDENCY_REMOVED') {
+    const relatedIssue = readIssueRef(item.metadata?.relatedIssue);
+    return relatedIssue?.id
+      ? `${actor} removed the dependency link to ${relatedIssue.id}`
+      : `${actor} removed a dependency link`;
+  }
+
+  if (activityType === 'ISSUE_WATCHERS_CHANGED') {
+    const watchers = Array.isArray(item.metadata?.watchers) ? item.metadata.watchers.map(readNamed).filter(Boolean) : [];
+    const action = typeof item.metadata?.action === 'string' ? item.metadata.action : 'updated';
+    if (watchers.length > 0 && action === 'added') {
+      return `${actor} added ${watchers.join(', ')} as watcher${watchers.length === 1 ? '' : 's'}`;
+    }
+    if (watchers.length > 0 && action === 'removed') {
+      return `${actor} removed ${watchers.join(', ')} from watchers`;
+    }
+    return `${actor} updated watchers`;
+  }
+
+  if (activityType === 'ISSUE_INTEGRATION_REFS_CHANGED') {
+    return `${actor} updated integration references`;
+  }
+
+  if (activityType === 'COMMENT_CREATED') {
     return `${actor} added a comment`;
   }
 
-  if (item.type === 'COMMENT_EDITED') {
+  if (activityType === 'COMMENT_EDITED') {
     return `${actor} edited a comment`;
   }
 
-  if (item.type === 'COMMENT_DELETED') {
+  if (activityType === 'COMMENT_DELETED') {
     return `${actor} deleted a comment`;
   }
 
-  if (item.type === 'ISSUE_CREATED') {
+  if (activityType === 'ISSUE_CREATED') {
     return `${actor} created the issue`;
   }
 
@@ -154,7 +335,7 @@ const AvatarFallback: React.FC<{ name: string }> = ({ name }) => (
 export const IssueActivityTimeline: React.FC<IssueActivityTimelineProps> = ({ issueId, compact }) => {
   const activityQuery = useIssueActivity(issueId, { limit: 50 }, { enabled: Boolean(issueId) });
   const items = useMemo(
-    () => activityQuery.data?.pages.flatMap((page) => page.items) ?? [],
+    () => (activityQuery.data?.pages.flatMap((page) => page.items) ?? []).filter((item) => !isNoopActivity(item)),
     [activityQuery.data]
   );
 
