@@ -51,6 +51,7 @@ export interface NotificationsListResult {
 export interface ListNotificationsInput {
   cursor?: string;
   limit?: number;
+  q?: string;
   unreadOnly?: boolean;
   category?: NotificationCategory;
   types?: string;

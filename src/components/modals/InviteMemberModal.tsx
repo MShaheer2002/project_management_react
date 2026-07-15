@@ -78,11 +78,6 @@ export const InviteMemberModal: React.FC = () => {
         teamId,
         departmentId: departmentId || undefined,
       });
-      if (result.existingUser) {
-        showToast(`Invitation sent to ${trimmedEmail}. They'll receive an in-app notification.`, 'success', 'Invite sent');
-      } else {
-        showToast(`Invitation sent to ${trimmedEmail}. They'll need to create an account first.`, 'success', 'Invite sent');
-      }
       handleClose();
     } catch (error) {
       const apiError = error as ApiAxiosError;

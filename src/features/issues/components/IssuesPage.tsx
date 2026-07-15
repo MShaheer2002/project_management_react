@@ -241,7 +241,6 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
         issueId,
         status: newStatus,
       });
-      showToast(`Issue moved to ${STATUS_LABELS[newStatus]}.`, 'success');
       return true;
     } catch {
       showToast('Failed to update issue status.', 'error');

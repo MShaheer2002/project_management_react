@@ -541,11 +541,6 @@ export const CreateIssuePage: React.FC = () => {
         });
       }
 
-      showToast(
-        cleanSubtasks.length > 0
-          ? `Issue created with ${cleanSubtasks.length} subtask${cleanSubtasks.length > 1 ? 's' : ''}`
-          : 'Issue created successfully'
-      );
       localStorage.removeItem(draftKey);
       navigate(`/issues/${createdIssueResourceId}`);
   }, [

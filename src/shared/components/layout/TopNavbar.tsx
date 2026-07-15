@@ -18,7 +18,7 @@ import {
   Globe,
   Sparkles,
 } from 'lucide-react';
-import { useUnreadNotificationsCount } from '@features/notifications';
+import { NotificationsPopover, useUnreadNotificationsCount } from '@features/notifications';
 
 export const TopNavbar: React.FC = () => {
   const { signOut } = useAuth();
@@ -29,6 +29,7 @@ export const TopNavbar: React.FC = () => {
   const theme = useThemeStore((s) => s.theme);
   const setTheme = useThemeStore((s) => s.setTheme);
   const [isUserMenuOpen, setUserMenuOpen] = useState(false);
+  const [isNotificationsOpen, setNotificationsOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement | null>(null);
   const navigate = useNavigate();
   const unreadNotifications = useUnreadNotificationsCount({ enabled: true });
@@ -82,17 +83,23 @@ export const TopNavbar: React.FC = () => {
         >
           <Plus size={18} />
         </button>
-        <button
-          onClick={() => navigate('/inbox')}
-          className="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-white/5 text-gray-400 transition-colors relative"
-        >
-          <Bell size={18} />
-          {unreadCount > 0 && (
-            <span className="absolute -right-1 -top-1 inline-flex min-w-[18px] items-center justify-center rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-bold leading-none text-white shadow-sm">
-              {unreadBadgeLabel}
-            </span>
-          )}
-        </button>
+        <div className="relative" onMouseDown={(event) => event.stopPropagation()}>
+          <button
+            onClick={() => {
+              setUserMenuOpen(false);
+              setNotificationsOpen((current) => !current);
+            }}
+            className="relative rounded-md p-2 text-gray-400 transition-colors hover:bg-gray-100 dark:hover:bg-white/5"
+          >
+            <Bell size={18} />
+            {unreadCount > 0 && (
+              <span className="absolute -right-1 -top-1 inline-flex min-w-[18px] items-center justify-center rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-bold leading-none text-white shadow-sm">
+                {unreadBadgeLabel}
+              </span>
+            )}
+          </button>
+          <NotificationsPopover open={isNotificationsOpen} onClose={() => setNotificationsOpen(false)} />
+        </div>
 
         <button
           onClick={() => setAiPanelOpen(!isAiPanelOpen)}

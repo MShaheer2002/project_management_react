@@ -297,7 +297,6 @@ export const IssueDetailPage: React.FC = () => {
   const handleStatusChange = async (nextStatus: Status) => {
     try {
       await updateIssueStatus.mutateAsync(nextStatus);
-      showToast(`Status updated to ${getStatusLabel(workspaceStatuses, nextStatus)}.`, 'success');
     } catch (error) {
       showToast(getApiErrorMessage(error) || 'Failed to update status.', 'error');
     }
@@ -306,7 +305,6 @@ export const IssueDetailPage: React.FC = () => {
   const handlePriorityChange = async (nextPriority: Priority) => {
     try {
       await updateIssue.mutateAsync({ priority: nextPriority });
-      showToast('Priority updated.', 'success');
     } catch (error) {
       showToast(getApiErrorMessage(error) || 'Failed to update priority.', 'error');
     }
@@ -315,7 +313,6 @@ export const IssueDetailPage: React.FC = () => {
   const handleAssigneeChange = async (nextAssigneeId: string) => {
     try {
       await updateIssue.mutateAsync({ assigneeId: nextAssigneeId || null });
-      showToast(nextAssigneeId ? 'Assignee updated.' : 'Issue unassigned.', 'success');
     } catch (error) {
       const nextAssignee = assigneeOptions.find((member) => member.id === nextAssigneeId);
       const didHandleProjectMembership = nextAssigneeId
@@ -327,7 +324,6 @@ export const IssueDetailPage: React.FC = () => {
           projectName: issue.project?.name ?? 'this project',
           retry: async () => {
             await updateIssue.mutateAsync({ assigneeId: nextAssigneeId });
-            showToast('Assignee updated.', 'success');
           },
         });
 
@@ -342,7 +338,6 @@ export const IssueDetailPage: React.FC = () => {
   const handleDueDateChange = async (nextDueDate: string) => {
     try {
       await updateIssue.mutateAsync({ dueDate: nextDueDate || null });
-      showToast(nextDueDate ? 'Due date updated.' : 'Due date cleared.', 'success');
     } catch (error) {
       showToast(getApiErrorMessage(error) || 'Failed to update due date.', 'error');
     }
@@ -351,18 +346,8 @@ export const IssueDetailPage: React.FC = () => {
   const handleDueTimeChange = async (nextDueTime: string) => {
     try {
       await updateIssue.mutateAsync({ dueTime: nextDueTime || null });
-      showToast(nextDueTime ? 'Due time updated.' : 'Due time cleared.', 'success');
     } catch (error) {
       showToast(getApiErrorMessage(error) || 'Failed to update due time.', 'error');
-    }
-  };
-
-  const handleTypeChange = async (nextType: IssueType) => {
-    try {
-      await updateIssue.mutateAsync({ type: nextType });
-      showToast('Type updated.', 'success');
-    } catch (error) {
-      showToast(getApiErrorMessage(error) || 'Failed to update type.', 'error');
     }
   };
 
@@ -370,11 +355,9 @@ export const IssueDetailPage: React.FC = () => {
     try {
       if (!nextCycleId) {
         await unassignIssueFromCycle.mutateAsync();
-        showToast('Issue moved back to backlog.', 'success');
         return;
       }
       await assignIssueToCycle.mutateAsync(nextCycleId);
-      showToast('Cycle updated.', 'success');
     } catch (error) {
       showToast(getApiErrorMessage(error) || 'Failed to update cycle.', 'error');
     }
@@ -397,7 +380,6 @@ export const IssueDetailPage: React.FC = () => {
     try {
       await updateIssue.mutateAsync({ title: nextTitle });
       setIsEditingTitle(false);
-      showToast('Title updated.', 'success');
     } catch (error) {
       showToast(getApiErrorMessage(error) || 'Failed to update title.', 'error');
     }
@@ -415,7 +397,6 @@ export const IssueDetailPage: React.FC = () => {
     try {
       await updateIssue.mutateAsync({ description: normalizedNext ? descriptionDraft : null });
       setIsEditingDescription(false);
-      showToast(normalizedNext ? 'Description updated.' : 'Description cleared.', 'success');
     } catch (error) {
       showToast(getApiErrorMessage(error) || 'Failed to update description.', 'error');
     }
@@ -439,7 +420,6 @@ export const IssueDetailPage: React.FC = () => {
     try {
       await updateIssue.mutateAsync({ [field]: normalizedNext ? nextValue : null });
       stopEditing();
-      showToast(`${label} updated.`, 'success');
     } catch (error) {
       showToast(getApiErrorMessage(error) || `Failed to update ${label.toLowerCase()}.`, 'error');
     }
@@ -456,7 +436,6 @@ export const IssueDetailPage: React.FC = () => {
 
     try {
       await updateIssue.mutateAsync({ parentIssueId: normalizedNext || null });
-      showToast(normalizedNext ? 'Parent issue updated.' : 'Parent issue cleared.', 'success');
     } catch (error) {
       setSystemParentIssueId(previousParentIssueId);
       showToast(getApiErrorMessage(error) || 'Failed to update parent issue.', 'error');
@@ -489,8 +468,6 @@ export const IssueDetailPage: React.FC = () => {
       for (const dependency of added) {
         await addIssueDependency.mutateAsync({ issueId: dependency.issueId, relation: dependency.relation });
       }
-
-      showToast('Dependencies updated.', 'success');
     } catch (error) {
       setSystemDependencies(previousDependencies);
       showToast(getApiErrorMessage(error) || 'Failed to update dependencies.', 'error');
@@ -514,8 +491,6 @@ export const IssueDetailPage: React.FC = () => {
       for (const watcherId of removedUserIds) {
         await removeIssueWatcher.mutateAsync(watcherId);
       }
-
-      showToast('Watchers updated.', 'success');
     } catch (error) {
       setSystemWatcherIds(previousWatcherIds);
       showToast(getApiErrorMessage(error) || 'Failed to update watchers.', 'error');
@@ -528,7 +503,6 @@ export const IssueDetailPage: React.FC = () => {
 
     try {
       await updateIssueIntegrationRefs.mutateAsync({ integrationRefs: nextIntegrationRefs });
-      showToast('Integration references updated.', 'success');
     } catch (error) {
       setSystemIntegrationRefs(previousIntegrationRefs);
       showToast(getApiErrorMessage(error) || 'Failed to update integration references.', 'error');
@@ -826,18 +800,11 @@ export const IssueDetailPage: React.FC = () => {
           <div className="mx-auto max-w-3xl space-y-10">
             <div className="space-y-6">
               <div className="flex flex-wrap items-center gap-3">
-                <div className="relative group">
-                  <select
-                    value={issue.type || 'task'}
-                    onChange={(event) => void handleTypeChange(event.target.value as IssueType)}
-                    className={`cursor-pointer appearance-none rounded px-2 py-0.5 pr-6 text-[10px] font-bold uppercase tracking-wider outline-none transition-all hover:opacity-90 ${ISSUE_TYPE_CONFIG[issue.type || 'task'].color}`}
-                  >
-                    <option value="task">Task</option>
-                    <option value="bug">Bug</option>
-                    <option value="issue">Issue</option>
-                  </select>
-                  <ChevronDown size={12} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-current opacity-70" />
-                </div>
+                <span
+                  className={`inline-flex items-center rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${ISSUE_TYPE_CONFIG[issue.type || 'task'].color}`}
+                >
+                  {(issue.type || 'task').toUpperCase()}
+                </span>
                 <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-gray-400">
                   <span>Created by</span>
                   <div className="flex items-center gap-1.5 text-gray-900 dark:text-gray-100">

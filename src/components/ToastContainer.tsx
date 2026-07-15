@@ -11,38 +11,33 @@ const toastConfig: Record<ToastType, {
   icon: React.ReactNode;
   containerClass: string;
   iconBgClass: string;
-  progressClass: string;
 }> = {
   success: {
     icon: <CheckCircle2 size={18} />,
     containerClass: 'bg-white dark:bg-card-dark border-gray-200 dark:border-border-dark',
     iconBgClass: 'bg-green-500/10 text-green-500',
-    progressClass: 'bg-green-500',
   },
   error: {
     icon: <AlertCircle size={18} />,
     containerClass: 'bg-white dark:bg-card-dark border-red-200 dark:border-red-900/50',
     iconBgClass: 'bg-red-500/10 text-red-500',
-    progressClass: 'bg-red-500',
   },
   warning: {
     icon: <AlertTriangle size={18} />,
     containerClass: 'bg-white dark:bg-card-dark border-orange-200 dark:border-orange-900/50',
     iconBgClass: 'bg-orange-500/10 text-orange-500',
-    progressClass: 'bg-orange-500',
   },
   info: {
     icon: <Info size={18} />,
     containerClass: 'bg-white dark:bg-card-dark border-blue-200 dark:border-blue-900/50',
     iconBgClass: 'bg-blue-500/10 text-blue-500',
-    progressClass: 'bg-blue-500',
   },
 };
 
 /**
  * ToastContainer — renders all active toast notifications.
  * Positioned bottom-right, stacked vertically.
- * Each toast has: colored icon, optional title, message, dismiss button, auto-dismiss progress bar.
+ * Each toast has: colored icon, optional title, message, dismiss button.
  */
 export const ToastContainer: React.FC = () => {
   const toasts = useToastStore((s) => s.toasts);
@@ -92,17 +87,6 @@ export const ToastContainer: React.FC = () => {
                 </button>
               </div>
 
-              {/* Auto-dismiss progress bar */}
-              {toast.duration && toast.duration > 0 && (
-                <div className="h-[2px] w-full bg-gray-100 dark:bg-white/5">
-                  <motion.div
-                    initial={{ width: '100%' }}
-                    animate={{ width: '0%' }}
-                    transition={{ duration: toast.duration / 1000, ease: 'linear' }}
-                    className={`h-full ${config.progressClass}`}
-                  />
-                </div>
-              )}
             </motion.div>
           );
         })}

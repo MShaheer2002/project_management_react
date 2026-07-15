@@ -146,6 +146,7 @@ export const useNotificationRealtime = () => {
   const { getToken, isSignedIn } = useAuth();
   const queryClient = useQueryClient();
   const workspaceId = useAuthStore((state) => state.workspace?.id);
+  const currentUserId = useAuthStore((state) => state.currentUser?.id);
   const showToast = useToastStore((state) => state.showToast);
   const processedEnvelopeIdsRef = useRef<Set<string>>(new Set());
   const processedNotificationIdsRef = useRef<Set<string>>(new Set());
@@ -193,10 +194,12 @@ export const useNotificationRealtime = () => {
         queryClient.invalidateQueries({ queryKey: sidebarQueryKeys.byWorkspace(workspaceId) });
         queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.byWorkspace(workspaceId) });
 
-        if (payload.ui?.toast) {
+        const isSelfOriginated = payload.notification.actor?.id === currentUserId;
+
+        if (payload.ui?.toast && !isSelfOriginated) {
           showToast(payload.notification.message, 'info', payload.notification.title);
         }
-        if (allowSoundRef.current && payload.ui?.soundKey) {
+        if (allowSoundRef.current && payload.ui?.soundKey && !isSelfOriginated) {
           tryPlaySound(payload.ui.soundKey);
         }
 
@@ -355,7 +358,7 @@ export const useNotificationRealtime = () => {
       active = false;
       if (teardown) teardown();
     };
-  }, [getToken, isSignedIn, queryClient, showToast, workspaceId]);
+  }, [currentUserId, getToken, isSignedIn, queryClient, showToast, workspaceId]);
 };
 
 export const useIssueSocketRoom = (issueId: string | undefined) => {

@@ -328,7 +328,6 @@ export const CreateProjectModal: React.FC = () => {
         },
         ...(docs && docs.length > 0 ? { docs } : {}),
       });
-      showToast('Project created successfully.', 'success');
       setActiveModal(null);
       resetForm();
     } catch (error) {

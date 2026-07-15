@@ -90,7 +90,6 @@ export const CreateCycleModal: React.FC = () => {
         endsAt: new Date(endDate).toISOString(),
         status: 'UPCOMING',
       });
-      showToast(`Cycle created for ${selectedTeam?.name || 'team'}.`, 'success');
       handleClose();
       resetForm();
     } catch (error) {

@@ -110,7 +110,6 @@ export const MyIssuesPage: React.FC = () => {
   const handleIssueUpdate = async (issueId: string, newStatus: Status) => {
     try {
       await updateAnyIssueStatus.mutateAsync({ issueId, status: newStatus });
-      showToast(`Issue moved to ${getStatusLabel(workspaceStatuses, newStatus)}.`, 'success');
       return true;
     } catch {
       showToast('Failed to update issue status.', 'error');

@@ -377,7 +377,6 @@ export const CycleDetailPage: React.FC = () => {
     try {
       await updateIssueStatus.mutateAsync({ issueId, status });
       queryClient.invalidateQueries({ queryKey: activityQueryKeys.workspace(workspaceId) });
-      showToast(`Issue moved to ${STATUS_LABELS[status]}.`, 'success');
       return true;
     } catch (error) {
       showToast(getApiErrorMessage(error) || 'Failed to update issue status.', 'error', 'Update failed');
