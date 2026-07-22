@@ -28,7 +28,7 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '@/app/stores/useAuthStore';
 import { useApp } from '../AppContext';
 import { ISSUE_TYPE_CONFIG } from '../constants';
-import { useWorkspaceStatuses } from '@shared/hooks/useWorkspaceStatuses';
+import { useEffectiveWorkflowStatuses } from '@shared/hooks/useEffectiveWorkflowStatuses';
 import {
   IssueAttachment,
   IssueDependency,
@@ -64,7 +64,6 @@ import {
   useCreateIssue,
   useProjectAssignmentGuard,
   useUpdateAnyIssue,
-  useUpdateIssueIntegrationRefsAny,
 } from '@features/issues';
 
 interface Subtask extends IssueSubtask {
@@ -109,7 +108,6 @@ export const CreateIssuePage: React.FC = () => {
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const workspaceId = useAuthStore((s) => s.workspace?.id);
-  const workspaceStatuses = useWorkspaceStatuses();
   const draftKey = `issue_draft:${workspaceId ?? 'unknown'}`;
   const scopedTeamId = searchParams.get('teamId') || undefined;
 
@@ -118,6 +116,7 @@ export const CreateIssuePage: React.FC = () => {
   const [description, setDescription] = useState('');
   const [type, setType] = useState<IssueType>('task');
   const [projectId, setProjectId] = useState('');
+  const workspaceStatuses = useEffectiveWorkflowStatuses(projectId || undefined);
   const [cycleId, setCycleId] = useState('');
   const [priority, setPriority] = useState<Priority>('medium');
   const [status, setStatus] = useState<Status>('todo');
@@ -184,7 +183,6 @@ export const CreateIssuePage: React.FC = () => {
   const updateAnyIssue = useUpdateAnyIssue();
   const addIssueDependencyAny = useAddIssueDependencyAny();
   const addIssueWatchersAny = useAddIssueWatchersAny();
-  const updateIssueIntegrationRefsAny = useUpdateIssueIntegrationRefsAny();
   const attachIssueLabelsAny = useAttachIssueLabelsAny();
   const createLabel = useCreateLabel();
   const labelsQuery = useIssueLabels(
@@ -219,6 +217,27 @@ export const CreateIssuePage: React.FC = () => {
   const activeTemplatesQuery = useActiveTemplates({});
   const activeTemplates = activeTemplatesQuery.data ?? [];
   const cycleParam = searchParams.get('cycleId');
+  const createVisibleStatuses = useMemo(
+    () => workspaceStatuses.filter((status) => status.visibility.create !== false),
+    [workspaceStatuses],
+  );
+  const cyclePlanningDefaultStatus = useMemo(
+    () =>
+      workspaceStatuses.find(
+        (status) =>
+          status.cycle.planIntoThisStatus &&
+          status.cycle.allowedInCycle &&
+          status.visibility.cycleList !== false,
+      )?.key ?? 'todo',
+    [workspaceStatuses],
+  );
+  const defaultCreateStatus = useMemo(
+    () =>
+      workspaceStatuses.find(
+        (status) => status.visibility.create !== false && !status.isFinal && status.category !== 'cancelled',
+      )?.key ?? 'todo',
+    [workspaceStatuses],
+  );
   const effectiveTemplate = useMemo(() => {
     return activeTemplates.find((template) => template.issueType === type) ?? null;
   }, [activeTemplates, type]);
@@ -297,7 +316,7 @@ export const CreateIssuePage: React.FC = () => {
     const projectParam = searchParams.get('projectId');
     const cycleParam = searchParams.get('cycleId');
 
-    if (statusParam && workspaceStatuses.some((s) => s.key === statusParam)) {
+    if (statusParam && createVisibleStatuses.some((s) => s.key === statusParam)) {
       setStatus(statusParam as Status);
     }
 
@@ -308,7 +327,7 @@ export const CreateIssuePage: React.FC = () => {
     if (cycleParam) {
       setCycleId(cycleParam);
     }
-  }, [searchParams, workspaceStatuses]);
+  }, [createVisibleStatuses, searchParams]);
 
   useEffect(() => {
     if (!cycleParam || cyclesQuery.isLoading) return;
@@ -324,7 +343,7 @@ export const CreateIssuePage: React.FC = () => {
     setTitle('');
     setDescription('');
     setPriority('medium');
-    setStatus('todo');
+    setStatus(cycleId ? cyclePlanningDefaultStatus : defaultCreateStatus);
     setEstimate(nextType === 'task' ? '1' : '');
     setSelectedLabelIds([]);
     setCycleId('');
@@ -358,7 +377,7 @@ export const CreateIssuePage: React.FC = () => {
     setTitle(t.titleTemplate || '');
     setDescription(t.contentTemplate || '');
     setPriority(t.defaultPriority);
-    setStatus(t.defaultStatus);
+    setStatus(createVisibleStatuses.some((statusOption) => statusOption.key === t.defaultStatus) ? t.defaultStatus : (cycleId ? cyclePlanningDefaultStatus : defaultCreateStatus));
     setAssigneeId(t.defaultAssigneeType === 'SPECIFIC_USER' ? t.defaultAssigneeId ?? undefined : undefined);
     setEstimate(t.defaultEstimate != null ? String(t.defaultEstimate) : '');
     setSelectedLabelIds(t.defaultLabelIds ?? []);
@@ -379,7 +398,7 @@ export const CreateIssuePage: React.FC = () => {
     if (typeof t.defaultDueDateOffset === 'number') {
       setDueDate(addDaysToDateInput(t.defaultDueDateOffset));
     }
-  }, [effectiveTemplate, type]);
+  }, [cycleId, cyclePlanningDefaultStatus, defaultCreateStatus, effectiveTemplate, type]);
 
   // Validation
   const validate = () => {
@@ -461,6 +480,7 @@ export const CreateIssuePage: React.FC = () => {
             ? relatedIssues.split(',').map((value) => value.trim()).filter(Boolean)
             : undefined,
         notes: type === 'issue' ? notes : undefined,
+        integrationRefs: cleanIntegrationRefs,
         departmentId: departmentId || null,
       },
     };
@@ -534,13 +554,6 @@ export const CreateIssuePage: React.FC = () => {
         });
       }
 
-      if (cleanIntegrationRefs.length > 0) {
-        await updateIssueIntegrationRefsAny.mutateAsync({
-          issueId: createdIssueResourceId,
-          input: { integrationRefs: cleanIntegrationRefs },
-        });
-      }
-
       localStorage.removeItem(draftKey);
       navigate(`/issues/${createdIssueResourceId}`);
   }, [
@@ -555,7 +568,6 @@ export const CreateIssuePage: React.FC = () => {
     selectedLabelIds,
     showToast,
     updateAnyIssue,
-    updateIssueIntegrationRefsAny,
     watcherIds,
     dependencies,
   ]);
@@ -1236,7 +1248,7 @@ export const CreateIssuePage: React.FC = () => {
                           onChange={(e) => setStatus(e.target.value as Status)}
                           className="w-full bg-gray-50 dark:bg-white/5 border border-transparent px-5 py-4 text-sm font-medium rounded-2xl shadow-sm outline-none appearance-none focus:ring-2 focus:ring-primary/20 transition-all group-hover:bg-gray-100 dark:group-hover:bg-white/10"
                         >
-                          {workspaceStatuses.map((ws) => (
+                          {createVisibleStatuses.map((ws) => (
                             <option key={ws.key} value={ws.key}>{ws.label}</option>
                           ))}
                         </select>

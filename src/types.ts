@@ -1,13 +1,93 @@
 export type Priority = 'low' | 'medium' | 'high' | 'urgent';
 export type Status = string;
+export type WorkspaceStatusCategory = 'backlog' | 'unstarted' | 'active' | 'review' | 'done' | 'cancelled';
+export type WorkflowTransitionRole = 'OWNER' | 'ADMIN' | 'MEMBER' | 'GUEST';
+
+export interface WorkspaceStatusVisibility {
+  board: boolean;
+  list: boolean;
+  filters: boolean;
+  create: boolean;
+  cycleBoard: boolean;
+  cycleList: boolean;
+}
+
+export interface WorkspaceStatusCycleConfig {
+  allowedInCycle: boolean;
+  countsAsCompleted: boolean;
+  countsAsCarryOver: boolean;
+  planIntoThisStatus: boolean;
+}
+
+export interface WorkspaceStatusTransitionConfig {
+  mode: 'free' | 'restricted';
+  to: string[];
+  allowRollback: boolean;
+  allowedRoles: WorkflowTransitionRole[];
+  allowedUserIds: string[];
+  assigneeOnly: boolean;
+  creatorOnly: boolean;
+}
+
+export interface WorkspaceStatusRuleConfig {
+  requireAssignee: boolean;
+  requireDueDate: boolean;
+  requireAllSubtasksComplete: boolean;
+  requireAcceptanceCriteria: boolean;
+  requireParentIssue: boolean;
+  requireIntegrationRef: boolean;
+}
+
+export type WorkflowApprovalReviewerSource = 'project_members' | 'team_lead' | 'department_head' | 'manual';
+
+export interface WorkspaceStatusApprovalConfig {
+  required: boolean;
+  requiredCount: number;
+  reviewerSource: WorkflowApprovalReviewerSource;
+  reviewerUserIds: string[];
+}
 
 export interface WorkspaceStatus {
   key: string;
   label: string;
   color: string;
   order: number;
+  category: WorkspaceStatusCategory;
+  isActive: boolean;
   isFinal: boolean;
   showOnBoard: boolean;
+  visibility: WorkspaceStatusVisibility;
+  cycle: WorkspaceStatusCycleConfig;
+  transitions: WorkspaceStatusTransitionConfig;
+  rules: WorkspaceStatusRuleConfig;
+  approval: WorkspaceStatusApprovalConfig;
+}
+
+export interface WorkflowAutomationConfig {
+  subtaskCompletion: {
+    enabled: boolean;
+    mode: 'suggest' | 'move';
+    targetStatusKey: string | null;
+  };
+  cycleStart: {
+    enabled: boolean;
+    fromStatusKey: string | null;
+    targetStatusKey: string | null;
+  };
+  overdue: {
+    enabled: boolean;
+    action: 'notify';
+  };
+  githubPullRequest: {
+    opened: {
+      enabled: boolean;
+      targetStatusKey: string | null;
+    };
+    merged: {
+      enabled: boolean;
+      targetStatusKey: string | null;
+    };
+  };
 }
 export type UserRole = 'owner' | 'admin' | 'member' | 'guest';
 export type IssueType = 'task' | 'bug' | 'issue';

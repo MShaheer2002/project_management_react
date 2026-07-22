@@ -1,6 +1,8 @@
 import type { AxiosRequestConfig } from 'axios';
 import { privateApi } from '@shared/services/privateApi';
 import type { ApiPaginatedResponse, ApiResponse } from '@shared/services/types';
+import type { WorkspaceStatusRemovalResolution } from '@features/workspace/services/workspaceService';
+import type { WorkflowAutomationConfig, WorkspaceStatus } from '@/types';
 import type {
   AddProjectMembersInput,
   CreateProjectInput,
@@ -14,6 +16,29 @@ import type {
   ProjectSummary,
   UpdateProjectInput,
 } from '../types';
+
+export interface ProjectWorkflow {
+  source: 'workspace' | 'project';
+  statuses: WorkspaceStatus[];
+  automation: WorkflowAutomationConfig;
+}
+
+export interface ProjectWorkflowStatusUsage {
+  statusKey: string;
+  label: string;
+  issueCount: number;
+  truncated?: boolean;
+  issues: Array<{ id: string; publicId: string; title: string }>;
+}
+
+export interface UpdateProjectWorkflowStatusesInput {
+  statuses: WorkspaceStatus[];
+  removalResolutions?: WorkspaceStatusRemovalResolution[];
+}
+
+export interface ClearProjectWorkflowOverrideInput {
+  removalResolutions?: WorkspaceStatusRemovalResolution[];
+}
 
 const mutationConfig = {
   skipGlobalErrorToast: true,
@@ -136,5 +161,62 @@ export const projectService = {
 
   removeMember: async (projectId: string, userId: string): Promise<void> => {
     await privateApi.delete(`/projects/${projectId}/members/${userId}`, mutationConfig);
+  },
+
+  getWorkflow: async (projectId: string): Promise<ProjectWorkflow> => {
+    const { data } = await privateApi.get<ApiResponse<ProjectWorkflow>>(`/projects/${projectId}/workflow`);
+    return data.data;
+  },
+
+  getWorkflowStatusUsage: async (projectId: string, statusKey: string, limit?: number): Promise<ProjectWorkflowStatusUsage> => {
+    const { data } = await privateApi.get<ApiResponse<ProjectWorkflowStatusUsage>>(
+      `/projects/${projectId}/workflow/statuses/${statusKey}/usage`,
+      { params: limit ? { limit } : undefined }
+    );
+    return data.data;
+  },
+
+  mergeWorkflowStatus: async (projectId: string, statusKey: string, targetStatusKey: string): Promise<ProjectWorkflow> => {
+    const { data } = await privateApi.post<ApiResponse<ProjectWorkflow>>(
+      `/projects/${projectId}/workflow/statuses/${statusKey}/merge`,
+      { targetStatusKey },
+      mutationConfig
+    );
+    return data.data;
+  },
+
+  updateWorkflowStatuses: async (
+    projectId: string,
+    input: UpdateProjectWorkflowStatusesInput
+  ): Promise<ProjectWorkflow> => {
+    const { data } = await privateApi.put<ApiResponse<ProjectWorkflow>>(
+      `/projects/${projectId}/workflow/statuses`,
+      input,
+      mutationConfig
+    );
+    return data.data;
+  },
+
+  clearWorkflowOverride: async (
+    projectId: string,
+    input: ClearProjectWorkflowOverrideInput = {}
+  ): Promise<ProjectWorkflow> => {
+    const { data } = await privateApi.delete<ApiResponse<ProjectWorkflow>>(`/projects/${projectId}/workflow`, {
+      ...mutationConfig,
+      data: input,
+    });
+    return data.data;
+  },
+
+  updateWorkflowAutomation: async (
+    projectId: string,
+    input: WorkflowAutomationConfig
+  ): Promise<ProjectWorkflow> => {
+    const { data } = await privateApi.put<ApiResponse<ProjectWorkflow>>(
+      `/projects/${projectId}/workflow/automation`,
+      input,
+      mutationConfig
+    );
+    return data.data;
   },
 };

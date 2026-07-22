@@ -1,14 +1,20 @@
 export {
   projectQueryKeys,
   useAddProjectMembers,
+  useClearProjectWorkflowOverride,
   useCreateProject,
   useDeleteProject,
   useProjectDetail,
   useProjectMembers,
   useProjectOptions,
+  useMergeProjectWorkflowStatus,
   useProjectsDirectory,
+  useProjectWorkflow,
+  useProjectWorkflows,
   useRemoveProjectMember,
   useUpdateProject,
+  useUpdateProjectWorkflowAutomation,
+  useUpdateProjectWorkflowStatuses,
 } from './hooks/useProjectData';
 export type {
   AddProjectMembersInput,
@@ -30,3 +36,10 @@ export type {
   ProjectVisibility,
   UpdateProjectInput,
 } from './types';
+export type {
+  ClearProjectWorkflowOverrideInput,
+  ProjectWorkflow,
+  ProjectWorkflowStatusUsage,
+  UpdateProjectWorkflowStatusesInput,
+} from './services/projectService';
+export { ProjectWorkflowSettings } from './components/ProjectWorkflowSettings';

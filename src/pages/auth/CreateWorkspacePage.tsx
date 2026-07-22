@@ -200,6 +200,9 @@ export const CreateWorkspacePage: React.FC = () => {
         logo: workspace.logo,
         role: (workspace.role?.toLowerCase() as any) || 'owner',
         defaultTeamId: workspace.defaultTeamId,
+        customStatuses: workspace.customStatuses,
+        workflowAutomation: workspace.workflowAutomation,
+        uploadPolicy: workspace.uploadPolicy,
       });
 
       // Invalidate workspace list so the switcher sees the new workspace

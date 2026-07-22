@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { Check, Eye, EyeOff, GripVertical, Loader2, Moon, Pencil, Plus, Save, Sun, Globe, Trash2, X } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Loader2, Moon, Save, Sun, Globe, Trash2 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { DocumentsPanel } from '@features/documents';
@@ -18,6 +18,8 @@ import type { WorkspaceStatus } from '@/types';
 import type { ApiAxiosError } from '@shared/services/types';
 import type { UploadPolicy } from '@/app/stores/useAuthStore';
 import { useAuthStore } from '@/app/stores/useAuthStore';
+import { Modal } from '@shared/components/ui/Modal';
+import { WorkflowStatusesEditor, WorkflowAutomationEditor } from '@shared/components/workflow/WorkflowEditors';
 
 interface SettingsSectionProps {
   title: string;
@@ -48,259 +50,6 @@ const SettingsItem: React.FC<SettingsItemProps> = ({ label, description, childre
   </div>
 );
 
-const STATUS_COLORS = [
-  '#6b7280', '#3b82f6', '#f59e0b', '#8b5cf6', '#22c55e',
-  '#ec4899', '#ef4444', '#14b8a6', '#f97316', '#06b6d4',
-];
-
-const toKebabCase = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-
-const WorkflowStatusesEditor: React.FC<{ workspaceId: string; canManage: boolean }> = ({ workspaceId, canManage }) => {
-  const showToast = useToastStore((s) => s.showToast);
-  const queryClient = useQueryClient();
-  const setWorkspace = useAuthStore((s) => s.setWorkspace);
-  const currentWorkspace = useAuthStore((s) => s.workspace);
-  const workspaceStatuses = useWorkspaceStatuses();
-  const [statuses, setStatuses] = useState<WorkspaceStatus[]>([]);
-  const [hasChanges, setHasChanges] = useState(false);
-  const [addingNew, setAddingNew] = useState(false);
-  const [newLabel, setNewLabel] = useState('');
-  const [editingKey, setEditingKey] = useState<string | null>(null);
-  const [editLabel, setEditLabel] = useState('');
-  const [dragIdx, setDragIdx] = useState<number | null>(null);
-  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
-
-  useEffect(() => {
-    setStatuses(workspaceStatuses.map((s, i) => ({ ...s, order: i })));
-    setHasChanges(false);
-  }, [workspaceStatuses]);
-
-  const saveMutation = useMutation({
-    mutationFn: (data: WorkspaceStatus[]) => workspaceService.updateStatuses(workspaceId, data),
-    onSuccess: (saved) => {
-      showToast('Workflow updated.', 'success');
-      setHasChanges(false);
-      if (currentWorkspace) {
-        setWorkspace({ ...currentWorkspace, customStatuses: saved as WorkspaceStatus[] });
-      }
-      queryClient.invalidateQueries({ queryKey: ['workspaces'] });
-    },
-    onError: (error: unknown) => {
-      const msg = (error as ApiAxiosError)?.response?.data?.error?.message || 'Failed to save statuses.';
-      showToast(msg, 'error');
-    },
-  });
-
-  const update = useCallback((fn: (prev: WorkspaceStatus[]) => WorkspaceStatus[]) => {
-    setStatuses((prev) => {
-      const next = fn(prev);
-      setHasChanges(true);
-      return next;
-    });
-  }, []);
-
-  const handleAdd = () => {
-    const label = newLabel.trim();
-    if (!label) return;
-    const key = toKebabCase(label);
-    if (statuses.some((s) => s.key === key)) { showToast('Status key already exists.', 'error'); return; }
-    update((prev) => [...prev, { key, label, color: STATUS_COLORS[prev.length % STATUS_COLORS.length], order: prev.length, isFinal: false, showOnBoard: true }]);
-    setNewLabel('');
-    setAddingNew(false);
-  };
-
-  const handleRemove = (key: string) => {
-    if (statuses.length <= 1) { showToast('Need at least one status.', 'error'); return; }
-    const target = statuses.find((s) => s.key === key);
-    if (target?.isFinal && statuses.filter((s) => s.isFinal).length <= 1) { showToast('Need at least one final status.', 'error'); return; }
-    update((prev) => prev.filter((s) => s.key !== key).map((s, i) => ({ ...s, order: i })));
-  };
-
-  const handleToggleFinal = (key: string) => {
-    const target = statuses.find((s) => s.key === key);
-    if (target?.isFinal && statuses.filter((s) => s.isFinal).length <= 1) { showToast('Need at least one final status.', 'error'); return; }
-    update((prev) => prev.map((s) => s.key === key ? { ...s, isFinal: !s.isFinal } : s));
-  };
-
-  const handleColorChange = (key: string, color: string) => {
-    update((prev) => prev.map((s) => s.key === key ? { ...s, color } : s));
-  };
-
-  const handleToggleBoardVisibility = (key: string) => {
-    const visibleCount = statuses.filter((s) => s.showOnBoard !== false).length;
-    const target = statuses.find((s) => s.key === key);
-    if (target?.showOnBoard !== false && visibleCount <= 1) {
-      showToast('At least one status must stay visible on the board.', 'error');
-      return;
-    }
-    update((prev) => prev.map((s) => s.key === key ? { ...s, showOnBoard: s.showOnBoard === false } : s));
-  };
-
-  const handleRename = (key: string) => {
-    const label = editLabel.trim();
-    if (!label) return;
-    const newKey = toKebabCase(label);
-    if (newKey !== key && statuses.some((s) => s.key === newKey)) { showToast('Status key already exists.', 'error'); return; }
-    update((prev) => prev.map((s) => s.key === key ? { ...s, key: newKey, label } : s));
-    setEditingKey(null);
-    setEditLabel('');
-  };
-
-  const handleDragStart = (idx: number) => setDragIdx(idx);
-  const handleDragOver = (e: React.DragEvent, idx: number) => { e.preventDefault(); setDragOverIdx(idx); };
-  const handleDragEnd = () => {
-    if (dragIdx !== null && dragOverIdx !== null && dragIdx !== dragOverIdx) {
-      update((prev) => {
-        const next = [...prev];
-        const [moved] = next.splice(dragIdx, 1);
-        next.splice(dragOverIdx, 0, moved);
-        return next.map((s, i) => ({ ...s, order: i }));
-      });
-    }
-    setDragIdx(null);
-    setDragOverIdx(null);
-  };
-
-  const handleSave = () => {
-    const finalCount = statuses.filter((s) => s.isFinal).length;
-    if (finalCount === 0) { showToast('At least one status must be marked as final (completion).', 'error'); return; }
-    saveMutation.mutate(statuses.map((s, i) => ({ ...s, order: i })));
-  };
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400">Workflow</h3>
-          <p className="mt-1 text-xs text-gray-400">Define the statuses issues move through. Drag to reorder and decide which statuses appear on board.</p>
-        </div>
-        <div className="flex items-center gap-2">
-          {canManage && (
-            <button
-              type="button"
-              onClick={() => { setAddingNew(true); setNewLabel(''); }}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold transition-colors hover:border-primary/40 hover:text-primary dark:border-border-dark"
-            >
-              <Plus size={13} /> Add status
-            </button>
-          )}
-          {hasChanges && canManage && (
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={saveMutation.isPending}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-1.5 text-xs font-bold text-white shadow-lg shadow-primary/20 disabled:opacity-50"
-            >
-              {saveMutation.isPending ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
-              Save
-            </button>
-          )}
-        </div>
-      </div>
-
-      <div className={`space-y-1${saveMutation.isPending ? ' pointer-events-none opacity-60' : ''}`}>
-        {statuses.map((status, idx) => (
-          <div
-            key={status.key}
-            draggable={canManage}
-            onDragStart={() => handleDragStart(idx)}
-            onDragOver={(e) => handleDragOver(e, idx)}
-            onDragEnd={handleDragEnd}
-            className={`group flex items-center gap-3 rounded-lg border p-3 transition-all ${
-              dragOverIdx === idx ? 'border-primary bg-primary/5' : 'border-gray-200 bg-white dark:border-border-dark dark:bg-card-dark'
-            }`}
-          >
-            {canManage && (
-              <GripVertical size={14} className="shrink-0 cursor-grab text-gray-300 active:cursor-grabbing dark:text-gray-600" />
-            )}
-
-            {/* Color dot with picker */}
-            <div className="relative">
-              <input
-                type="color"
-                value={status.color}
-                onChange={(e) => handleColorChange(status.key, e.target.value)}
-                disabled={!canManage}
-                className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-              />
-              <div className="h-3.5 w-3.5 rounded-full" style={{ backgroundColor: status.color }} />
-            </div>
-
-            {/* Label */}
-            {editingKey === status.key ? (
-              <input
-                autoFocus
-                value={editLabel}
-                onChange={(e) => setEditLabel(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') handleRename(status.key); if (e.key === 'Escape') setEditingKey(null); }}
-                className="min-w-0 flex-1 rounded border border-primary/40 bg-transparent px-2 py-0.5 text-sm outline-none"
-              />
-            ) : (
-              <span className="min-w-0 flex-1 text-sm font-medium text-gray-900 dark:text-text-primary-dark">{status.label}</span>
-            )}
-
-            {/* Final badge */}
-            {status.isFinal && (
-              <span className="shrink-0 rounded-full bg-green-500/10 px-2 py-0.5 text-[10px] font-bold text-green-500">
-                Done
-              </span>
-            )}
-            {status.showOnBoard === false && (
-              <span className="shrink-0 rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold text-amber-400">
-                List only
-              </span>
-            )}
-
-            {/* Actions */}
-            {canManage && (
-              <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                {editingKey === status.key ? (
-                  <button type="button" onClick={() => handleRename(status.key)} className="rounded p-1 text-primary hover:bg-primary/10"><Check size={13} /></button>
-                ) : (
-                  <button type="button" onClick={() => { setEditingKey(status.key); setEditLabel(status.label); }} className="rounded p-1 text-gray-400 hover:text-primary"><Pencil size={13} /></button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => handleToggleBoardVisibility(status.key)}
-                  title={status.showOnBoard === false ? 'Show on board' : 'Hide from board'}
-                  className={`rounded p-1 transition-colors ${status.showOnBoard === false ? 'text-amber-400 hover:text-amber-300' : 'text-gray-400 hover:text-amber-400'}`}
-                >
-                  {status.showOnBoard === false ? <EyeOff size={13} /> : <Eye size={13} />}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleToggleFinal(status.key)}
-                  title={status.isFinal ? 'Remove completion status' : 'Mark as completion status'}
-                  className={`rounded p-1 transition-colors ${status.isFinal ? 'text-green-500 hover:text-green-400' : 'text-gray-400 hover:text-green-500'}`}
-                >
-                  <Check size={13} />
-                </button>
-                <button type="button" onClick={() => handleRemove(status.key)} className="rounded p-1 text-gray-400 hover:text-red-500"><Trash2 size={13} /></button>
-              </div>
-            )}
-          </div>
-        ))}
-
-        {/* Add new inline */}
-        {addingNew && (
-          <div className="flex items-center gap-3 rounded-lg border border-primary/40 bg-white p-3 dark:bg-card-dark">
-            <div className="h-3.5 w-3.5 rounded-full bg-gray-400" />
-            <input
-              autoFocus
-              value={newLabel}
-              onChange={(e) => setNewLabel(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') handleAdd(); if (e.key === 'Escape') setAddingNew(false); }}
-              placeholder="Status name..."
-              className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-gray-400"
-            />
-            <button type="button" onClick={handleAdd} className="rounded p-1 text-primary hover:bg-primary/10"><Check size={13} /></button>
-            <button type="button" onClick={() => setAddingNew(false)} className="rounded p-1 text-gray-400 hover:text-gray-600"><X size={13} /></button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
 
 /** Dedicated upload policy selector — isolated mutation to avoid racing with "Save Changes" */
 const UploadPolicySection: React.FC<{ workspaceId: string }> = ({ workspaceId }) => {
@@ -367,10 +116,19 @@ export const SettingsPage: React.FC = () => {
   const workspacesQuery = useWorkspaces();
   const updateWorkspace = useUpdateWorkspace();
   const deleteWorkspace = useDeleteWorkspace();
+  const queryClient = useQueryClient();
+  const workspaceWorkflowStatuses = useWorkspaceStatuses();
 
   const [name, setName] = useState('');
   const [logo, setLogo] = useState('');
   const [confirmName, setConfirmName] = useState('');
+  const [workflowStatusesDirty, setWorkflowStatusesDirty] = useState(false);
+  const [workflowAutomationDirty, setWorkflowAutomationDirty] = useState(false);
+  const [pendingNavigation, setPendingNavigation] = useState<(() => void) | null>(null);
+  const pendingNavigationRef = useRef<(() => void) | null>(null);
+  const suppressPopStateRef = useRef(false);
+  const historyGuardArmedRef = useRef(false);
+  const historyPointRef = useRef<string | null>(null);
 
   const role = activeWorkspace?.role;
   const canManageSettings = canManageDocuments(role);
@@ -382,6 +140,117 @@ export const SettingsPage: React.FC = () => {
       setLogo(workspace.logo ?? '');
     }
   }, [workspace]);
+
+  const generalDirty = useMemo(() => {
+    if (!workspace || !canManageSettings) return false;
+    return name.trim() !== workspace.name || (logo.trim() || '') !== (workspace.logo ?? '');
+  }, [canManageSettings, logo, name, workspace]);
+
+  const hasUnsavedChanges = generalDirty || workflowStatusesDirty || workflowAutomationDirty;
+
+  useEffect(() => {
+    if (!hasUnsavedChanges) return;
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasUnsavedChanges]);
+
+  useEffect(() => {
+    if (hasUnsavedChanges) {
+      if (!historyGuardArmedRef.current && pendingNavigationRef.current === null) {
+        const guardPoint = `settings-guard:${Date.now()}`;
+        historyPointRef.current = guardPoint;
+        window.history.pushState(
+          { ...(window.history.state ?? {}), __settingsUnsavedGuard: true, __settingsGuardPoint: guardPoint },
+          '',
+          window.location.href,
+        );
+        historyGuardArmedRef.current = true;
+      }
+      return;
+    }
+  }, [hasUnsavedChanges]);
+
+  const attemptNavigation = useCallback((action: () => void) => {
+    if (!hasUnsavedChanges) {
+      action();
+      return;
+    }
+
+    pendingNavigationRef.current = action;
+    setPendingNavigation(() => action);
+  }, [hasUnsavedChanges]);
+
+  useEffect(() => {
+    if (!hasUnsavedChanges) return;
+
+    const handleDocumentClick = (event: MouseEvent) => {
+      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+        return;
+      }
+
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+
+      const anchor = target.closest('a[href]');
+      if (!(anchor instanceof HTMLAnchorElement)) return;
+      if (anchor.target === '_blank' || anchor.hasAttribute('download')) return;
+
+      const href = anchor.getAttribute('href');
+      if (!href || href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('tel:')) return;
+
+      const nextUrl = new URL(anchor.href, window.location.origin);
+      if (nextUrl.origin !== window.location.origin) return;
+
+      const current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+      const next = `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`;
+      if (current === next) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      attemptNavigation(() => navigate(next));
+    };
+
+    document.addEventListener('click', handleDocumentClick, true);
+    return () => document.removeEventListener('click', handleDocumentClick, true);
+  }, [attemptNavigation, hasUnsavedChanges, navigate]);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      if (!hasUnsavedChanges || suppressPopStateRef.current) return;
+
+      const guardPoint = historyPointRef.current ?? `settings-guard:${Date.now()}`;
+      historyPointRef.current = guardPoint;
+      window.history.pushState(
+        { ...(window.history.state ?? {}), __settingsUnsavedGuard: true, __settingsGuardPoint: guardPoint },
+        '',
+        window.location.href,
+      );
+      historyGuardArmedRef.current = true;
+
+      const leaveAction = () => {
+        suppressPopStateRef.current = true;
+        historyGuardArmedRef.current = false;
+        historyPointRef.current = null;
+        pendingNavigationRef.current = null;
+        setPendingNavigation(null);
+        window.history.back();
+        window.setTimeout(() => {
+          suppressPopStateRef.current = false;
+        }, 0);
+      };
+      pendingNavigationRef.current = leaveAction;
+      setPendingNavigation(() => leaveAction);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [hasUnsavedChanges]);
 
   const settingsTab = searchParams.get('tab') === 'workspace' ? 'workspace' : 'general';
 
@@ -430,6 +299,9 @@ export const SettingsPage: React.FC = () => {
           logo: nextWorkspace.logo ?? undefined,
           role: nextWorkspace.role.toLowerCase() as 'owner' | 'admin' | 'member' | 'guest',
           defaultTeamId: nextWorkspace.defaultTeamId,
+          customStatuses: nextWorkspace.customStatuses,
+          workflowAutomation: nextWorkspace.workflowAutomation,
+          uploadPolicy: nextWorkspace.uploadPolicy,
         });
         showToast('Workspace deleted. Switched to another workspace.', 'success');
         navigate('/dashboard', { replace: true });
@@ -446,6 +318,28 @@ export const SettingsPage: React.FC = () => {
       showToast(apiError.response?.data?.error?.message || 'Failed to delete workspace.', 'error');
     }
   };
+
+  const handleStayOnPage = useCallback(() => {
+    pendingNavigationRef.current = null;
+    setPendingNavigation(null);
+    if (hasUnsavedChanges && !historyGuardArmedRef.current) {
+      const guardPoint = historyPointRef.current ?? `settings-guard:${Date.now()}`;
+      historyPointRef.current = guardPoint;
+      window.history.pushState(
+        { ...(window.history.state ?? {}), __settingsUnsavedGuard: true, __settingsGuardPoint: guardPoint },
+        '',
+        window.location.href,
+      );
+      historyGuardArmedRef.current = true;
+    }
+  }, [hasUnsavedChanges]);
+
+  const handleLeavePage = useCallback(() => {
+    const nextAction = pendingNavigationRef.current;
+    pendingNavigationRef.current = null;
+    setPendingNavigation(null);
+    nextAction?.();
+  }, []);
 
   if (isLoading) {
     return (
@@ -469,18 +363,20 @@ export const SettingsPage: React.FC = () => {
               key={tab.name}
               onClick={() => {
                 if (tab.view === 'settings') {
-                  setSearchParams({}, { replace: true });
+                  attemptNavigation(() => setSearchParams({}, { replace: true }));
                   return;
                 }
 
                 if (tab.view === 'settings-workspace') {
-                  const next = new URLSearchParams(searchParams);
-                  next.set('tab', 'workspace');
-                  setSearchParams(next, { replace: true });
+                  attemptNavigation(() => {
+                    const next = new URLSearchParams(searchParams);
+                    next.set('tab', 'workspace');
+                    setSearchParams(next, { replace: true });
+                  });
                   return;
                 }
 
-                navigate('/' + tab.view);
+                attemptNavigation(() => navigate('/' + tab.view));
               }}
               className={`pb-4 text-sm font-medium transition-colors relative shrink-0 ${
                 (tab.view === 'settings' && settingsTab === 'general') || (tab.view === 'settings-workspace' && settingsTab === 'workspace')
@@ -588,7 +484,36 @@ export const SettingsPage: React.FC = () => {
         ) : (
           <>
             {workspace && canManageSettings && (
-              <WorkflowStatusesEditor workspaceId={workspace.id} canManage={canManageSettings} />
+              <WorkflowAutomationEditor
+                initialStatuses={workspaceWorkflowStatuses}
+                initialAutomation={activeWorkspace?.workflowAutomation ?? null}
+                canManage={canManageSettings}
+                onDirtyChange={setWorkflowAutomationDirty}
+                onSave={(payload) => workspaceService.updateWorkflowAutomation(workspace.id, payload)}
+                onSaved={(saved) => {
+                  if (activeWorkspace) {
+                    setWorkspace({ ...activeWorkspace, workflowAutomation: saved });
+                  }
+                  queryClient.invalidateQueries({ queryKey: ['workspaces'] });
+                }}
+              />
+            )}
+
+            {workspace && canManageSettings && (
+              <WorkflowStatusesEditor
+                initialStatuses={workspaceWorkflowStatuses}
+                canManage={canManageSettings}
+                onDirtyChange={setWorkflowStatusesDirty}
+                onSave={(data) => workspaceService.updateStatuses(workspace.id, data)}
+                onSaved={(saved) => {
+                  if (activeWorkspace) {
+                    setWorkspace({ ...activeWorkspace, customStatuses: saved as WorkspaceStatus[] });
+                  }
+                  queryClient.invalidateQueries({ queryKey: ['workspaces'] });
+                }}
+                getStatusUsage={(statusKey, limit) => workspaceService.getStatusUsage(workspace.id, statusKey, limit)}
+                onMergeStatus={(sourceKey, targetStatusKey) => workspaceService.mergeStatus(workspace.id, sourceKey, targetStatusKey)}
+              />
             )}
 
             {workspace && canManageSettings && (
@@ -638,6 +563,35 @@ export const SettingsPage: React.FC = () => {
           </>
         )}
       </div>
+
+      <Modal
+        isOpen={pendingNavigation !== null}
+        onClose={handleStayOnPage}
+        title="Leave without saving?"
+        maxWidth="max-w-md"
+      >
+        <div className="space-y-5">
+          <p className="text-sm leading-6 text-gray-500 dark:text-gray-400">
+            You have unsaved changes on this page. If you leave now, those edits will be lost.
+          </p>
+          <div className="flex justify-end gap-3">
+            <button
+              type="button"
+              onClick={handleStayOnPage}
+              className="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 dark:border-border-dark dark:text-gray-300 dark:hover:bg-white/5"
+            >
+              Stay here
+            </button>
+            <button
+              type="button"
+              onClick={handleLeavePage}
+              className="rounded-lg bg-red-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-600"
+            >
+              Leave page
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

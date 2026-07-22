@@ -35,6 +35,8 @@ export function useWorkspaceSwitch() {
         role: workspace.role.toLowerCase() as AuthWorkspace['role'],
         defaultTeamId: workspace.defaultTeamId,
         customStatuses: workspace.customStatuses,
+        workflowAutomation: workspace.workflowAutomation,
+        uploadPolicy: workspace.uploadPolicy,
       };
       setWorkspace(authWorkspace);
 

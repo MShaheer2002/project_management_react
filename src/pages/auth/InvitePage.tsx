@@ -103,6 +103,7 @@ export const InvitePage: React.FC = () => {
         slug: accepted.workspace.slug,
         logo: accepted.workspace.logo || undefined,
         role: accepted.role.toLowerCase() as 'owner' | 'admin' | 'member' | 'guest',
+        uploadPolicy: 'BOTH',
       });
       showToast("You're now a member of this workspace.", 'success', 'Invitation accepted');
       navigate('/dashboard', { replace: true });

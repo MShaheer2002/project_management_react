@@ -11,6 +11,7 @@ import {
   CheckSquare,
   Clock,
   Filter,
+  FolderKanban,
   Loader2,
   MoreHorizontal,
   Plus,
@@ -27,9 +28,12 @@ import { LabelChip } from '@shared/components/ui/LabelChip';
 import { WorkflowStatusSelect } from '@shared/components/ui/WorkflowStatusSelect';
 import { useDepartmentsDirectory } from '@features/department';
 import { useTeamDetail } from '@features/team';
+import { useProjectOptions, useProjectWorkflows } from '@features/projects';
 import { useWorkspaceMemberOptions } from '@features/workspace';
-import { useWorkspaceStatuses } from '@shared/hooks/useWorkspaceStatuses';
-import type { Issue, IssueType, Priority, Status } from '@/types';
+import { getApiErrorMessage } from '@shared/services';
+import { useEffectiveWorkflowStatuses } from '@shared/hooks/useEffectiveWorkflowStatuses';
+import { checkTransitionAllowed } from '@shared/utils/workflowTransitions';
+import type { Issue, IssueType, Priority, Status, WorkspaceStatus } from '@/types';
 import { useDeleteAnyIssue, useIssuesDirectory, useUpdateAnyIssueStatus } from '../hooks/useIssueData';
 
 const TypeBadge: React.FC<{ type: IssueType }> = ({ type }) => {
@@ -126,18 +130,22 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
   const teamIdFromQuery = searchParams.get('team') || undefined;
   const activeTeamId = teamId ?? teamIdFromQuery;
   const role = useAuthStore((state) => state.workspace?.role);
+  const currentUserId = useAuthStore((state) => state.currentUser?.id);
   const canDelete = canDeleteIssues(role);
+  const isCrossProject = !projectId;
 
   const [viewMode, setViewMode] = useState<'list' | 'kanban' | 'calendar'>(initialViewMode);
   const [searchQuery, setSearchQuery] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState<string>('all');
   const [typeFilter, setTypeFilter] = useState<IssueType | 'all'>('all');
+  const [projectFilter, setProjectFilter] = useState<string>('all');
   const [selectedAssigneeIds, setSelectedAssigneeIds] = useState<string[]>([]);
   const [selectedIssueIds, setSelectedIssueIds] = useState<string[]>([]);
   const [activeIssueMenuId, setActiveIssueMenuId] = useState<string | null>(null);
   const [assignmentDraft, setAssignmentDraft] = useState<{ issueIds: string[]; teamId?: string } | null>(null);
   const deferredSearchQuery = useDeferredValue(searchQuery);
-  const workspaceStatuses = useWorkspaceStatuses();
+  const effectiveProjectId = projectId ?? (projectFilter === 'all' ? undefined : projectFilter);
+  const ownWorkflowStatuses = useEffectiveWorkflowStatuses(projectId);
   const [collapsedStatusKeys, setCollapsedStatusKeys] = useState<string[]>([]);
 
   const teamQuery = useTeamDetail(activeTeamId);
@@ -148,6 +156,7 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
     },
     { enabled: true }
   );
+  const projectOptionsQuery = useProjectOptions({ sort: 'name:asc', limit: 100 }, { enabled: isCrossProject });
   const assigneeOptionsQuery = useWorkspaceMemberOptions(
     {
       sort: 'name:asc',
@@ -157,7 +166,7 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
   );
   const issuesQuery = useIssuesDirectory({
     q: deferredSearchQuery.trim() || undefined,
-    projectId,
+    projectId: effectiveProjectId,
     teamId: activeTeamId,
     departmentId: departmentFilter === 'all' ? undefined : departmentFilter,
     type: typeFilter === 'all' ? undefined : typeFilter,
@@ -168,6 +177,7 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
   const deleteAnyIssue = useDeleteAnyIssue();
 
   const departments = departmentsQuery.data?.pages.flatMap((page) => page.items) ?? [];
+  const projectOptions = projectOptionsQuery.data?.pages.flatMap((page) => page.items) ?? [];
   const workspaceAssigneeOptions = assigneeOptionsQuery.data?.pages.flatMap((page) => page.items) ?? [];
   const issues = useMemo(() => {
     const issuesById = new Map<string, Issue>();
@@ -178,6 +188,29 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
     });
     return Array.from(issuesById.values());
   }, [issuesQuery.data]);
+
+  // Cross-project view: issues can belong to different projects, each potentially on
+  // its own workflow. Resolve every distinct project's effective workflow (bounded by
+  // whatever projects are actually represented among the loaded issues) so statuses
+  // that only exist on one project's override still show up, and moves can be checked
+  // against the issue's OWN project rather than a single workspace-wide list.
+  const distinctIssueProjectIds = useMemo(
+    () => (isCrossProject ? [...new Set(issues.map((issue) => issue.projectId))] : []),
+    [isCrossProject, issues]
+  );
+  const projectWorkflowsById = useProjectWorkflows(distinctIssueProjectIds);
+  const workspaceStatuses = useMemo<WorkspaceStatus[]>(() => {
+    if (!isCrossProject) return ownWorkflowStatuses;
+
+    const merged = new Map<string, WorkspaceStatus>();
+    ownWorkflowStatuses.forEach((status) => merged.set(status.key, status));
+    projectWorkflowsById.forEach((workflow) => {
+      workflow.statuses.forEach((status) => {
+        if (!merged.has(status.key)) merged.set(status.key, status);
+      });
+    });
+    return [...merged.values()].sort((a, b) => a.order - b.order);
+  }, [isCrossProject, ownWorkflowStatuses, projectWorkflowsById]);
   const boardAssignees = useMemo<BoardAssigneeFilter[]>(() => {
     const map = new Map<string, BoardAssigneeFilter>();
 
@@ -217,6 +250,7 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
   const listStatusGroups = useMemo(
     () =>
       workspaceStatuses
+        .filter((status) => status.visibility.list !== false)
         .map((status) => ({
           status,
           items: visibleIssues.filter((issue) => issue.status === status.key),
@@ -236,14 +270,33 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
   }, [issues]);
 
   const handleIssueUpdate = async (issueId: string, newStatus: Status) => {
+    const issue = issues.find((item) => item.id === issueId);
+    if (issue && role) {
+      const issueOwnStatuses = isCrossProject
+        ? projectWorkflowsById.get(issue.projectId)?.statuses ?? ownWorkflowStatuses
+        : ownWorkflowStatuses;
+      const check = checkTransitionAllowed(issueOwnStatuses, {
+        currentStatusKey: issue.status,
+        nextStatusKey: newStatus,
+        actorRole: role,
+        actorUserId: currentUserId,
+        assigneeId: issue.assigneeId,
+        creatorId: issue.creatorId,
+      });
+      if (check.allowed === false) {
+        showToast(check.reason, 'error');
+        return false;
+      }
+    }
+
     try {
       await updateAnyIssueStatus.mutateAsync({
         issueId,
         status: newStatus,
       });
       return true;
-    } catch {
-      showToast('Failed to update issue status.', 'error');
+    } catch (error) {
+      showToast(getApiErrorMessage(error) || 'Failed to update issue status.', 'error');
       return false;
     }
   };
@@ -548,6 +601,7 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
       issues={visibleIssues}
       onIssueUpdate={handleIssueUpdate}
       onNewIssue={(status) => navigate(`/issues/create?status=${status}`)}
+      statuses={workspaceStatuses}
     />
   );
 
@@ -686,6 +740,23 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
               ))}
             </select>
           </div>
+          {isCrossProject && (
+            <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-md border border-gray-200 dark:border-border-dark bg-white dark:bg-white/5 shrink-0">
+              <FolderKanban size={14} className="text-gray-400" />
+              <select
+                value={projectFilter}
+                onChange={(event) => setProjectFilter(event.target.value)}
+                className="bg-transparent border-none text-xs font-medium outline-none focus:ring-0 appearance-none pr-4 cursor-pointer"
+              >
+                <option value="all">All Projects</option>
+                {projectOptions.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <button
             onClick={() => navigate('/issues/create')}
             className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary/90 transition-colors shrink-0"

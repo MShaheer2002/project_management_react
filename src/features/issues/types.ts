@@ -195,6 +195,7 @@ export interface CreateIssueInput {
   acceptanceCriteria?: string;
   relatedIssueKeys?: string[];
   notes?: string;
+  integrationRefs?: IssueIntegrationRef[];
   departmentId?: string | null;
 }
 
@@ -331,4 +332,21 @@ export interface ListIssueActivityInput {
 
 export interface AddIssueCommentAttachmentsInput {
   attachments: IssueCommentAttachmentInput[];
+}
+
+export interface IssueApprovalStatus {
+  statusKey: string;
+  statusLabel: string;
+  required: boolean;
+  requiredCount: number;
+  reviewerSource: 'project_members' | 'team_lead' | 'department_head' | 'manual';
+  currentCount: number;
+  satisfied: boolean;
+  approvals: Array<{
+    userId: string;
+    name: string;
+    email: string;
+    avatar: string | null;
+    approvedAt: string;
+  }>;
 }

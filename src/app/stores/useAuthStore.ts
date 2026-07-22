@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { WorkspaceStatus } from '@/types';
+import type { WorkflowAutomationConfig, WorkspaceStatus } from '@/types';
 
 export interface AuthUser {
   id: string;
@@ -19,6 +19,7 @@ export interface AuthWorkspace {
   role: 'owner' | 'admin' | 'member' | 'guest';
   defaultTeamId?: string; // Auto-created team — needed for invites, first project/issue creation
   customStatuses?: WorkspaceStatus[];
+  workflowAutomation?: WorkflowAutomationConfig;
   uploadPolicy?: UploadPolicy; // Controls where members can upload: BOTH (default), SYSTEM_ONLY, DRIVE_ONLY
 }
 

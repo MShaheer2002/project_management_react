@@ -2,6 +2,7 @@ import { privateApi } from '@shared/services/privateApi';
 import { publicApi } from '@shared/services/publicApi';
 import type { ApiListMeta, ApiPaginatedResponse, ApiResponse } from '@shared/services/types';
 import type { AxiosRequestConfig } from 'axios';
+import type { WorkflowAutomationConfig, WorkspaceStatus } from '@/types';
 
 /**
  * Workspace API response types.
@@ -23,7 +24,8 @@ export interface WorkspaceResponse {
   unreadNotifications?: number; // Per-workspace unread count (from GET /workspaces)
   joinedAt?: string;            // When user joined this workspace
   createdAt?: string;
-  customStatuses?: Array<{ key: string; label: string; color: string; order: number; isFinal: boolean; showOnBoard: boolean }>;
+  customStatuses?: WorkspaceStatus[];
+  workflowAutomation?: WorkflowAutomationConfig;
 }
 
 export interface CreateWorkspaceInput {
@@ -64,6 +66,33 @@ export interface UpdateWorkspaceInput {
   name?: string;
   logo?: string | null;
   uploadPolicy?: 'BOTH' | 'SYSTEM_ONLY' | 'DRIVE_ONLY';
+}
+
+export interface WorkspaceStatusUsageResponse {
+  statusKey: string;
+  label: string;
+  issueCount: number;
+  truncated?: boolean;
+  issues: Array<{
+    id: string;
+    publicId: string;
+    title: string;
+    project: {
+      id: string;
+      name: string;
+    } | null;
+  }>;
+}
+
+export interface WorkspaceStatusRemovalResolution {
+  statusKey: string;
+  action: 'move' | 'delete';
+  targetStatusKey?: string | null;
+}
+
+export interface UpdateWorkspaceStatusesInput {
+  statuses: NonNullable<WorkspaceResponse['customStatuses']>;
+  removalResolutions?: WorkspaceStatusRemovalResolution[];
 }
 
 export interface WorkspaceMemberResponse {
@@ -240,8 +269,37 @@ export const workspaceService = {
     return data.data;
   },
 
-  updateStatuses: async (workspaceId: string, statuses: NonNullable<WorkspaceResponse['customStatuses']>): Promise<NonNullable<WorkspaceResponse['customStatuses']>> => {
-    const { data } = await privateApi.put<ApiResponse<NonNullable<WorkspaceResponse['customStatuses']>>>(`/workspaces/${workspaceId}/statuses`, statuses);
+  getStatusUsage: async (workspaceId: string, statusKey: string, limit?: number): Promise<WorkspaceStatusUsageResponse> => {
+    const { data } = await privateApi.get<ApiResponse<WorkspaceStatusUsageResponse>>(`/workspaces/${workspaceId}/statuses/${statusKey}/usage`, {
+      params: limit ? { limit } : undefined,
+    });
+    return data.data;
+  },
+
+  updateStatuses: async (workspaceId: string, input: UpdateWorkspaceStatusesInput): Promise<NonNullable<WorkspaceResponse['customStatuses']>> => {
+    const { data } = await privateApi.put<ApiResponse<NonNullable<WorkspaceResponse['customStatuses']>>>(`/workspaces/${workspaceId}/statuses`, input);
+    return data.data;
+  },
+
+  mergeStatus: async (
+    workspaceId: string,
+    statusKey: string,
+    targetStatusKey: string
+  ): Promise<NonNullable<WorkspaceResponse['customStatuses']>> => {
+    const { data } = await privateApi.post<ApiResponse<NonNullable<WorkspaceResponse['customStatuses']>>>(
+      `/workspaces/${workspaceId}/statuses/${statusKey}/merge`,
+      { targetStatusKey }
+    );
+    return data.data;
+  },
+
+  getWorkflowAutomation: async (workspaceId: string): Promise<WorkflowAutomationConfig> => {
+    const { data } = await privateApi.get<ApiResponse<WorkflowAutomationConfig>>(`/workspaces/${workspaceId}/workflow-automation`);
+    return data.data;
+  },
+
+  updateWorkflowAutomation: async (workspaceId: string, input: WorkflowAutomationConfig): Promise<WorkflowAutomationConfig> => {
+    const { data } = await privateApi.put<ApiResponse<WorkflowAutomationConfig>>(`/workspaces/${workspaceId}/workflow-automation`, input);
     return data.data;
   },
 

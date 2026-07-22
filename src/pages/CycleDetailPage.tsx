@@ -267,9 +267,14 @@ export const CycleDetailPage: React.FC = () => {
   }, [cycleIssues, selectedAssigneeIds]);
   const visibleCycleIssues = issueView === 'board' ? filteredCycleIssues : cycleIssues;
   const visibleCycleIssueIds = useMemo(() => visibleCycleIssues.map((issue) => issue.id), [visibleCycleIssues]);
+  const cycleBoardStatuses = useMemo(
+    () => workspaceStatuses.filter((status) => status.visibility.cycleBoard !== false),
+    [workspaceStatuses],
+  );
   const listStatusGroups = useMemo(
     () =>
       workspaceStatuses
+        .filter((status) => status.visibility.cycleList !== false)
         .map((status) => ({
           status,
           items: visibleCycleIssues.filter((issue) => issue.status === status.key),
@@ -1137,6 +1142,7 @@ export const CycleDetailPage: React.FC = () => {
                 <div className="flex-1 overflow-hidden">
                   <KanbanBoard
                     issues={visibleCycleIssues}
+                    statuses={cycleBoardStatuses}
                     onIssueUpdate={handleIssueStatusUpdate}
                     onNewIssue={(status) => {
                       showToast(`Planning a ${STATUS_LABELS[status]} issue for ${cycle.name}.`, 'info');

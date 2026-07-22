@@ -16,7 +16,7 @@ interface ToastState {
   dismissToast: (id: string) => void;
 }
 
-export const useToastStore = create<ToastState>()((set) => ({
+export const useToastStore = create<ToastState>()((set, get) => ({
   toasts: [],
 
   /**
@@ -27,6 +27,13 @@ export const useToastStore = create<ToastState>()((set) => ({
    * @param duration - Auto-dismiss in ms (default: 5000, use 0 for persistent)
    */
   showToast: (message, type = 'success', title, duration) => {
+    // Skip if an identical toast (same type/title/message) is already showing —
+    // prevents duplicate-looking stacks from repeated retries of the same failure.
+    const alreadyShowing = get().toasts.some(
+      (t) => t.type === type && t.title === title && t.message === message
+    );
+    if (alreadyShowing) return;
+
     const id = Math.random().toString(36).substring(2, 9);
     const autoDismiss = duration ?? (type === 'error' ? 6000 : 5000);
 

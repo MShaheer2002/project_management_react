@@ -30,6 +30,8 @@ export const useUpdateWorkspace = () => {
         name: workspace.name,
         slug: workspace.slug,
         logo: workspace.logo ?? undefined,
+        customStatuses: workspace.customStatuses ?? current.customStatuses,
+        workflowAutomation: workspace.workflowAutomation ?? current.workflowAutomation,
         uploadPolicy: workspace.uploadPolicy ?? current.uploadPolicy,
       });
       queryClient.invalidateQueries({ queryKey: workspaceQueryKeys.detail(workspaceId) });

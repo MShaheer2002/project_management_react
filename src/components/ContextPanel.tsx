@@ -24,6 +24,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { useAuthStore } from '@/app/stores/useAuthStore';
 import { useApp } from '@/AppContext';
 import { ISSUE_TYPE_CONFIG, PRIORITY_COLORS, STATUS_LABELS } from '@/constants';
+import { useEffectiveWorkflowStatuses } from '@shared/hooks/useEffectiveWorkflowStatuses';
 import { canDeleteIssues } from '@shared/permissions';
 import { getApiErrorCode, getApiErrorMessage } from '@shared/services';
 import { normalizeDateForInput, normalizeTimeForInput } from '@shared/utils/date';
@@ -34,6 +35,7 @@ import { useIssueSocketRoom } from '@features/notifications';
 import { AssignIssuesToCycleDialog } from '@features/cycles';
 import {
   IssueActivityTimeline,
+  IssueApprovalPanel,
   IssueCommentsThread,
   IssueLabelsEditor,
   SubtaskList,
@@ -67,6 +69,7 @@ export const ContextPanel: React.FC = () => {
   const { selectedIssueId, setSelectedIssueId, showToast } = useApp();
   const navigate = useNavigate();
   const role = useAuthStore((state) => state.workspace?.role);
+  const currentUser = useAuthStore((state) => state.currentUser);
   const canDelete = canDeleteIssues(role);
 
   const [activeTab, setActiveTab] = useState<'comments' | 'activity'>('comments');
@@ -77,6 +80,7 @@ export const ContextPanel: React.FC = () => {
 
   const issueQuery = useIssueDetail(selectedIssueId || undefined);
   const issue = issueQuery.data;
+  const workspaceStatuses = useEffectiveWorkflowStatuses(issue?.projectId);
   const errorCode = getApiErrorCode(issueQuery.error);
   const issueResourceId = issue?.entityId ?? selectedIssueId ?? undefined;
   const displayIssueId = issue?.id ?? (/^[A-Z]+-\d+$/i.test(selectedIssueId ?? '') ? selectedIssueId ?? '' : '');
@@ -107,6 +111,21 @@ export const ContextPanel: React.FC = () => {
       ...items,
     ];
   }, [assigneeOptionsQuery.data, issue?.assignee]);
+  const statusOptions = useMemo(() => {
+    if (!issue) {
+      return workspaceStatuses.map((status) => ({ key: status.key, label: status.label }));
+    }
+
+    const current = workspaceStatuses.find((status) => status.key === issue.status);
+    if (!current || current.transitions.mode === 'free') {
+      return workspaceStatuses.map((status) => ({ key: status.key, label: status.label }));
+    }
+
+    const allowedKeys = new Set([issue.status, ...current.transitions.to]);
+    return workspaceStatuses
+      .filter((status) => allowedKeys.has(status.key))
+      .map((status) => ({ key: status.key, label: status.label }));
+  }, [issue, workspaceStatuses]);
 
   if (!selectedIssueId) return null;
 
@@ -147,7 +166,7 @@ export const ContextPanel: React.FC = () => {
   const handleStatusChange = async (status: Status) => {
     try {
       await updateIssueStatus.mutateAsync(status);
-      showToast(`Status updated to ${STATUS_LABELS[status]}.`, 'success');
+      showToast(`Status updated to ${statusOptions.find((option) => option.key === status)?.label ?? STATUS_LABELS[status] ?? status}.`, 'success');
     } catch (error) {
       showToast(getApiErrorMessage(error) || 'Failed to update status.', 'error');
     }
@@ -357,9 +376,9 @@ export const ContextPanel: React.FC = () => {
                   onChange={(event) => handleStatusChange(event.target.value as Status)}
                   className="w-full cursor-pointer appearance-none rounded-lg border border-transparent bg-transparent px-2 py-1 text-xs font-medium outline-none transition-all hover:bg-gray-100 dark:hover:bg-white/5"
                 >
-                  {Object.entries(STATUS_LABELS).map(([status, label]) => (
-                    <option key={status} value={status}>
-                      {label}
+                  {statusOptions.map((status) => (
+                    <option key={status.key} value={status.key}>
+                      {status.label}
                     </option>
                   ))}
                 </select>
@@ -426,6 +445,8 @@ export const ContextPanel: React.FC = () => {
                 className="rounded-lg border border-transparent bg-transparent px-2 py-1 text-xs font-medium outline-none transition-all hover:bg-gray-100 focus:bg-white focus:ring-2 focus:ring-primary/20 [color-scheme:light] dark:hover:bg-white/5 dark:focus:bg-white/5 dark:[color-scheme:dark]"
               />
             </div>
+
+            <IssueApprovalPanel issueId={issueResourceId} currentUserId={currentUser?.id} />
 
             <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-border-dark dark:bg-card-dark">
               <h3 className="mb-3 text-[10px] font-bold uppercase tracking-wider text-gray-400">Project scope</h3>

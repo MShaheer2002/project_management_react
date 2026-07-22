@@ -38,6 +38,7 @@ import {
   useRemoveProjectMember,
   useUpdateProject,
 } from '../hooks/useProjectData';
+import { ProjectWorkflowSettings } from '../components/ProjectWorkflowSettings';
 import type { ProjectMemberRow, ProjectStatus, ProjectVisibility } from '../types';
 import type { Issue } from '@/types';
 
@@ -839,6 +840,8 @@ export const ProjectDetailPage: React.FC = () => {
           ))}
         </div>
       </section>
+
+      {project && <ProjectWorkflowSettings projectId={project.id} canManage={canManage} />}
 
       <section className="space-y-6">
         <div>

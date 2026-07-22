@@ -45,6 +45,8 @@ export const issueQueryKeys = {
     [...issueQueryKeys.detail(workspaceId, issueId), 'comments'] as const,
   activity: (workspaceId: string | undefined, issueId: string | undefined) =>
     [...issueQueryKeys.detail(workspaceId, issueId), 'activity'] as const,
+  approvals: (workspaceId: string | undefined, issueId: string | undefined) =>
+    [...issueQueryKeys.detail(workspaceId, issueId), 'approvals'] as const,
   labels: (workspaceId: string | undefined, params: object) =>
     [...issueQueryKeys.workspace(workspaceId), 'labels', params] as const,
 };
@@ -294,6 +296,40 @@ export const useUpdateIssueStatus = (issueId: string | undefined) => {
         teamId: issue.teamId,
         departmentId: issue.departmentId,
       });
+    },
+  });
+};
+
+export const useIssueApprovalStatus = (issueId: string | undefined) => {
+  const workspaceId = useAuthStore((s) => s.workspace?.id);
+
+  return useQuery({
+    queryKey: issueQueryKeys.approvals(workspaceId, issueId),
+    queryFn: () => issueService.getApprovalStatus(issueId!),
+    enabled: Boolean(workspaceId && issueId),
+  });
+};
+
+export const useApproveIssueStatus = (issueId: string | undefined) => {
+  const queryClient = useQueryClient();
+  const workspaceId = useAuthStore((s) => s.workspace?.id);
+
+  return useMutation({
+    mutationFn: () => issueService.approveStatus(issueId!),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: issueQueryKeys.approvals(workspaceId, issueId) });
+    },
+  });
+};
+
+export const useRevokeIssueApproval = (issueId: string | undefined) => {
+  const queryClient = useQueryClient();
+  const workspaceId = useAuthStore((s) => s.workspace?.id);
+
+  return useMutation({
+    mutationFn: () => issueService.revokeApproval(issueId!),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: issueQueryKeys.approvals(workspaceId, issueId) });
     },
   });
 };

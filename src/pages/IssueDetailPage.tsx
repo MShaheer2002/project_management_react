@@ -28,6 +28,7 @@ import { normalizeRichTextValue, RichTextEditor } from '@/components/RichTextEdi
 import { PRIORITY_COLORS, ISSUE_TYPE_CONFIG } from '@/constants';
 import { getStatusLabel } from '@shared/constants/statuses';
 import { useWorkspaceStatuses } from '@shared/hooks/useWorkspaceStatuses';
+import { useEffectiveWorkflowStatuses } from '@shared/hooks/useEffectiveWorkflowStatuses';
 import { canDeleteIssues } from '@shared/permissions';
 import { getApiErrorCode, getApiErrorMessage } from '@shared/services';
 import { normalizeDateForInput, normalizeTimeForInput } from '@shared/utils/date';
@@ -37,6 +38,7 @@ import { useWorkspaceMemberOptions } from '@features/workspace';
 import { useIssueSocketRoom } from '@features/notifications';
 import { useAssignIssueToCycle, useCycles, useUnassignIssueFromCycle } from '@features/cycles';
 import {
+  IssueApprovalPanel,
   IssueAttachmentsField,
   IssueActivityTimeline,
   IssueSystemParametersPanel,
@@ -104,9 +106,11 @@ const PrioritySelect: React.FC<{
 const StatusSelect: React.FC<{
   value: Status;
   disabled?: boolean;
+  options?: Array<{ key: string; label: string }>;
   onChange: (value: Status) => void;
-}> = ({ value, disabled, onChange }) => {
+}> = ({ value, disabled, options, onChange }) => {
   const workspaceStatuses = useWorkspaceStatuses();
+  const resolvedOptions = options ?? workspaceStatuses.map((status) => ({ key: status.key, label: status.label }));
   return (
     <div className="relative group">
       <select
@@ -115,7 +119,7 @@ const StatusSelect: React.FC<{
         onChange={(event) => onChange(event.target.value as Status)}
         className="w-full cursor-pointer appearance-none rounded-lg border border-transparent bg-transparent px-2 py-1 text-xs font-medium outline-none transition-all hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60 dark:hover:bg-white/5"
       >
-        {workspaceStatuses.map((ws) => (
+        {resolvedOptions.map((ws) => (
           <option key={ws.key} value={ws.key}>
             {ws.label}
           </option>
@@ -147,6 +151,9 @@ export const IssueDetailPage: React.FC = () => {
   const { showToast, setSelectedIssueId } = useApp();
   const currentUser = useAuthStore((state) => state.currentUser);
   const role = useAuthStore((state) => state.workspace?.role);
+  const issueQuery = useIssueDetail(issueId);
+  const issue = issueQuery.data;
+  const workspaceStatuses = useEffectiveWorkflowStatuses(issue?.projectId);
 
   const [activeTab, setActiveTab] = useState<'comments' | 'activity'>('comments');
   const [isAttachmentComposerOpen, setIsAttachmentComposerOpen] = useState(false);
@@ -175,8 +182,21 @@ export const IssueDetailPage: React.FC = () => {
   const { dialog: projectAssignmentDialog, handleAssignmentError } = useProjectAssignmentGuard();
   useIssueSocketRoom(issueId);
 
-  const issueQuery = useIssueDetail(issueId);
-  const issue = issueQuery.data;
+  const statusOptions = useMemo(() => {
+    if (!issue) {
+      return workspaceStatuses.map((status) => ({ key: status.key, label: status.label }));
+    }
+
+    const current = workspaceStatuses.find((status) => status.key === issue.status);
+    if (!current || current.transitions.mode === 'free') {
+      return workspaceStatuses.map((status) => ({ key: status.key, label: status.label }));
+    }
+
+    const allowedKeys = new Set([issue.status, ...current.transitions.to]);
+    return workspaceStatuses
+      .filter((status) => allowedKeys.has(status.key))
+      .map((status) => ({ key: status.key, label: status.label }));
+  }, [issue, workspaceStatuses]);
   const errorCode = getApiErrorCode(issueQuery.error);
   const issueResourceId = issue?.entityId ?? issueId ?? '';
   const assigneeOptionsQuery = useWorkspaceMemberOptions(
@@ -291,8 +311,6 @@ export const IssueDetailPage: React.FC = () => {
       showToast(getApiErrorMessage(error) || 'Failed to delete issue.', 'error');
     }
   };
-
-  const workspaceStatuses = useWorkspaceStatuses();
 
   const handleStatusChange = async (nextStatus: Status) => {
     try {
@@ -1168,6 +1186,7 @@ export const IssueDetailPage: React.FC = () => {
               <StatusSelect
                 value={issue.status}
                 disabled={updateIssueStatus.isPending}
+                options={statusOptions}
                 onChange={handleStatusChange}
               />
 
@@ -1235,6 +1254,8 @@ export const IssueDetailPage: React.FC = () => {
                 <ChevronDown size={12} className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 opacity-0 transition-opacity group-hover:opacity-100" />
               </div>
             </div>
+
+            <IssueApprovalPanel issueId={issueResourceId} currentUserId={currentUser?.id} />
 
             <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-border-dark dark:bg-card-dark">
               <h3 className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-400">Project scope</h3>

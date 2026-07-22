@@ -8,6 +8,7 @@ import {
   CheckSquare,
   Clock,
   Filter,
+  FolderKanban,
   Kanban,
   List,
   MoreHorizontal,
@@ -22,10 +23,13 @@ import { getStatusLabel, isStatusFinal } from '@shared/constants/statuses';
 import { canDeleteIssues } from '@shared/permissions';
 import { WorkflowStatusSelect } from '@shared/components/ui/WorkflowStatusSelect';
 import { useWorkspaceStatuses } from '@shared/hooks/useWorkspaceStatuses';
+import { getApiErrorMessage } from '@shared/services';
+import { checkTransitionAllowed } from '@shared/utils/workflowTransitions';
 import { formatCalendarDate } from '@shared/utils/date';
-import { Issue, IssueType, Status } from '../types';
+import { Issue, IssueType, Status, WorkspaceStatus } from '../types';
 import { KanbanBoard } from '../components/board/KanbanBoard';
 import { useDeleteAnyIssue, useIssuesDirectory, useUpdateAnyIssueStatus } from '@/features/issues';
+import { useProjectOptions, useProjectWorkflows } from '@features/projects';
 import { AssignIssuesToCycleDialog } from '@features/cycles';
 
 const TypeBadge: React.FC<{ type: IssueType }> = ({ type }) => {
@@ -43,7 +47,7 @@ const TypeBadge: React.FC<{ type: IssueType }> = ({ type }) => {
 export const MyIssuesPage: React.FC = () => {
   const currentUser = useAuthStore((s) => s.currentUser);
   const role = useAuthStore((s) => s.workspace?.role);
-  const workspaceStatuses = useWorkspaceStatuses();
+  const ownWorkflowStatuses = useWorkspaceStatuses();
   const { setSelectedIssueId, showToast } = useApp();
   const navigate = useNavigate();
   const canDelete = canDeleteIssues(role);
@@ -51,17 +55,21 @@ export const MyIssuesPage: React.FC = () => {
   const [viewMode, setViewMode] = useState<'list' | 'board'>('board');
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<IssueType | 'all'>('all');
+  const [projectFilter, setProjectFilter] = useState<string>('all');
   const [selectedIssueIds, setSelectedIssueIds] = useState<string[]>([]);
   const [activeIssueMenuId, setActiveIssueMenuId] = useState<string | null>(null);
   const [assignmentDraft, setAssignmentDraft] = useState<{ issueIds: string[]; teamId?: string } | null>(null);
   const [collapsedStatusKeys, setCollapsedStatusKeys] = useState<string[]>([]);
   const deferredSearch = useDeferredValue(search);
 
-  const finalStatusKeys = workspaceStatuses.filter((s) => s.isFinal).map((s) => s.key);
+  const finalStatusKeys = ownWorkflowStatuses.filter((s) => s.isFinal).map((s) => s.key);
+  const projectOptionsQuery = useProjectOptions({ sort: 'name:asc', limit: 100 });
+  const projectOptions = projectOptionsQuery.data?.pages.flatMap((page) => page.items) ?? [];
   const issuesQuery = useIssuesDirectory(
     {
       q: deferredSearch.trim() || undefined,
       type: typeFilter === 'all' ? undefined : typeFilter,
+      projectId: projectFilter === 'all' ? undefined : projectFilter,
       assigneeId: activeTab === 'assigned' || activeTab === 'completed' ? currentUser?.id : undefined,
       creatorId: activeTab === 'created' ? currentUser?.id : undefined,
       status: activeTab === 'completed' ? (finalStatusKeys[0] ?? 'done') : undefined,
@@ -83,6 +91,26 @@ export const MyIssuesPage: React.FC = () => {
     return Array.from(issuesById.values());
   }, [issuesQuery.data]);
 
+  // My Issues always spans every project the user is assigned to/created issues in,
+  // so it needs the same cross-project workflow resolution as the All Issues view —
+  // each project can have its own override, and a status like "cvzvc" from one
+  // project shouldn't be invisible just because it's not in the workspace default.
+  const distinctIssueProjectIds = useMemo(
+    () => [...new Set(allIssues.map((issue) => issue.projectId))],
+    [allIssues]
+  );
+  const projectWorkflowsById = useProjectWorkflows(distinctIssueProjectIds);
+  const workspaceStatuses = useMemo<WorkspaceStatus[]>(() => {
+    const merged = new Map<string, WorkspaceStatus>();
+    ownWorkflowStatuses.forEach((status) => merged.set(status.key, status));
+    projectWorkflowsById.forEach((workflow) => {
+      workflow.statuses.forEach((status) => {
+        if (!merged.has(status.key)) merged.set(status.key, status);
+      });
+    });
+    return [...merged.values()].sort((a, b) => a.order - b.order);
+  }, [ownWorkflowStatuses, projectWorkflowsById]);
+
   const myIssues = useMemo(() => {
     if (activeTab === 'assigned') {
       return allIssues.filter((issue) => !isStatusFinal(workspaceStatuses, issue.status));
@@ -95,6 +123,7 @@ export const MyIssuesPage: React.FC = () => {
   const listStatusGroups = useMemo(
     () =>
       workspaceStatuses
+        .filter((status) => status.visibility.list !== false)
         .map((status) => ({
           status,
           items: myIssues.filter((issue) => issue.status === status.key),
@@ -108,11 +137,28 @@ export const MyIssuesPage: React.FC = () => {
   }, [myIssues]);
 
   const handleIssueUpdate = async (issueId: string, newStatus: Status) => {
+    const issue = allIssues.find((item) => item.id === issueId);
+    if (issue && role) {
+      const issueOwnStatuses = projectWorkflowsById.get(issue.projectId)?.statuses ?? ownWorkflowStatuses;
+      const check = checkTransitionAllowed(issueOwnStatuses, {
+        currentStatusKey: issue.status,
+        nextStatusKey: newStatus,
+        actorRole: role,
+        actorUserId: currentUser?.id,
+        assigneeId: issue.assigneeId,
+        creatorId: issue.creatorId,
+      });
+      if (check.allowed === false) {
+        showToast(check.reason, 'error');
+        return false;
+      }
+    }
+
     try {
       await updateAnyIssueStatus.mutateAsync({ issueId, status: newStatus });
       return true;
-    } catch {
-      showToast('Failed to update issue status.', 'error');
+    } catch (error) {
+      showToast(getApiErrorMessage(error) || 'Failed to update issue status.', 'error');
       return false;
     }
   };
@@ -483,6 +529,21 @@ export const MyIssuesPage: React.FC = () => {
               <option value="issue">Issues</option>
             </select>
           </div>
+          <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-md border border-gray-200 dark:border-border-dark bg-white dark:bg-white/5 shrink-0">
+            <FolderKanban size={14} className="text-gray-400" />
+            <select
+              value={projectFilter}
+              onChange={(event) => setProjectFilter(event.target.value)}
+              className="bg-transparent border-none text-xs font-medium outline-none focus:ring-0 appearance-none pr-4 cursor-pointer"
+            >
+              <option value="all">All Projects</option>
+              {projectOptions.map((project) => (
+                <option key={project.id} value={project.id}>
+                  {project.name}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </header>
 
@@ -577,6 +638,7 @@ export const MyIssuesPage: React.FC = () => {
             onIssueUpdate={handleIssueUpdate}
             onNewIssue={() => {}}
             hideNewIssueButton={true}
+            statuses={workspaceStatuses}
           />
         )}
 

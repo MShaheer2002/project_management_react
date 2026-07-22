@@ -1,4 +1,5 @@
 export { IssuesPage } from './components/IssuesPage';
+export { IssueApprovalPanel } from './components/IssueApprovalPanel';
 export { CreateIssueModal } from './components/CreateIssueModal';
 export { SubtaskList } from './components/SubtaskList';
 export { IssueSystemParametersPanel } from './components/IssueSystemParametersPanel';
@@ -15,6 +16,7 @@ export {
   useAddIssueCommentAttachments,
   useAddIssueDependency,
   useAddIssueDependencyAny,
+  useApproveIssueStatus,
   useAttachIssueLabels,
   useAttachIssueLabelsAny,
   useAddIssueWatchers,
@@ -30,6 +32,7 @@ export {
   useDeleteIssue,
   useDeleteIssueSubtask,
   useIssueActivity,
+  useIssueApprovalStatus,
   useIssueComments,
   useIssueDetail,
   useIssueLabels,
@@ -43,6 +46,7 @@ export {
   useRemoveIssueLabelAny,
   useRemoveIssueWatcher,
   useReorderIssueSubtasks,
+  useRevokeIssueApproval,
   useUpdateAnyIssue,
   useUpdateAnyIssueStatus,
   useUpdateLabel,
@@ -65,6 +69,7 @@ export type {
   CreateIssueInput,
   CreateIssueSubtaskInput,
   IssueActivityItem,
+  IssueApprovalStatus,
   IssueAssignmentEligibility,
   IssueCommentAttachment,
   IssueCommentAttachmentInput,

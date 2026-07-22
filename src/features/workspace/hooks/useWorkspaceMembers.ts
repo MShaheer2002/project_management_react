@@ -1,4 +1,4 @@
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '@/app/stores/useAuthStore';
 import {
   workspaceService,
@@ -61,5 +61,6 @@ export const useWorkspaceMemberOptions = (
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage.meta.cursor ?? undefined,
     enabled: Boolean(workspaceId) && (options?.enabled ?? true),
+    placeholderData: keepPreviousData,
   });
 };

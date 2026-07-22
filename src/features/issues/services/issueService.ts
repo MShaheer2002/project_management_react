@@ -19,6 +19,7 @@ import type {
   IssueComment,
   IssueCompactOption,
   IssueDependencyRow,
+  IssueApprovalStatus,
   IssueDetail,
   IssueListResult,
   IssueLabelRow,
@@ -434,6 +435,21 @@ export const issueService = {
       mutationConfig
     );
     return normalizeIssueDetail(data.data);
+  },
+
+  getApprovalStatus: async (issueId: string): Promise<IssueApprovalStatus> => {
+    const { data } = await privateApi.get<ApiResponse<IssueApprovalStatus>>(`/issues/${issueId}/approvals`);
+    return data.data;
+  },
+
+  approveStatus: async (issueId: string): Promise<IssueApprovalStatus> => {
+    const { data } = await privateApi.post<ApiResponse<IssueApprovalStatus>>(`/issues/${issueId}/approvals`, {}, mutationConfig);
+    return data.data;
+  },
+
+  revokeApproval: async (issueId: string): Promise<IssueApprovalStatus> => {
+    const { data } = await privateApi.delete<ApiResponse<IssueApprovalStatus>>(`/issues/${issueId}/approvals`, mutationConfig);
+    return data.data;
   },
 
   createSubtask: async (issueId: string, input: CreateIssueSubtaskInput): Promise<IssueSubtask> => {
