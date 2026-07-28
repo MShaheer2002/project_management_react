@@ -22,12 +22,12 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Globe,
-  Key,
   CreditCard,
   FileText,
   CircleDot,
   LayoutGrid,
   FolderKanban,
+  Sparkles,
 } from 'lucide-react';
 import { useAuth } from '@clerk/clerk-react';
 import { useAuthStore } from '@/app/stores/useAuthStore';
@@ -308,10 +308,10 @@ export const Sidebar: React.FC = () => {
       { path: '/members', label: 'Members', icon: <Users size={16} /> },
       { path: '/activity', label: 'Activity', icon: <History size={16} /> },
       { path: '/analytics', label: 'Analytics', icon: <BarChart3 size={16} />, leadOnly: true },
-      { path: '/integrations', label: 'Integrations', icon: <Globe size={16} />, leadOnly: true },
+      { path: '/integrations', label: 'Integrations', icon: <Globe size={16} />, adminOnly: true },
       { path: '/templates', label: 'Templates', icon: <FileText size={16} />, permission: 'canManageTemplates' },
-      { path: '/api-keys', label: 'API Keys', icon: <Key size={16} />, permission: 'canManageApiKeys' },
       { path: '/billing', label: 'Billing', icon: <CreditCard size={16} />, permission: 'canManageBilling' },
+      { path: '/ai-usage', label: 'AI Usage', icon: <Sparkles size={16} />, adminOnly: true },
       { path: '/settings', label: 'Settings', icon: <Settings size={16} />, permission: 'canManageSettings' },
     ];
 

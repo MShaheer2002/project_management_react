@@ -380,7 +380,9 @@ export const CycleDetailPage: React.FC = () => {
 
   const handleIssueStatusUpdate = async (issueId: string, status: Status) => {
     try {
-      await updateIssueStatus.mutateAsync({ issueId, status });
+      // Kanban drags pass entityId (internal UUID) when present; match either form.
+      const previousStatus = cycleIssues.find((issue) => issue.id === issueId || issue.entityId === issueId)?.status;
+      await updateIssueStatus.mutateAsync({ issueId, status, previousStatus });
       queryClient.invalidateQueries({ queryKey: activityQueryKeys.workspace(workspaceId) });
       return true;
     } catch (error) {

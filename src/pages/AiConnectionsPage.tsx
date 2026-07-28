@@ -107,7 +107,12 @@ const setupCards = [
   { title: 'Cursor', description: 'Use the same token with a generated Trussen MCP endpoint config.' },
 ];
 
-export const AiConnectionsPage: React.FC = () => {
+interface AiConnectionsPageProps {
+  /** Render as a section within another page (e.g. Settings tabs) instead of a standalone full-height page — drops the bordered header and own scroll/padding. */
+  embedded?: boolean;
+}
+
+export const AiConnectionsPage: React.FC<AiConnectionsPageProps> = ({ embedded = false }) => {
   const { data: connections = [], isLoading, error, refetch } = useAiConnections();
   const healthCheck = useAiConnectionHealthCheck();
   const rotateConnection = useRotateAiConnection();
@@ -160,8 +165,8 @@ export const AiConnectionsPage: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-full">
-      <header className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-border-dark">
+    <div className={embedded ? '' : 'flex flex-col h-full'}>
+      <header className={`flex items-center justify-between ${embedded ? 'pb-4' : 'px-6 py-4 border-b border-gray-200 dark:border-border-dark'}`}>
         <div className="flex items-center gap-3">
           <h1 className="text-lg font-semibold dark:text-white">AI Connections</h1>
           {!isLoading && (
@@ -179,7 +184,7 @@ export const AiConnectionsPage: React.FC = () => {
         </button>
       </header>
 
-      <div className="p-6 space-y-5 overflow-y-auto flex-1">
+      <div className={embedded ? 'space-y-5' : 'p-6 space-y-5 overflow-y-auto flex-1'}>
         <div className="rounded-2xl border border-primary/10 bg-gradient-to-br from-primary/10 via-primary/[0.06] to-transparent px-5 py-4">
           <div className="flex items-start gap-3">
             <div className="w-10 h-10 rounded-xl bg-primary/15 text-primary flex items-center justify-center shrink-0">

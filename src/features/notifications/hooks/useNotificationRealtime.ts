@@ -151,6 +151,7 @@ export const useNotificationRealtime = () => {
   const processedEnvelopeIdsRef = useRef<Set<string>>(new Set());
   const processedNotificationIdsRef = useRef<Set<string>>(new Set());
   const allowSoundRef = useRef(false);
+  const hasConnectedOnceRef = useRef(false);
 
   useEffect(() => {
     const enableSound = () => {
@@ -233,8 +234,14 @@ export const useNotificationRealtime = () => {
         log('notification:read-all', envelope.payload);
       };
 
-      const handleWorkspaceIssueChange = (envelope: RealtimeEnvelope<{ issueId?: string }>) => {
+      const handleWorkspaceIssueChange = (envelope: RealtimeEnvelope<{ issueId?: string; actorUserId?: string }>) => {
         if (envelope.workspaceId !== workspaceId) return;
+        // The actor's own change already updated their cache directly (optimistic
+        // patch on the mutation's onSuccess) — this broadcast is for OTHER clients.
+        // Without this check, every status change re-invalidated all 7+ board
+        // columns for the very user who just made the change, on top of the
+        // optimistic update that had already applied correctly.
+        if (envelope.payload?.actorUserId === currentUserId) return;
         queryClient.invalidateQueries({ queryKey: issueQueryKeys.workspace(workspaceId) });
       };
 
@@ -256,7 +263,16 @@ export const useNotificationRealtime = () => {
       };
 
       const handleConnect = async () => {
-        log('socket connected: triggering notification resync');
+        // The first connect of a session lands right after the notification list and
+        // unread-count queries already did their own natural initial fetch — resyncing
+        // again immediately is redundant. Only actual reconnects (a dropped connection
+        // that may have missed realtime events while it was down) need this.
+        if (!hasConnectedOnceRef.current) {
+          hasConnectedOnceRef.current = true;
+          log('socket connected (first time this session): skipping redundant resync');
+          return;
+        }
+        log('socket reconnected: triggering notification resync');
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: notificationQueryKeys.workspace(workspaceId) }),
           queryClient.invalidateQueries({ queryKey: notificationQueryKeys.unread(workspaceId) }),
@@ -316,12 +332,6 @@ export const useNotificationRealtime = () => {
       socket.on('connect_error', handleConnectError);
       socket.io.on('reconnect_attempt', handleReconnectAttempt);
 
-      const handleWindowFocus = () => {
-        queryClient.invalidateQueries({ queryKey: notificationQueryKeys.workspace(workspaceId) });
-        queryClient.invalidateQueries({ queryKey: notificationQueryKeys.unread(workspaceId) });
-      };
-      window.addEventListener('focus', handleWindowFocus);
-
       const cleanup = () => {
         socket.off('notification:created', handleNotificationCreated);
         socket.off('notification:read', handleNotificationRead);
@@ -343,7 +353,6 @@ export const useNotificationRealtime = () => {
         socket.off('connect', handleConnect);
         socket.off('connect_error', handleConnectError);
         socket.io.off('reconnect_attempt', handleReconnectAttempt);
-        window.removeEventListener('focus', handleWindowFocus);
       };
 
       return cleanup;

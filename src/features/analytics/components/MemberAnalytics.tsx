@@ -23,15 +23,12 @@ import { ChartCard } from './shared/ChartCard';
 import { AnalyticsLoadingState } from './shared/AnalyticsLoadingState';
 import { AnalyticsErrorState } from './shared/AnalyticsErrorState';
 import { EmptyAnalyticsState } from './shared/EmptyAnalyticsState';
-import { ExportButton } from './shared/ExportButton';
-import { PeriodSelector } from './shared/PeriodSelector';
 import { useMemberAnalytics } from '../hooks/useAnalyticsData';
 import type { AnalyticsPeriod, HeatmapPoint, ActivityItem } from '../types';
 
 interface MemberAnalyticsProps {
   memberId: string;
   period: AnalyticsPeriod;
-  onPeriodChange: (p: AnalyticsPeriod) => void;
 }
 
 const TOOLTIP_STYLE = {
@@ -229,7 +226,6 @@ const RecentActivityList: React.FC<RecentActivityListProps> = ({ activities }) =
 export const MemberAnalytics: React.FC<MemberAnalyticsProps> = ({
   memberId,
   period,
-  onPeriodChange,
 }) => {
   const { data, isLoading, isError, refetch } = useMemberAnalytics(memberId, { period });
 
@@ -241,12 +237,6 @@ export const MemberAnalytics: React.FC<MemberAnalyticsProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* ── Header ── */}
-      <div className="flex items-center justify-end gap-3">
-        <PeriodSelector value={period} onChange={onPeriodChange} />
-        <ExportButton scope="member" scopeId={memberId} params={{ period }} />
-      </div>
-
       {/* ── Stats Row ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard label="Assigned" value={summary.assigned} icon={<ListTodo size={20} />} />

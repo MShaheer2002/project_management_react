@@ -38,6 +38,7 @@ export {
   useIssueLabels,
   useIssueOptions,
   useIssuesDirectory,
+  useIssueStatusCounts,
   useIssueWatchers,
   useRemoveIssueAttachment,
   useRemoveIssueCommentAttachment,

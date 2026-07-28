@@ -109,7 +109,7 @@ export const LoginPage: React.FC = () => {
 
         <div className="relative z-10 flex flex-col h-full p-8 xl:p-12">
           {/* Logo with light styling for dark background */}
-          <Logo className="[&_span]:text-white/90 [&_div]:bg-white/15 [&_div]:border [&_div]:border-white/10 [&_div]:shadow-none" />
+          <Logo className="[&_span]:text-white/90" />
 
           {/* Center content — glassmorphic app preview card */}
           <div className="flex-1 flex items-center justify-center">

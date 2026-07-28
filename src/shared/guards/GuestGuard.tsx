@@ -2,6 +2,7 @@ import React from 'react';
 import { useUser } from '@clerk/clerk-react';
 import { Navigate, Outlet } from 'react-router-dom';
 import { useAuthStore } from '@/app/stores/useAuthStore';
+import { TrussenAppLogo } from '@/assets/svg/TrussenAppLogo';
 
 /**
  * GuestGuard
@@ -25,9 +26,7 @@ export const GuestGuard: React.FC = () => {
     return (
       <div className="min-h-screen flex items-center justify-center bg-white dark:bg-bg-dark">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-white font-bold animate-pulse">
-            L
-          </div>
+          <TrussenAppLogo className="w-12 h-12 animate-pulse" />
           <p className="text-sm text-gray-400">Loading...</p>
         </div>
       </div>

@@ -11,6 +11,8 @@ export interface BillingEntitlements {
   storageLimitBytes: number | null;   // null = unlimited (Premium)
   memberInviteCap: number | null;     // null = unlimited (paid plans)
   paidSeatBilling: boolean;
+  teamCap: number | null;             // null = unlimited (paid plans)
+  allowedIntegrations: string[] | null; // null = all integrations allowed (paid plans)
 }
 
 export interface BillingPermissions {
@@ -47,18 +49,15 @@ export interface PaymentMethod {
 
 export interface Invoice {
   id: string;
-  stripeInvoiceId: string;
+  stripeInvoiceId: string | null;
   invoiceNumber: string | null;
   amount: number;
   currency: string;
-  status: string;
-  periodStart: string;
-  periodEnd: string;
+  status: 'PAID' | 'UNPAID' | 'VOID';
   issuedAt: string | null;
   paidAt: string | null;
-  hostedUrl: string | null;
+  hostedInvoiceUrl: string | null;
   pdfUrl: string | null;
-  createdAt: string;
 }
 
 export interface SetupIntentResponse {

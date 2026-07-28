@@ -5,6 +5,7 @@ import { ThemeProvider } from '@/app/providers/ThemeProvider';
 import { AppProvider } from './AppContext';
 import { AppRoutes } from '@/app/routes';
 import { ToastContainer } from '@/components/ToastContainer';
+import { ErrorBoundary } from '@shared/components/ErrorBoundary';
 
 /**
  * App — Root component.
@@ -29,7 +30,15 @@ export default function App() {
         <AuthSync>
           <RealtimeNotificationProvider>
             <AppProvider>
-              <AppRoutes />
+              {/* Root-level safety net for crashes outside MainLayout (auth pages, routing
+                  itself) — MainLayout has its own boundary around just the page Outlet so a
+                  crash there doesn't take down the sidebar too; this one is the last resort. */}
+              <ErrorBoundary
+                title="Trussen hit an unexpected error"
+                description="Reloading usually fixes this. If it keeps happening, let us know what you were doing right before it appeared."
+              >
+                <AppRoutes />
+              </ErrorBoundary>
               {/* Global toast — renders on all pages (auth, dashboard, everywhere) */}
               <ToastContainer />
             </AppProvider>

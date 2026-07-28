@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useInfiniteQuery, useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/app/stores/useAuthStore';
 import { departmentQueryKeys } from '@features/department';
@@ -193,22 +193,37 @@ export const useProjectWorkflows = (projectIds: string[]) => {
   const workspaceId = useAuthStore((s) => s.workspace?.id);
   const uniqueProjectIds = useMemo(() => [...new Set(projectIds)], [projectIds]);
 
-  const results = useQueries({
+  // `useQueries` returns a new `results` array reference on every render by design —
+  // wrapping it in `useMemo(..., [results])` never actually skips recomputation, so the
+  // returned Map was a brand-new object every render regardless of whether any workflow
+  // data had changed. That instability cascaded into every memo/effect downstream (e.g.
+  // KanbanBoard's `useEffect(() => setLocalIssues(issues), [issues])`), causing an
+  // infinite render loop. `combine` is TanStack Query's own mechanism for this exact
+  // problem — it uses structural sharing so the output only changes when the underlying
+  // query results actually do.
+  // `combine` itself must also be reference-stable — TanStack Query treats a changed
+  // `combine` identity as a reason to recompute, which would silently undo the whole
+  // point of using `combine` if it were passed as a fresh inline function every render.
+  const combine = useCallback(
+    (results: Array<{ data: ProjectWorkflow | undefined }>) => {
+      const map = new Map<string, ProjectWorkflow>();
+      uniqueProjectIds.forEach((projectId, index) => {
+        const data = results[index]?.data;
+        if (data) map.set(projectId, data);
+      });
+      return map;
+    },
+    [uniqueProjectIds]
+  );
+
+  return useQueries({
     queries: uniqueProjectIds.map((projectId) => ({
       queryKey: projectQueryKeys.workflow(workspaceId, projectId),
       queryFn: () => projectService.getWorkflow(projectId),
       enabled: Boolean(workspaceId),
     })),
+    combine,
   });
-
-  return useMemo(() => {
-    const map = new Map<string, ProjectWorkflow>();
-    uniqueProjectIds.forEach((projectId, index) => {
-      const data = results[index]?.data;
-      if (data) map.set(projectId, data);
-    });
-    return map;
-  }, [uniqueProjectIds, results]);
 };
 
 const invalidateProjectWorkflowQueries = (

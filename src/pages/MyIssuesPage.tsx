@@ -137,7 +137,8 @@ export const MyIssuesPage: React.FC = () => {
   }, [myIssues]);
 
   const handleIssueUpdate = async (issueId: string, newStatus: Status) => {
-    const issue = allIssues.find((item) => item.id === issueId);
+    // Kanban drags pass entityId (internal UUID) when present; match either form.
+    const issue = allIssues.find((item) => item.id === issueId || item.entityId === issueId);
     if (issue && role) {
       const issueOwnStatuses = projectWorkflowsById.get(issue.projectId)?.statuses ?? ownWorkflowStatuses;
       const check = checkTransitionAllowed(issueOwnStatuses, {
@@ -155,7 +156,7 @@ export const MyIssuesPage: React.FC = () => {
     }
 
     try {
-      await updateAnyIssueStatus.mutateAsync({ issueId, status: newStatus });
+      await updateAnyIssueStatus.mutateAsync({ issueId, status: newStatus, previousStatus: issue?.status });
       return true;
     } catch (error) {
       showToast(getApiErrorMessage(error) || 'Failed to update issue status.', 'error');

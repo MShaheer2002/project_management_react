@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   CheckCircle2,
   ExternalLink,
   Loader2,
+  Lock,
   Plus,
   Search,
   Settings,
@@ -35,6 +36,10 @@ import {
   useDisconnectDrive,
   driveQueryKeys,
 } from '@features/drive';
+import { useSubscription } from '@features/billing';
+
+const integrationListFormatter = new Intl.ListFormat('en', { style: 'long', type: 'conjunction' });
+const formatIntegrationNames = (names: string[]) => integrationListFormatter.format(names);
 
 const relativeTime = (value: string | null) => {
   if (!value) return '';
@@ -61,6 +66,7 @@ type EnrichedIntegration = {
   connected: boolean;
   connectedAt: string | null;
   connectedBy: IntegrationItem['connectedBy'];
+  planLocked: boolean;
 };
 
 export const IntegrationsPage: React.FC = () => {
@@ -86,6 +92,14 @@ export const IntegrationsPage: React.FC = () => {
   const connectGitHub = useConnectGitHub();
   const connectSlack = useConnectSlack();
   const disconnectIntegration = useDisconnectIntegration();
+
+  const { data: subscription } = useSubscription();
+  const allowedIntegrations = subscription?.entitlements.allowedIntegrations ?? null;
+  const isIntegrationPlanLocked = useCallback(
+    (provider: IntegrationProvider) =>
+      allowedIntegrations !== null && !allowedIntegrations.includes(provider.toUpperCase()),
+    [allowedIntegrations],
+  );
 
   // Drive is user-scoped — separate from workspace integrations
   const { data: driveConnection, isLoading: isDriveLoading } = useDriveConnection();
@@ -137,6 +151,7 @@ export const IntegrationsPage: React.FC = () => {
         connected: apiData?.connected ?? false,
         connectedAt: apiData?.connectedAt ?? null,
         connectedBy: apiData?.connectedBy ?? null,
+        planLocked: isIntegrationPlanLocked(meta.id),
       };
     });
 
@@ -147,16 +162,26 @@ export const IntegrationsPage: React.FC = () => {
         i.name.toLowerCase().includes(term) ||
         i.description.toLowerCase().includes(term),
     );
-  }, [integrations, search]);
+  }, [integrations, search, isIntegrationPlanLocked]);
 
   const connectedCount =
     enrichedIntegrations.filter((i) => i.connected).length +
     (driveConnection?.connected ? 1 : 0);
 
+  // Locked-and-unconnected integrations are summarized in a single upgrade
+  // placeholder instead of being listed individually with a disabled state.
+  const visibleIntegrations = enrichedIntegrations.filter((i) => i.connected || !i.planLocked);
+  const lockedIntegrations = enrichedIntegrations.filter((i) => !i.connected && i.planLocked);
+
   const handleConnect = useCallback(
     async (provider: IntegrationProvider) => {
       if (!PROVIDER_META[provider]?.available) {
         showToast(`${PROVIDER_META[provider]?.name ?? provider} integration coming soon`, 'info');
+        return;
+      }
+
+      if (isIntegrationPlanLocked(provider)) {
+        showToast(`${PROVIDER_META[provider]?.name ?? provider} is available on Standard or Premium. Upgrade the workspace plan to connect it.`, 'error');
         return;
       }
 
@@ -187,7 +212,7 @@ export const IntegrationsPage: React.FC = () => {
         }
       }
     },
-    [connectGitHub, connectSlack, showToast],
+    [connectGitHub, connectSlack, showToast, isIntegrationPlanLocked],
   );
 
   const confirmDisconnect = useCallback(() => {
@@ -272,7 +297,7 @@ export const IntegrationsPage: React.FC = () => {
 
       <div className="flex-1 overflow-y-auto p-6">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {enrichedIntegrations.map((integration) => (
+          {visibleIntegrations.map((integration) => (
             <div
               key={integration.id}
               className="bg-white dark:bg-card-dark border border-gray-200 dark:border-border-dark rounded-xl p-6 shadow-sm hover:border-primary/50 transition-all group"
@@ -468,24 +493,49 @@ export const IntegrationsPage: React.FC = () => {
             </div>
           )}
 
-          {/* Request Integration card */}
-          <div className="bg-gray-50 dark:bg-black/10 border border-dashed border-gray-300 dark:border-border-dark rounded-xl p-6 flex flex-col items-center justify-center text-center space-y-4">
-            <div className="w-12 h-12 rounded-xl bg-white dark:bg-white/5 flex items-center justify-center text-gray-400">
-              <Plus size={24} />
+          {/* Upgrade placeholder — summarizes integrations not available on the current plan */}
+          {lockedIntegrations.length > 0 && (
+            <div className="bg-gray-50 dark:bg-black/10 border border-dashed border-gray-300 dark:border-border-dark rounded-xl p-6 flex flex-col items-center justify-center text-center space-y-4">
+              <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+                <Lock size={24} />
+              </div>
+              <div className="space-y-1">
+                <h3 className="font-bold text-sm">Unlock More Integrations</h3>
+                <p className="text-xs text-gray-400">
+                  {formatIntegrationNames(lockedIntegrations.map((i) => i.name))} {lockedIntegrations.length === 1 ? 'is' : 'are'} available on Standard and Premium plans. Upgrade your workspace to connect{lockedIntegrations.length === 1 ? ' it' : ' them'}.
+                </p>
+              </div>
+              {isManager && (
+                <Link
+                  to="/billing"
+                  className="px-4 py-1.5 rounded-md bg-primary text-white text-xs font-semibold hover:bg-primary/90 transition-colors"
+                >
+                  Upgrade Plan
+                </Link>
+              )}
             </div>
-            <div className="space-y-1">
-              <h3 className="font-bold text-sm">Request Integration</h3>
-              <p className="text-xs text-gray-400">
-                Don&apos;t see what you need? Let us know.
-              </p>
+          )}
+
+          {/* Request Integration card — paid plans only */}
+          {subscription?.accessPlan !== 'FREE' && (
+            <div className="bg-gray-50 dark:bg-black/10 border border-dashed border-gray-300 dark:border-border-dark rounded-xl p-6 flex flex-col items-center justify-center text-center space-y-4">
+              <div className="w-12 h-12 rounded-xl bg-white dark:bg-white/5 flex items-center justify-center text-gray-400">
+                <Plus size={24} />
+              </div>
+              <div className="space-y-1">
+                <h3 className="font-bold text-sm">Request Integration</h3>
+                <p className="text-xs text-gray-400">
+                  Don&apos;t see what you need? Let us know.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="px-4 py-1.5 rounded-md border border-gray-200 dark:border-border-dark text-xs font-semibold hover:bg-gray-100 dark:hover:bg-white/5 transition-all"
+              >
+                Submit Request
+              </button>
             </div>
-            <button
-              type="button"
-              className="px-4 py-1.5 rounded-md border border-gray-200 dark:border-border-dark text-xs font-semibold hover:bg-gray-100 dark:hover:bg-white/5 transition-all"
-            >
-              Submit Request
-            </button>
-          </div>
+          )}
         </div>
       </div>
 

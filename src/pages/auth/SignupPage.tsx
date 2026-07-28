@@ -114,7 +114,7 @@ export const SignupPage: React.FC = () => {
         </div>
 
         <div className="relative z-10 flex flex-col h-full p-8 xl:p-12">
-          <Logo className="[&_span]:text-white/90 [&_div]:bg-white/15 [&_div]:border [&_div]:border-white/10 [&_div]:shadow-none" />
+          <Logo className="[&_span]:text-white/90" />
 
           {/* Feature bullets */}
           <div className="flex-1 flex flex-col justify-center max-w-md">

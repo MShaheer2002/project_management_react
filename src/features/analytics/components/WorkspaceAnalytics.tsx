@@ -26,8 +26,6 @@ import type { AnalyticsPeriod, GroupCountItem } from '../types';
 
 import { StatCard } from './shared/StatCard';
 import { ChartCard } from './shared/ChartCard';
-import { PeriodSelector } from './shared/PeriodSelector';
-import { ExportButton } from './shared/ExportButton';
 import { AnalyticsLoadingState } from './shared/AnalyticsLoadingState';
 import { AnalyticsErrorState } from './shared/AnalyticsErrorState';
 import { EmptyAnalyticsState } from './shared/EmptyAnalyticsState';
@@ -36,7 +34,6 @@ import { EmptyAnalyticsState } from './shared/EmptyAnalyticsState';
 
 interface WorkspaceAnalyticsProps {
   period: AnalyticsPeriod;
-  onPeriodChange: (period: AnalyticsPeriod) => void;
 }
 
 // ── Color palettes ──
@@ -145,7 +142,7 @@ const statusBadgeClasses: Record<string, string> = {
 
 // ── Component ──
 
-export const WorkspaceAnalytics: React.FC<WorkspaceAnalyticsProps> = ({ period, onPeriodChange }) => {
+export const WorkspaceAnalytics: React.FC<WorkspaceAnalyticsProps> = ({ period }) => {
   const { data, isLoading, error, refetch } = useWorkspaceAnalytics({ period });
 
   const pieStatusData = useMemo(
@@ -187,12 +184,6 @@ export const WorkspaceAnalytics: React.FC<WorkspaceAnalyticsProps> = ({ period, 
 
   return (
     <div className="space-y-8">
-      {/* ── Header ── */}
-      <div className="flex items-center justify-end gap-3">
-        <PeriodSelector value={period} onChange={onPeriodChange} />
-        <ExportButton scope="workspace" params={{ period }} />
-      </div>
-
       {/* ── Summary Cards ── */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard

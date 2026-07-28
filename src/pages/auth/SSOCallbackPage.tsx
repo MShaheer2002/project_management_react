@@ -1,5 +1,6 @@
 import React from 'react';
 import { AuthenticateWithRedirectCallback } from '@clerk/clerk-react';
+import { TrussenAppLogo } from '@/assets/svg/TrussenAppLogo';
 
 /**
  * SSOCallbackPage
@@ -18,9 +19,7 @@ export const SSOCallbackPage: React.FC = () => {
   return (
     <div className="min-h-screen flex items-center justify-center bg-white dark:bg-bg-dark">
       <div className="flex flex-col items-center gap-3">
-        <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-white font-bold animate-pulse">
-          L
-        </div>
+        <TrussenAppLogo className="w-12 h-12 animate-pulse" />
         <p className="text-sm text-gray-400">Completing sign in...</p>
       </div>
       {/* Clerk handles the actual OAuth callback logic here */}

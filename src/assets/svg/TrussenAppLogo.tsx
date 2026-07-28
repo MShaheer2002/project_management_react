@@ -1,0 +1,50 @@
+import React, { useId } from 'react';
+
+interface TrussenAppLogoProps {
+  className?: string;
+}
+
+export const TrussenAppLogo: React.FC<TrussenAppLogoProps> = ({ className }) => {
+  const uid = useId();
+  const gradientId = (index: number) => `trussen-logo-${uid}-${index}`;
+
+  return (
+    <svg viewBox="0 0 690 785" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
+      <path
+        fillRule="evenodd"
+        clipRule="evenodd"
+        d="M24 185V188L40 198L343 364H349L668 188L665 183L349 0H343L24 185ZM369 113L371 112L545 215L370 305L369 113ZM323 112L322 305L147 216L156 209L322 111L323 112Z"
+        fill={`url(#${gradientId(0)})`}
+      />
+      <path
+        fillRule="evenodd"
+        clipRule="evenodd"
+        d="M2 220L0 222L2 604L18 615L319 785H323V705L283 681L282 473.5V449L83 337L79 333V266L58 252L2 220ZM239 498L241 499L240 650L110 577L111 575L239 498ZM84 383L216 461L214 464L84 546V383Z"
+        fill={`url(#${gradientId(1)})`}
+      />
+      <path
+        fillRule="evenodd"
+        clipRule="evenodd"
+        d="M688 220L619 261.5L612 266V333L608 337L415.5 446L409 450L408 682L372.5 703L368 706L367 782L369 785H372L680 611L688 605L690 222L688 220ZM451 499L452 498L582 576L452 650L451 499ZM608 383V546L475 462L476 460L608 383Z"
+        fill={`url(#${gradientId(2)})`}
+      />
+      <defs>
+        <linearGradient id={gradientId(0)} x1="21" y1="34" x2="501" y2="204" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#825EFF" />
+          <stop offset="0.45" stopColor="#6E5CFF" />
+          <stop offset="1" stopColor="#4C68FF" />
+        </linearGradient>
+        <linearGradient id={gradientId(1)} x1="-29" y1="164" x2="241" y2="634" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#755DFF" />
+          <stop offset="0.45" stopColor="#5A67FF" />
+          <stop offset="1" stopColor="#356CFF" />
+        </linearGradient>
+        <linearGradient id={gradientId(2)} x1="501" y1="164" x2="261" y2="634" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#755DFF" />
+          <stop offset="0.45" stopColor="#5A67FF" />
+          <stop offset="1" stopColor="#356CFF" />
+        </linearGradient>
+      </defs>
+    </svg>
+  );
+};

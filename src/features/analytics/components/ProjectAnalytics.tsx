@@ -25,15 +25,12 @@ import { ChartCard } from './shared/ChartCard';
 import { AnalyticsLoadingState } from './shared/AnalyticsLoadingState';
 import { AnalyticsErrorState } from './shared/AnalyticsErrorState';
 import { EmptyAnalyticsState } from './shared/EmptyAnalyticsState';
-import { ExportButton } from './shared/ExportButton';
-import { PeriodSelector } from './shared/PeriodSelector';
 import { useProjectAnalytics } from '../hooks/useAnalyticsData';
 import type { AnalyticsPeriod, ProjectAnalyticsData } from '../types';
 
 interface ProjectAnalyticsProps {
   projectId: string;
   period: AnalyticsPeriod;
-  onPeriodChange: (p: AnalyticsPeriod) => void;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -85,7 +82,6 @@ const renderPieLabel = (props: any) => {
 export const ProjectAnalytics: React.FC<ProjectAnalyticsProps> = ({
   projectId,
   period,
-  onPeriodChange,
 }) => {
   const { data, isLoading, isError, refetch } = useProjectAnalytics(projectId, { period });
 
@@ -127,12 +123,6 @@ export const ProjectAnalytics: React.FC<ProjectAnalyticsProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-end gap-3">
-        <PeriodSelector value={period} onChange={onPeriodChange} />
-        <ExportButton scope="project" scopeId={projectId} params={{ period }} />
-      </div>
-
       {/* Progress Hero */}
       <div className="flex flex-col items-center gap-6 rounded-xl border border-gray-200 bg-white p-8 shadow-sm dark:border-border-dark dark:bg-card-dark sm:flex-row sm:justify-center">
         <div className="relative flex items-center justify-center">

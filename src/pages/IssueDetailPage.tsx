@@ -314,7 +314,7 @@ export const IssueDetailPage: React.FC = () => {
 
   const handleStatusChange = async (nextStatus: Status) => {
     try {
-      await updateIssueStatus.mutateAsync(nextStatus);
+      await updateIssueStatus.mutateAsync({ status: nextStatus, previousStatus: issue?.status });
     } catch (error) {
       showToast(getApiErrorMessage(error) || 'Failed to update status.', 'error');
     }

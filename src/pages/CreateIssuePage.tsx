@@ -363,12 +363,26 @@ export const CreateIssuePage: React.FC = () => {
   };
 
   const lastAppliedRef = useRef<string | null>(null);
+  // Landing here via "Apply Template" (a specific, non-active template) already
+  // hydrates the form from that template via issueDraftFromRoute. Guard against
+  // the auto-fill effect below re-matching whatever template is *active* for the
+  // same issue type and silently overwriting what was just applied.
+  const explicitTemplateTypeRef = useRef<string | null>(
+    issueDraftFromRoute?.templateId ? issueDraftFromRoute.type ?? 'task' : null,
+  );
 
   useEffect(() => {
     if (!effectiveTemplate) return;
 
     const key = `${effectiveTemplate.id}:${type}`;
     if (lastAppliedRef.current === key) return;
+
+    if (explicitTemplateTypeRef.current === type) {
+      lastAppliedRef.current = key;
+      explicitTemplateTypeRef.current = null;
+      return;
+    }
+
     lastAppliedRef.current = key;
 
     const t = effectiveTemplate;

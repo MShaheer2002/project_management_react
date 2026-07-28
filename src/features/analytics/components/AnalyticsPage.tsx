@@ -10,12 +10,14 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '@/app/stores/useAuthStore';
 import { privateApi } from '@shared/services/privateApi';
-import type { AnalyticsPeriod } from '../types';
+import type { AnalyticsPeriod, ExportScope } from '../types';
 import { WorkspaceAnalytics } from './WorkspaceAnalytics';
 import { ProjectAnalytics } from './ProjectAnalytics';
 import { TeamAnalytics } from './TeamAnalytics';
 import { MemberAnalytics } from './MemberAnalytics';
 import { CycleAnalytics } from './CycleAnalytics';
+import { PeriodSelector } from './shared/PeriodSelector';
+import { ExportButton } from './shared/ExportButton';
 
 type AnalyticsTab = 'workspace' | 'project' | 'team' | 'member' | 'cycle';
 
@@ -171,21 +173,25 @@ export const AnalyticsPage: React.FC = () => {
   const renderContent = () => {
     switch (activeTab) {
       case 'workspace':
-        return <WorkspaceAnalytics period={period} onPeriodChange={setPeriod} />;
+        return <WorkspaceAnalytics period={period} />;
       case 'project':
         if (!entityId) return <SelectEntityPrompt entity="project" />;
-        return <ProjectAnalytics projectId={entityId} period={period} onPeriodChange={setPeriod} />;
+        return <ProjectAnalytics projectId={entityId} period={period} />;
       case 'team':
         if (!entityId) return <SelectEntityPrompt entity="team" />;
-        return <TeamAnalytics teamId={entityId} period={period} onPeriodChange={setPeriod} />;
+        return <TeamAnalytics teamId={entityId} period={period} />;
       case 'member':
         if (!entityId) return <SelectEntityPrompt entity="member" />;
-        return <MemberAnalytics memberId={entityId} period={period} onPeriodChange={setPeriod} />;
+        return <MemberAnalytics memberId={entityId} period={period} />;
       case 'cycle':
         if (!entityId) return <SelectEntityPrompt entity="cycle" />;
-        return <CycleAnalytics cycleId={entityId} period={period} onPeriodChange={setPeriod} />;
+        return <CycleAnalytics cycleId={entityId} period={period} />;
     }
   };
+
+  // Period/Export controls only make sense once there's data to show — workspace
+  // always has data, other scopes need an entity selected first.
+  const showPeriodControls = activeTab === 'workspace' || Boolean(entityId);
 
   return (
     <div className="flex flex-col h-full">
@@ -198,7 +204,15 @@ export const AnalyticsPage: React.FC = () => {
             </div>
             <h1 className="text-xl font-bold tracking-tight text-gray-900 dark:text-white">Analytics</h1>
           </div>
-          {activeTab !== 'workspace' && renderEntitySelector()}
+          <div className="flex items-center gap-3">
+            {activeTab !== 'workspace' && renderEntitySelector()}
+            {showPeriodControls && (
+              <>
+                <PeriodSelector value={period} onChange={setPeriod} />
+                <ExportButton scope={activeTab as ExportScope} scopeId={entityId || undefined} params={{ period }} />
+              </>
+            )}
+          </div>
         </div>
 
         {/* Tabs */}

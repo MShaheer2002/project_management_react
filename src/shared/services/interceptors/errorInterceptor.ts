@@ -57,6 +57,11 @@ export function attachErrorInterceptor(instance: AxiosInstance) {
             if (typeof window !== 'undefined') {
               window.location.href = '/org-creation';
             }
+          } else if (errorCode === 'FREE_PLAN_ACCESS_LIMIT_EXCEEDED') {
+            // Still a member, just over the Free plan's seat cap — don't clear
+            // the workspace or redirect to onboarding, just explain why every
+            // action is being blocked until the owner upgrades or seats free up.
+            showToast(errorMessage, 'error', 'Workspace over member limit');
           } else if (errorCode !== 'USER_NOT_SYNCED' && !skipGlobalErrorToast) {
             showToast("You don't have permission to perform this action.", 'error', 'Access denied');
           }

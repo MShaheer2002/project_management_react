@@ -1,15 +1,14 @@
 import React, { useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, ArrowLeft } from 'lucide-react';
+import { TrussenAppLogo } from '@/assets/svg/TrussenAppLogo';
 
 /* ─── logo ─── */
 export const Logo: React.FC<{ className?: string }> = ({ className = '' }) => {
   const navigate = useNavigate();
   return (
     <div className={`flex items-center gap-2.5 cursor-pointer ${className}`} onClick={() => navigate('/marketing')}>
-      <div className="w-9 h-9 bg-primary rounded-xl flex items-center justify-center text-white text-lg font-bold shadow-lg shadow-primary/25">
-        L
-      </div>
+      <TrussenAppLogo className="w-11 h-11 shrink-0" />
       <span className="text-lg font-bold tracking-tight dark:text-white">Trussen</span>
     </div>
   );

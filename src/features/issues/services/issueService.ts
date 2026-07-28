@@ -380,6 +380,16 @@ export const issueService = {
     };
   },
 
+  /**
+   * Workspace-wide per-status issue counts — read straight from a counter table the
+   * backend keeps in sync via a DB trigger (never a runtime COUNT). Unfiltered: only
+   * valid as a fast default-view total, not alongside search/project/team/type filters.
+   */
+  getStatusCounts: async (): Promise<Record<string, number>> => {
+    const { data } = await privateApi.get<ApiResponse<Record<string, number>>>('/issues/status-counts');
+    return data.data;
+  },
+
   listOptions: async (params: ListIssuesInput = {}): Promise<IssueListResult<IssueCompactOption>> => {
     const { data } = await privateApi.get<ApiPaginatedResponse<IssueCompactOption>>('/issues', {
       params: {

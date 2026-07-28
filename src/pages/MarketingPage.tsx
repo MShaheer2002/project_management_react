@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion, useInView } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
+import { TrussenAppLogo } from '@/assets/svg/TrussenAppLogo';
 import {
   ArrowRight,
   CheckCircle2,
@@ -88,9 +89,7 @@ const Nav = () => {
             className="flex items-center gap-2.5 cursor-pointer"
             onClick={() => navigate('/marketing')}
           >
-            <div className="w-9 h-9 bg-primary rounded-xl flex items-center justify-center text-white text-lg font-bold shadow-lg shadow-primary/25">
-              L
-            </div>
+            <TrussenAppLogo className="w-11 h-11 shrink-0" />
             <span className="text-xl font-bold tracking-tight">Trussen</span>
           </div>
 
@@ -250,7 +249,7 @@ const Hero = () => {
               {/* sidebar mock */}
               <div className="hidden sm:flex flex-col w-56 border-r border-gray-100 dark:border-border-dark bg-gray-50/50 dark:bg-sidebar-dark p-4 gap-1">
                 <div className="flex items-center gap-2 mb-6">
-                  <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center text-white text-xs font-bold">L</div>
+                  <TrussenAppLogo className="w-7 h-7 shrink-0" />
                   <span className="text-sm font-semibold">Trussen</span>
                 </div>
                 {['Dashboard', 'My Issues', 'All Issues', 'Projects', 'Teams', 'Cycles'].map((item, i) => (
@@ -851,7 +850,7 @@ const Footer = () => (
     <div className="max-w-7xl mx-auto px-4 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-12 mb-20">
       <div className="col-span-2 lg:col-span-2 space-y-6">
         <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 bg-primary rounded-xl flex items-center justify-center text-white text-lg font-bold shadow-lg shadow-primary/25">L</div>
+          <TrussenAppLogo className="w-11 h-11 shrink-0" />
           <span className="text-xl font-bold tracking-tight">Trussen</span>
         </div>
         <p className="text-sm text-gray-500 dark:text-gray-400 max-w-xs leading-relaxed">

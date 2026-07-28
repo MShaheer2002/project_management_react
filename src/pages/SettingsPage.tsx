@@ -20,6 +20,8 @@ import type { UploadPolicy } from '@/app/stores/useAuthStore';
 import { useAuthStore } from '@/app/stores/useAuthStore';
 import { Modal } from '@shared/components/ui/Modal';
 import { WorkflowStatusesEditor, WorkflowAutomationEditor } from '@shared/components/workflow/WorkflowEditors';
+import { ApiKeysPage } from '@/pages/ApiKeysPage';
+import { AiConnectionsPage } from '@/pages/AiConnectionsPage';
 
 interface SettingsSectionProps {
   title: string;
@@ -252,17 +254,18 @@ export const SettingsPage: React.FC = () => {
     return () => window.removeEventListener('popstate', handlePopState);
   }, [hasUnsavedChanges]);
 
-  const settingsTab = searchParams.get('tab') === 'workspace' ? 'workspace' : 'general';
+  const SETTINGS_TABS = ['general', 'workspace', 'api-keys', 'ai-connections'] as const;
+  type SettingsTab = (typeof SETTINGS_TABS)[number];
+  const requestedTab = searchParams.get('tab');
+  const settingsTab: SettingsTab = SETTINGS_TABS.includes(requestedTab as SettingsTab)
+    ? (requestedTab as SettingsTab)
+    : 'general';
 
-  const tabs = [
-    { name: 'General', view: 'settings' },
-    { name: 'Workspace', view: 'settings-workspace' },
-    { name: 'Members', view: 'members' },
-    { name: 'Teams', view: 'teams' },
-    { name: 'Billing', view: 'billing' },
-    { name: 'Integrations', view: 'integrations' },
-    { name: 'AI Connections', view: 'ai-connections' },
+  const tabs: { name: string; view: SettingsTab }[] = [
+    { name: 'General', view: 'general' },
+    { name: 'Workspace', view: 'workspace' },
     { name: 'API Keys', view: 'api-keys' },
+    { name: 'AI Connections', view: 'ai-connections' },
   ];
 
   const handleSave = async () => {
@@ -356,43 +359,39 @@ export const SettingsPage: React.FC = () => {
         <h1 className="text-2xl font-bold">Settings</h1>
       </header>
 
-      <div className="flex-1 overflow-y-auto p-8 max-w-4xl mx-auto w-full space-y-12">
+      <div className="px-8 pt-6 max-w-4xl mx-auto w-full shrink-0">
         <div className="flex gap-8 border-b border-gray-200 dark:border-border-dark overflow-x-auto">
           {tabs.map((tab) => (
             <button
               key={tab.name}
               onClick={() => {
-                if (tab.view === 'settings') {
-                  attemptNavigation(() => setSearchParams({}, { replace: true }));
-                  return;
-                }
-
-                if (tab.view === 'settings-workspace') {
-                  attemptNavigation(() => {
-                    const next = new URLSearchParams(searchParams);
-                    next.set('tab', 'workspace');
-                    setSearchParams(next, { replace: true });
-                  });
-                  return;
-                }
-
-                attemptNavigation(() => navigate('/' + tab.view));
+                attemptNavigation(() => {
+                  if (tab.view === 'general') {
+                    setSearchParams({}, { replace: true });
+                    return;
+                  }
+                  const next = new URLSearchParams(searchParams);
+                  next.set('tab', tab.view);
+                  setSearchParams(next, { replace: true });
+                });
               }}
               className={`pb-4 text-sm font-medium transition-colors relative shrink-0 ${
-                (tab.view === 'settings' && settingsTab === 'general') || (tab.view === 'settings-workspace' && settingsTab === 'workspace')
+                settingsTab === tab.view
                   ? 'text-primary'
                   : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200'
               }`}
             >
               {tab.name}
-              {((tab.view === 'settings' && settingsTab === 'general') || (tab.view === 'settings-workspace' && settingsTab === 'workspace')) && (
+              {settingsTab === tab.view && (
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
               )}
             </button>
           ))}
         </div>
+      </div>
 
-        {settingsTab === 'general' ? (
+      <div className="flex-1 overflow-y-auto p-8 max-w-4xl mx-auto w-full space-y-12">
+        {settingsTab === 'general' && (
           <>
             <SettingsSection title="Appearance">
               <SettingsItem
@@ -481,7 +480,9 @@ export const SettingsPage: React.FC = () => {
               </div>
             )}
           </>
-        ) : (
+        )}
+
+        {settingsTab === 'workspace' && (
           <>
             {workspace && canManageSettings && (
               <WorkflowAutomationEditor
@@ -562,6 +563,9 @@ export const SettingsPage: React.FC = () => {
 
           </>
         )}
+
+        {settingsTab === 'api-keys' && <ApiKeysPage embedded />}
+        {settingsTab === 'ai-connections' && <AiConnectionsPage embedded />}
       </div>
 
       <Modal

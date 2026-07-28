@@ -1,31 +1,20 @@
-import React, { useDeferredValue, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   AlertCircle,
-  ArrowUpDown,
-  Bug,
-  ChevronDown,
   Building2,
   Calendar,
-  CheckCircle2,
-  CheckSquare,
-  Clock,
   Filter,
   FolderKanban,
   Loader2,
   MoreHorizontal,
   Plus,
   Search as SearchIcon,
-  Zap,
 } from 'lucide-react';
 import { useApp } from '@/AppContext';
 import { useAuthStore } from '@/app/stores/useAuthStore';
-import { KanbanBoard } from '@/components/board/KanbanBoard';
-import { PRIORITY_COLORS, STATUS_LABELS, ISSUE_TYPE_CONFIG } from '@/constants';
 import { AssignIssuesToCycleDialog } from '@features/cycles';
 import { canDeleteIssues } from '@shared/permissions';
-import { LabelChip } from '@shared/components/ui/LabelChip';
-import { WorkflowStatusSelect } from '@shared/components/ui/WorkflowStatusSelect';
 import { useDepartmentsDirectory } from '@features/department';
 import { useTeamDetail } from '@features/team';
 import { useProjectOptions, useProjectWorkflows } from '@features/projects';
@@ -33,52 +22,11 @@ import { useWorkspaceMemberOptions } from '@features/workspace';
 import { getApiErrorMessage } from '@shared/services';
 import { useEffectiveWorkflowStatuses } from '@shared/hooks/useEffectiveWorkflowStatuses';
 import { checkTransitionAllowed } from '@shared/utils/workflowTransitions';
-import type { Issue, IssueType, Priority, Status, WorkspaceStatus } from '@/types';
-import { useDeleteAnyIssue, useIssuesDirectory, useUpdateAnyIssueStatus } from '../hooks/useIssueData';
-
-const TypeBadge: React.FC<{ type: IssueType }> = ({ type }) => {
-  const config = ISSUE_TYPE_CONFIG[type];
-  return (
-    <span className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${config.color}`}>
-      {type === 'task' && <CheckSquare size={10} />}
-      {type === 'bug' && <Bug size={10} />}
-      {type === 'issue' && <Zap size={10} />}
-      {config.label}
-    </span>
-  );
-};
-
-const PriorityIcon: React.FC<{ priority: Priority }> = ({ priority }) => {
-  switch (priority) {
-    case 'urgent':
-      return <AlertCircle size={14} className="text-red-500" />;
-    case 'high':
-      return <AlertCircle size={14} className="text-orange-500" />;
-    case 'medium':
-      return <AlertCircle size={14} className="text-blue-500" />;
-    case 'low':
-      return <AlertCircle size={14} className="text-gray-400" />;
-    default:
-      return null;
-  }
-};
-
-const StatusIcon: React.FC<{ status: Status }> = ({ status }) => {
-  switch (status) {
-    case 'done':
-      return <CheckCircle2 size={14} className="text-green-500" />;
-    case 'in-progress':
-      return <Clock size={14} className="text-blue-500" />;
-    case 'review':
-      return <Clock size={14} className="text-purple-500" />;
-    case 'todo':
-      return <div className="w-3.5 h-3.5 rounded-full border-2 border-gray-400" />;
-    case 'backlog':
-      return <div className="w-3.5 h-3.5 rounded-full border-2 border-dashed border-gray-400" />;
-    default:
-      return null;
-  }
-};
+import type { Issue, IssueType, Status, WorkspaceStatus } from '@/types';
+import { useDeleteAnyIssue, useIssuesDirectory, useIssueStatusCounts, useUpdateAnyIssueStatus } from '../hooks/useIssueData';
+import { IssueKanbanBoard } from './IssueKanbanBoard';
+import { IssueStatusGroup } from './IssueStatusGroup';
+import type { IssueBoardFilters } from './IssueBoardColumn';
 
 type IssuesPageProps = {
   projectId?: string;
@@ -147,6 +95,15 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
   const effectiveProjectId = projectId ?? (projectFilter === 'all' ? undefined : projectFilter);
   const ownWorkflowStatuses = useEffectiveWorkflowStatuses(projectId);
   const [collapsedStatusKeys, setCollapsedStatusKeys] = useState<string[]>([]);
+  const hasInitializedCollapse = useRef(false);
+  // Board columns and list groups each fetch their own status independently (see
+  // IssueBoardColumn/IssueStatusGroup) — this aggregates whatever they've loaded so
+  // far purely for cross-project workflow resolution and the assignee filter, without
+  // ever loading a workspace's full issue set into memory at once.
+  const [loadedIssuesByStatus, setLoadedIssuesByStatus] = useState<Record<string, Issue[]>>({});
+  const handleIssuesLoaded = useCallback((statusKey: string, loaded: Issue[]) => {
+    setLoadedIssuesByStatus((current) => ({ ...current, [statusKey]: loaded }));
+  }, []);
 
   const teamQuery = useTeamDetail(activeTeamId);
   const departmentsQuery = useDepartmentsDirectory(
@@ -176,9 +133,13 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
   const updateAnyIssueStatus = useUpdateAnyIssueStatus();
   const deleteAnyIssue = useDeleteAnyIssue();
 
-  const departments = departmentsQuery.data?.pages.flatMap((page) => page.items) ?? [];
-  const projectOptions = projectOptionsQuery.data?.pages.flatMap((page) => page.items) ?? [];
-  const workspaceAssigneeOptions = assigneeOptionsQuery.data?.pages.flatMap((page) => page.items) ?? [];
+  // Memoized on the query's own `.data` (stable unless React Query actually refetched) —
+  // a plain flatMap here would produce a brand-new array every render, which cascaded
+  // into every memo/effect downstream (project workflow resolution, assignee options)
+  // recomputing and re-fetching far more than the underlying data ever changed.
+  const departments = useMemo(() => departmentsQuery.data?.pages.flatMap((page) => page.items) ?? [], [departmentsQuery.data]);
+  const projectOptions = useMemo(() => projectOptionsQuery.data?.pages.flatMap((page) => page.items) ?? [], [projectOptionsQuery.data]);
+  const workspaceAssigneeOptions = useMemo(() => assigneeOptionsQuery.data?.pages.flatMap((page) => page.items) ?? [], [assigneeOptionsQuery.data]);
   const issues = useMemo(() => {
     const issuesById = new Map<string, Issue>();
     issuesQuery.data?.pages.forEach((page) => {
@@ -189,14 +150,27 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
     return Array.from(issuesById.values());
   }, [issuesQuery.data]);
 
+  // Everything currently loaded anywhere on the page — the flat calendar query plus
+  // whatever each board column / list group has independently fetched so far.
+  const allLoadedIssues = useMemo(() => {
+    const byId = new Map<string, Issue>();
+    issues.forEach((issue) => byId.set(issue.id, issue));
+    Object.values(loadedIssuesByStatus).forEach((list) => list.forEach((issue) => byId.set(issue.id, issue)));
+    return Array.from(byId.values());
+  }, [issues, loadedIssuesByStatus]);
+
   // Cross-project view: issues can belong to different projects, each potentially on
-  // its own workflow. Resolve every distinct project's effective workflow (bounded by
-  // whatever projects are actually represented among the loaded issues) so statuses
-  // that only exist on one project's override still show up, and moves can be checked
-  // against the issue's OWN project rather than a single workspace-wide list.
+  // its own workflow. Resolve every accessible project's effective workflow up front
+  // from the already-fetched project list (same data backing the project filter
+  // dropdown) — not from which projects happen to be represented among issues loaded
+  // so far. Columns/groups resolve independently and at different times, so deriving
+  // this from loaded issues caused a waterfall: each column's arrival re-triggered
+  // project-workflow resolution as the set of "known" projects grew incrementally.
+  // Resolving from the project list instead means every workflow fetch starts
+  // immediately, in parallel, exactly once.
   const distinctIssueProjectIds = useMemo(
-    () => (isCrossProject ? [...new Set(issues.map((issue) => issue.projectId))] : []),
-    [isCrossProject, issues]
+    () => (isCrossProject ? projectOptions.map((project) => project.id) : []),
+    [isCrossProject, projectOptions]
   );
   const projectWorkflowsById = useProjectWorkflows(distinctIssueProjectIds);
   const workspaceStatuses = useMemo<WorkspaceStatus[]>(() => {
@@ -222,7 +196,7 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
       });
     });
 
-    issues.forEach((issue) => {
+    allLoadedIssues.forEach((issue) => {
       if (!issue.assigneeId || !issue.assignee?.name) return;
       map.set(issue.assigneeId, {
         id: issue.assigneeId,
@@ -232,32 +206,42 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
     });
 
     return Array.from(map.values())
-      .filter((member) => issues.some((issue) => issue.assigneeId === member.id))
+      .filter((member) => allLoadedIssues.some((issue) => issue.assigneeId === member.id))
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [issues, workspaceAssigneeOptions]);
-  const filteredIssues = useMemo(() => {
-    if (selectedAssigneeIds.length === 0) return issues;
-    const selectedIds = new Set(selectedAssigneeIds);
-    return issues.filter((issue) => issue.assigneeId && selectedIds.has(issue.assigneeId));
-  }, [issues, selectedAssigneeIds]);
-  const visibleIssues = viewMode === 'kanban' ? filteredIssues : issues;
+  }, [allLoadedIssues, workspaceAssigneeOptions]);
   const teamLabel = teamQuery.data?.name;
   const pageTitle = title ?? (teamLabel ? `${teamLabel} — Issues` : 'All Issues');
-  const calendarDays = useMemo(() => buildCalendarDays(visibleIssues), [visibleIssues]);
-  const visibleIssueIds = useMemo(() => visibleIssues.map((issue) => issue.id), [visibleIssues]);
-  const allVisibleSelected = visibleIssueIds.length > 0 && visibleIssueIds.every((issueId) => selectedIssueIds.includes(issueId));
-  const someVisibleSelected = visibleIssueIds.some((issueId) => selectedIssueIds.includes(issueId));
-  const listStatusGroups = useMemo(
-    () =>
-      workspaceStatuses
-        .filter((status) => status.visibility.list !== false)
-        .map((status) => ({
-          status,
-          items: visibleIssues.filter((issue) => issue.status === status.key),
-        }))
-        .filter((group) => group.items.length > 0),
-    [visibleIssues, workspaceStatuses]
+  const calendarDays = useMemo(() => buildCalendarDays(issues), [issues]);
+  const boardFilters = useMemo<IssueBoardFilters>(
+    () => ({
+      q: deferredSearchQuery.trim() || undefined,
+      projectId: effectiveProjectId,
+      teamId: activeTeamId,
+      departmentId: departmentFilter === 'all' ? undefined : departmentFilter,
+      type: typeFilter === 'all' ? undefined : typeFilter,
+    }),
+    [deferredSearchQuery, effectiveProjectId, activeTeamId, departmentFilter, typeFilter]
   );
+  const listStatusGroups = useMemo(
+    () => workspaceStatuses.filter((status) => status.visibility.list !== false),
+    [workspaceStatuses]
+  );
+
+  // The persisted per-status counter is workspace-wide and unfiltered, so it's only
+  // valid to show as-is when nothing narrows the view below that scope.
+  const hasActiveListFilters = Boolean(
+    boardFilters.q || boardFilters.projectId || boardFilters.teamId || boardFilters.departmentId || boardFilters.type
+  );
+  const statusCountsQuery = useIssueStatusCounts({ enabled: !hasActiveListFilters });
+  const statusCounts = statusCountsQuery.data;
+
+  // List groups are collapsed by default so nothing loads until the user opens one —
+  // only run this once per mount, so it doesn't fight the user's own toggles later.
+  useEffect(() => {
+    if (hasInitializedCollapse.current || workspaceStatuses.length === 0) return;
+    hasInitializedCollapse.current = true;
+    setCollapsedStatusKeys(workspaceStatuses.map((status) => status.key));
+  }, [workspaceStatuses]);
 
   const toggleAssigneeFilter = (assigneeId: string) => {
     setSelectedAssigneeIds((current) =>
@@ -265,12 +249,12 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
     );
   };
 
-  useEffect(() => {
-    setSelectedIssueIds((current) => current.filter((issueId) => issues.some((issue) => issue.id === issueId)));
-  }, [issues]);
-
   const handleIssueUpdate = async (issueId: string, newStatus: Status) => {
-    const issue = issues.find((item) => item.id === issueId);
+    // Kanban drags pass entityId (internal UUID) when present; list/dropdown changes
+    // pass the human-readable id. Match either, or this lookup silently fails for
+    // every drag — no previousStatus, so the optimistic cache patch never applies
+    // and it falls back to invalidating everything.
+    const issue = allLoadedIssues.find((item) => item.id === issueId || item.entityId === issueId);
     if (issue && role) {
       const issueOwnStatuses = isCrossProject
         ? projectWorkflowsById.get(issue.projectId)?.statuses ?? ownWorkflowStatuses
@@ -293,6 +277,7 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
       await updateAnyIssueStatus.mutateAsync({
         issueId,
         status: newStatus,
+        previousStatus: issue?.status,
       });
       return true;
     } catch (error) {
@@ -307,18 +292,8 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
     );
   };
 
-  const toggleSelectAllVisible = () => {
-    setSelectedIssueIds((current) => {
-      if (allVisibleSelected) {
-        return current.filter((issueId) => !visibleIssueIds.includes(issueId));
-      }
-
-      return [...new Set([...current, ...visibleIssueIds])];
-    });
-  };
-
   const openAssignDialog = (issueIds: string[]) => {
-    const selectedIssues = issues.filter((issue) => issueIds.includes(issue.id));
+    const selectedIssues = allLoadedIssues.filter((issue) => issueIds.includes(issue.id));
     const teamIds = [...new Set(selectedIssues.map((issue) => issue.teamId).filter(Boolean))];
 
     if (selectedIssues.length === 0) {
@@ -373,235 +348,47 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
   };
 
   const renderListView = () => (
-    <>
-      <div className="flex-1 overflow-y-auto px-4 py-5">
-        {visibleIssues.length > 0 ? (
-          <div className="space-y-3">
-            {listStatusGroups.map(({ status, items }) => {
-              const isCollapsed = collapsedStatusKeys.includes(status.key);
-              return (
-                <section
-                  key={status.key}
-                  className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-border-dark dark:bg-card-dark"
-                >
-                  <button
-                    type="button"
-                    onClick={() => toggleStatusSection(status.key)}
-                  className="flex w-full items-center justify-between gap-4 px-4 py-2.5 text-left transition-colors hover:bg-gray-50 dark:hover:bg-white/[0.03]"
-                  >
-                    <div className="flex min-w-0 items-center gap-3">
-                      <ChevronDown
-                        size={16}
-                        className={`shrink-0 text-gray-400 transition-transform ${isCollapsed ? '-rotate-90' : 'rotate-0'}`}
-                      />
-                      <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: status.color }} />
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{status.label}</h3>
-                          {status.isFinal && (
-                            <span className="rounded-full bg-green-500/10 px-2 py-0.5 text-[10px] font-bold text-green-500">
-                              Done
-                            </span>
-                          )}
-                        </div>
-                        <p className="mt-0.5 text-xs text-gray-400">
-                          {items.length} issue{items.length === 1 ? '' : 's'}
-                        </p>
-                      </div>
-                    </div>
-                    <div
-                      className="flex items-center gap-3"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                      }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={items.every((issue) => selectedIssueIds.includes(issue.id))}
-                        ref={(input) => {
-                          if (input) {
-                            const selectedCount = items.filter((issue) => selectedIssueIds.includes(issue.id)).length;
-                            input.indeterminate = selectedCount > 0 && selectedCount < items.length;
-                          }
-                        }}
-                        onChange={() =>
-                          setSelectedIssueIds((current) => {
-                            const groupIds = items.map((issue) => issue.id);
-                            const allSelected = groupIds.every((issueId) => current.includes(issueId));
-                            if (allSelected) {
-                              return current.filter((issueId) => !groupIds.includes(issueId));
-                            }
-                            return [...new Set([...current, ...groupIds])];
-                          })
-                        }
-                        className="h-4 w-4 rounded border-gray-300 bg-transparent text-primary focus:ring-primary/30"
-                      />
-                    </div>
-                  </button>
-
-                  {!isCollapsed && (
-                    <div className="border-t border-gray-200 dark:border-border-dark">
-                      <div className="grid grid-cols-[44px_40px_100px_1fr_120px_100px_150px_120px_44px] gap-4 bg-gray-50/60 px-5 py-2 text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:bg-black/10">
-                        <div className="flex justify-center">
-                          <input
-                            type="checkbox"
-                            checked={items.every((issue) => selectedIssueIds.includes(issue.id))}
-                            ref={(input) => {
-                              if (input) {
-                                const selectedCount = items.filter((issue) => selectedIssueIds.includes(issue.id)).length;
-                                input.indeterminate = selectedCount > 0 && selectedCount < items.length;
-                              }
-                            }}
-                            onChange={() =>
-                              setSelectedIssueIds((current) => {
-                                const groupIds = items.map((issue) => issue.id);
-                                const allSelected = groupIds.every((issueId) => current.includes(issueId));
-                                if (allSelected) {
-                                  return current.filter((issueId) => !groupIds.includes(issueId));
-                                }
-                                return [...new Set([...current, ...groupIds])];
-                              })
-                            }
-                            className="h-4 w-4 rounded border-gray-300 bg-transparent text-primary focus:ring-primary/30"
-                          />
-                        </div>
-                        <div className="flex justify-center">
-                          <ArrowUpDown size={10} />
-                        </div>
-                        <div>ID</div>
-                        <div>Title</div>
-                        <div>Workflow</div>
-                        <div>Type</div>
-                        <div>Assignee</div>
-                        <div>Priority</div>
-                        <div />
-                      </div>
-
-                      {items.map((issue) => {
-                        const assignee = issue.assignee;
-                        const isSelected = selectedIssueIds.includes(issue.id);
-                        return (
-                          <div
-                            key={issue.id}
-                            onClick={() => setSelectedIssueId(issue.id)}
-                            className={`grid grid-cols-[44px_40px_100px_1fr_120px_100px_150px_120px_44px] gap-4 border-t border-gray-100 px-5 py-3 transition-colors group dark:border-border-dark/50 ${
-                              isSelected ? 'bg-primary/5 dark:bg-primary/10' : 'hover:bg-gray-50 dark:hover:bg-white/5'
-                            } cursor-pointer`}
-                          >
-                            <div
-                              className="flex items-center justify-center"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                              }}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={isSelected}
-                                onChange={() => toggleIssueSelection(issue.id)}
-                                className="h-4 w-4 rounded border-gray-300 bg-transparent text-primary focus:ring-primary/30"
-                              />
-                            </div>
-                            <div className="flex justify-center items-center">
-                              <PriorityIcon priority={issue.priority} />
-                            </div>
-                            <div className="text-xs font-mono text-gray-400 flex items-center">{issue.id}</div>
-                            <div className="flex flex-col justify-center min-w-0">
-                              <span className="text-sm font-medium truncate">{issue.title}</span>
-                              <div className="flex gap-1 mt-1 flex-wrap">
-                                {issue.labels.map((label) => (
-                                  <LabelChip key={label} label={label} />
-                                ))}
-                              </div>
-                            </div>
-                            <div
-                              className="flex items-center"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                              }}
-                            >
-                              <WorkflowStatusSelect
-                                value={issue.status}
-                                statuses={workspaceStatuses}
-                                onChange={(nextStatus) => {
-                                  void handleIssueUpdate(issue.id, nextStatus);
-                                }}
-                              />
-                            </div>
-                            <div className="flex items-center">
-                              <TypeBadge type={issue.type || 'task'} />
-                            </div>
-                            <div className="flex items-center">
-                              {assignee ? (
-                                <div className="flex items-center gap-2 text-xs min-w-0">
-                                  {assignee.avatar ? (
-                                    <img src={assignee.avatar} className="w-5 h-5 rounded-full" alt={assignee.name} />
-                                  ) : (
-                                    <div className="w-5 h-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[10px] font-bold">
-                                      {assignee.name.charAt(0).toUpperCase()}
-                                    </div>
-                                  )}
-                                  <span className="truncate">{assignee.name}</span>
-                                </div>
-                              ) : (
-                                <span className="text-xs text-gray-400 italic">Unassigned</span>
-                              )}
-                            </div>
-                            <div className="flex items-center">
-                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-tighter ${PRIORITY_COLORS[issue.priority]}`}>
-                                {issue.priority}
-                              </span>
-                            </div>
-                            <div className="relative flex items-center justify-center opacity-0 transition-opacity group-hover:opacity-100">
-                              <button
-                                type="button"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  setActiveIssueMenuId((current) => (current === issue.id ? null : issue.id));
-                                }}
-                                className="rounded p-1.5 text-gray-400 hover:bg-gray-200 dark:hover:bg-white/10"
-                              >
-                                <MoreHorizontal size={14} />
-                              </button>
-                              {activeIssueMenuId === issue.id && (
-                                <div className="absolute right-0 top-9 z-20 min-w-[180px] rounded-xl border border-gray-200 bg-white p-1.5 shadow-xl dark:border-border-dark dark:bg-card-dark">
-                                  <button
-                                    type="button"
-                                    onClick={(event) => {
-                                      event.stopPropagation();
-                                      openAssignDialog([issue.id]);
-                                    }}
-                                    className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-gray-200 dark:hover:bg-white/5 dark:hover:text-white"
-                                  >
-                                    Add To Cycle
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </section>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="flex flex-col items-center justify-center h-64 text-gray-400">
-            <SearchIcon size={48} className="mb-4 opacity-10" />
-            <p className="text-sm">No issues found matching your filters.</p>
-          </div>
-        )}
-      </div>
-    </>
+    <div className="flex-1 overflow-y-auto px-4 py-5">
+      {listStatusGroups.length > 0 ? (
+        <div className="space-y-3">
+          {listStatusGroups.map((status) => (
+            <IssueStatusGroup
+              key={status.key}
+              status={status}
+              filters={boardFilters}
+              isCollapsed={collapsedStatusKeys.includes(status.key)}
+              onToggle={() => toggleStatusSection(status.key)}
+              workspaceStatuses={workspaceStatuses}
+              selectedIssueIds={selectedIssueIds}
+              setSelectedIssueIds={setSelectedIssueIds}
+              toggleIssueSelection={toggleIssueSelection}
+              onIssueSelect={setSelectedIssueId}
+              onIssueUpdate={handleIssueUpdate}
+              activeIssueMenuId={activeIssueMenuId}
+              setActiveIssueMenuId={setActiveIssueMenuId}
+              onAssignToCycle={openAssignDialog}
+              onIssuesLoaded={handleIssuesLoaded}
+              persistedCount={hasActiveListFilters ? undefined : statusCounts?.[status.key]}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="flex flex-col items-center justify-center h-64 text-gray-400">
+          <SearchIcon size={48} className="mb-4 opacity-10" />
+          <p className="text-sm">No workflow statuses are configured for the list view.</p>
+        </div>
+      )}
+    </div>
   );
 
   const renderKanbanView = () => (
-    <KanbanBoard
-      issues={visibleIssues}
+    <IssueKanbanBoard
+      filters={boardFilters}
+      selectedAssigneeIds={selectedAssigneeIds}
+      statuses={workspaceStatuses}
       onIssueUpdate={handleIssueUpdate}
       onNewIssue={(status) => navigate(`/issues/create?status=${status}`)}
-      statuses={workspaceStatuses}
+      onIssuesLoaded={handleIssuesLoaded}
     />
   );
 
@@ -670,8 +457,8 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <header className="flex flex-wrap items-center justify-between gap-4 px-6 py-4 border-b border-gray-200 dark:border-border-dark bg-white dark:bg-bg-dark sticky top-0 z-20">
-        <div className="flex flex-wrap items-center gap-4 sm:gap-6">
+      <header className="flex flex-col gap-3 px-6 pt-4 pb-2 border-b border-gray-200 dark:border-border-dark bg-white dark:bg-bg-dark sticky top-0 z-20">
+        <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <h1 className="text-lg font-semibold truncate max-w-[200px] sm:max-w-none">{pageTitle}</h1>
             {showTeamScopeBadge && teamLabel && (
@@ -680,6 +467,16 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
               </span>
             )}
           </div>
+          <button
+            onClick={() => navigate('/issues/create')}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary/90 transition-colors shrink-0"
+          >
+            <Plus size={14} />
+            <span className="hidden sm:inline">New Issue</span>
+          </button>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center bg-gray-100 dark:bg-white/5 rounded-md p-1 shrink-0">
             <button
               onClick={() => setViewMode('list')}
@@ -700,8 +497,6 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
               Calendar
             </button>
           </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 flex-1 justify-end min-w-0">
           <div className="relative flex-1 max-w-[240px] min-w-[140px]">
             <SearchIcon size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
@@ -757,17 +552,11 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
               </select>
             </div>
           )}
-          <button
-            onClick={() => navigate('/issues/create')}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary/90 transition-colors shrink-0"
-          >
-            <Plus size={14} />
-            <span className="hidden sm:inline">New Issue</span>
-          </button>
         </div>
 
         {viewMode === 'kanban' && (
-          <div className="flex w-full flex-wrap items-center gap-1.5 border-t border-gray-100 pt-3 dark:border-border-dark/70">
+          <div className="-mx-6 border-t border-gray-100 pt-2 dark:border-border-dark/70">
+          <div className="flex w-full flex-wrap items-center gap-1.5 px-6">
             <button
               type="button"
               onClick={() => setSelectedAssigneeIds([])}
@@ -814,6 +603,7 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
                 </button>
               );
             })}
+          </div>
           </div>
         )}
       </header>
@@ -881,7 +671,7 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
         {viewMode === 'kanban' && renderKanbanView()}
         {viewMode === 'calendar' && renderCalendarView()}
 
-        {issuesQuery.hasNextPage && (
+        {viewMode === 'calendar' && issuesQuery.hasNextPage && (
           <div className="border-t border-gray-100 px-6 py-3 dark:border-border-dark">
             <button
               type="button"

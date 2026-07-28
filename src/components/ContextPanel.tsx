@@ -165,7 +165,7 @@ export const ContextPanel: React.FC = () => {
 
   const handleStatusChange = async (status: Status) => {
     try {
-      await updateIssueStatus.mutateAsync(status);
+      await updateIssueStatus.mutateAsync({ status, previousStatus: issue?.status });
       showToast(`Status updated to ${statusOptions.find((option) => option.key === status)?.label ?? STATUS_LABELS[status] ?? status}.`, 'success');
     } catch (error) {
       showToast(getApiErrorMessage(error) || 'Failed to update status.', 'error');

@@ -15,15 +15,12 @@ import { ChartCard } from './shared/ChartCard';
 import { AnalyticsLoadingState } from './shared/AnalyticsLoadingState';
 import { AnalyticsErrorState } from './shared/AnalyticsErrorState';
 import { EmptyAnalyticsState } from './shared/EmptyAnalyticsState';
-import { ExportButton } from './shared/ExportButton';
-import { PeriodSelector } from './shared/PeriodSelector';
 import { useTeamAnalytics } from '../hooks/useAnalyticsData';
 import type { AnalyticsPeriod, TeamAnalyticsData } from '../types';
 
 interface TeamAnalyticsProps {
   teamId: string;
   period: AnalyticsPeriod;
-  onPeriodChange: (p: AnalyticsPeriod) => void;
 }
 
 const TOOLTIP_STYLE = {
@@ -38,7 +35,6 @@ const AXIS_TICK = { fontSize: 12, fill: '#888' };
 export const TeamAnalytics: React.FC<TeamAnalyticsProps> = ({
   teamId,
   period,
-  onPeriodChange,
 }) => {
   const { data, isLoading, isError, refetch } = useTeamAnalytics(teamId, { period });
 
@@ -52,12 +48,6 @@ export const TeamAnalytics: React.FC<TeamAnalyticsProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-end gap-3">
-        <PeriodSelector value={period} onChange={onPeriodChange} />
-        <ExportButton scope="team" scopeId={teamId} params={{ period }} />
-      </div>
-
       {/* Stats Row */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <StatCard

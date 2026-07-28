@@ -26,15 +26,12 @@ import { ChartCard } from './shared/ChartCard';
 import { AnalyticsLoadingState } from './shared/AnalyticsLoadingState';
 import { AnalyticsErrorState } from './shared/AnalyticsErrorState';
 import { EmptyAnalyticsState } from './shared/EmptyAnalyticsState';
-import { ExportButton } from './shared/ExportButton';
-import { PeriodSelector } from './shared/PeriodSelector';
 import { useCycleAnalytics } from '../hooks/useAnalyticsData';
 import type { AnalyticsPeriod, GroupCountItem } from '../types';
 
 interface CycleAnalyticsProps {
   cycleId: string;
   period: AnalyticsPeriod;
-  onPeriodChange: (p: AnalyticsPeriod) => void;
 }
 
 const TOOLTIP_STYLE = {
@@ -151,7 +148,6 @@ const DonutChart: React.FC<DonutChartProps> = ({ data, colorMap, fallbackColors 
 export const CycleAnalytics: React.FC<CycleAnalyticsProps> = ({
   cycleId,
   period,
-  onPeriodChange,
 }) => {
   const { data, isLoading, isError, refetch } = useCycleAnalytics(cycleId, { period });
 
@@ -164,12 +160,6 @@ export const CycleAnalytics: React.FC<CycleAnalyticsProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* ── Header ── */}
-      <div className="flex items-center justify-end gap-3">
-        <PeriodSelector value={period} onChange={onPeriodChange} />
-        <ExportButton scope="cycle" scopeId={cycleId} params={{ period }} />
-      </div>
-
       {/* ── Progress Bar Hero ── */}
       <div className="bg-white dark:bg-card-dark p-6 rounded-xl border border-gray-200 dark:border-border-dark shadow-sm">
         <div className="flex items-center justify-between mb-3">

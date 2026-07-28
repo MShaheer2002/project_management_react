@@ -25,7 +25,12 @@ function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-export const ApiKeysPage: React.FC = () => {
+interface ApiKeysPageProps {
+  /** Render as a section within another page (e.g. Settings tabs) instead of a standalone full-height page — drops the bordered header and own scroll/padding. */
+  embedded?: boolean;
+}
+
+export const ApiKeysPage: React.FC<ApiKeysPageProps> = ({ embedded = false }) => {
   const showToast = useToastStore((s) => s.showToast);
   const { data: apiKeys = [], isLoading, error, refetch } = useApiKeys();
 
@@ -36,9 +41,9 @@ export const ApiKeysPage: React.FC = () => {
   const expiredKeys = apiKeys.filter((k) => k.isExpired);
 
   return (
-    <div className="flex flex-col h-full">
+    <div className={embedded ? '' : 'flex flex-col h-full'}>
       {/* Header */}
-      <header className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-border-dark">
+      <header className={`flex items-center justify-between ${embedded ? 'pb-4' : 'px-6 py-4 border-b border-gray-200 dark:border-border-dark'}`}>
         <div className="flex items-center gap-3">
           <h1 className="text-lg font-semibold dark:text-white">API Keys</h1>
           {!isLoading && (
@@ -56,7 +61,7 @@ export const ApiKeysPage: React.FC = () => {
         </button>
       </header>
 
-      <div className="p-6 space-y-5 overflow-y-auto flex-1">
+      <div className={embedded ? 'space-y-5' : 'p-6 space-y-5 overflow-y-auto flex-1'}>
         {/* Security notice */}
         <div className="flex items-start gap-3 rounded-xl bg-blue-500/[0.06] border border-blue-500/10 px-4 py-3.5">
           <Shield size={16} className="text-blue-500 mt-0.5 shrink-0" />

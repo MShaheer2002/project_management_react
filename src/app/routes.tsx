@@ -5,6 +5,7 @@ import { useAuthStore } from '@/app/stores/useAuthStore';
 import { MainLayout } from '@/app/layouts/MainLayout';
 import { AuthGuard } from '@shared/guards/AuthGuard';
 import { GuestGuard } from '@shared/guards/GuestGuard';
+import { TrussenAppLogo } from '@/assets/svg/TrussenAppLogo';
 
 // ── Auth pages (Clerk-integrated) ──
 import {
@@ -37,6 +38,7 @@ import { MarketingPage } from '@/pages/MarketingPage';
 import { CyclesPage } from '@/pages/CyclesPage';
 import { CycleDetailPage } from '@/pages/CycleDetailPage';
 import { BillingPage } from '@/pages/BillingPage';
+import { AiUsagePage } from '@/pages/AiUsagePage';
 import { ApiKeysPage } from '@/pages/ApiKeysPage';
 import { AiConnectionsPage } from '@/pages/AiConnectionsPage';
 import { ProjectDetailPage } from '@/features/projects/pages/ProjectDetailPage';
@@ -60,9 +62,7 @@ const RootPage: React.FC = () => {
     return (
       <div className="min-h-screen flex items-center justify-center bg-white dark:bg-bg-dark">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-white font-bold animate-pulse">
-            L
-          </div>
+          <TrussenAppLogo className="w-12 h-12 animate-pulse" />
           <p className="text-sm text-gray-400">Loading...</p>
         </div>
       </div>
@@ -158,7 +158,7 @@ export const AppRoutes: React.FC = () => {
 
           {/* Role-guarded routes (inline checks — will use RoleGuard component in Phase 3) */}
           <Route path="/analytics" element={isLead ? <AnalyticsPage /> : <Navigate to="/" />} />
-          <Route path="/integrations" element={isLead ? <IntegrationsPage /> : <Navigate to="/" />} />
+          <Route path="/integrations" element={isAdmin ? <IntegrationsPage /> : <Navigate to="/" />} />
           <Route path="/templates" element={isAdmin ? <TemplatesPage /> : <Navigate to="/" />} />
           <Route path="/templates/new" element={isAdmin ? <TemplatesPage /> : <Navigate to="/" />} />
           <Route path="/templates/:templateId" element={isAdmin ? <TemplatesPage /> : <Navigate to="/" />} />
@@ -167,6 +167,7 @@ export const AppRoutes: React.FC = () => {
           <Route path="/api-keys" element={isAdmin ? <ApiKeysPage /> : <Navigate to="/" />} />
           <Route path="/ai-connections" element={isAdmin ? <AiConnectionsPage /> : <Navigate to="/" />} />
           <Route path="/billing" element={isAdmin ? <BillingPage /> : <Navigate to="/" />} />
+          <Route path="/ai-usage" element={isAdmin ? <AiUsagePage /> : <Navigate to="/" />} />
 
           {/* Catch-all inside authenticated layout — redirect to dashboard */}
           <Route path="*" element={<Navigate to="/dashboard" />} />

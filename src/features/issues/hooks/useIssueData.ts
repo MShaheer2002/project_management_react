@@ -4,7 +4,6 @@ import { dashboardQueryKeys } from '@features/dashboard';
 import { departmentQueryKeys } from '@features/department';
 import { projectQueryKeys } from '@features/projects';
 import { teamQueryKeys } from '@features/team';
-import { workspaceQueryKeys } from '@features/workspace';
 import { issueService } from '../services/issueService';
 import type {
   AddIssueAttachmentsInput,
@@ -18,6 +17,8 @@ import type {
   CreateIssueInput,
   CreateIssueSubtaskInput,
   IssueAssignmentEligibility,
+  IssueDetail,
+  IssueSummary,
   ListIssueActivityInput,
   ListIssueCommentsInput,
   ListLabelsInput,
@@ -35,6 +36,8 @@ export const issueQueryKeys = {
   workspace: (workspaceId: string | undefined) => [...issueQueryKeys.all, workspaceId] as const,
   directory: (workspaceId: string | undefined, params: object) =>
     [...issueQueryKeys.workspace(workspaceId), 'directory', params] as const,
+  statusCounts: (workspaceId: string | undefined) =>
+    [...issueQueryKeys.workspace(workspaceId), 'status-counts'] as const,
   options: (workspaceId: string | undefined, params: object) =>
     [...issueQueryKeys.workspace(workspaceId), 'options', params] as const,
   detail: (workspaceId: string | undefined, issueId: string | undefined) =>
@@ -63,11 +66,13 @@ const invalidateIssueRelatedQueries = (
 ) => {
   queryClient.invalidateQueries({ queryKey: issueQueryKeys.workspace(workspaceId) });
   queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.byWorkspace(workspaceId) });
-  queryClient.invalidateQueries({ queryKey: workspaceQueryKeys.detail(workspaceId) });
-  queryClient.invalidateQueries({ queryKey: workspaceQueryKeys.members(workspaceId) });
+  // Project list shows a live per-project issueCount, so it has to be refetched.
+  // Workspace detail/members and the team/department lists carry no issue-derived
+  // data — invalidating them here was pure waste, refetched on every issue mutation
+  // for no reason (workspace detail, full member list, full team list, full
+  // department list), and it was the biggest contributor to the request fan-out that
+  // was tripping the global rate limiter.
   queryClient.invalidateQueries({ queryKey: projectQueryKeys.workspace(workspaceId) });
-  queryClient.invalidateQueries({ queryKey: teamQueryKeys.workspace(workspaceId) });
-  queryClient.invalidateQueries({ queryKey: departmentQueryKeys.workspace(workspaceId) });
 
   if (issueId) {
     queryClient.invalidateQueries({ queryKey: issueQueryKeys.detail(workspaceId, issueId) });
@@ -95,6 +100,101 @@ const invalidateIssueRelatedQueries = (
   }
 };
 
+type IssueDirectoryPage = { items: IssueSummary[]; meta: { total: number; cursor: string | null; hasMore: boolean } };
+type IssueDirectoryData = { pages: IssueDirectoryPage[]; pageParams: unknown[] };
+
+/**
+ * Directly patches every cached issues query the moved issue could appear in,
+ * instead of invalidating and refetching them. A status change should cost
+ * exactly one network request (the PATCH itself) — every board column, list
+ * group, and flat query currently mounted gets updated from the mutation's
+ * response, in memory, with zero extra GETs. Columns/groups for unrelated
+ * statuses are left completely untouched (not even marked stale).
+ */
+function patchIssueStatusCaches(
+  queryClient: ReturnType<typeof useQueryClient>,
+  workspaceId: string | undefined,
+  updatedIssue: IssueDetail,
+  previousStatus: string,
+) {
+  const newStatus = updatedIssue.status;
+  if (previousStatus === newStatus) return;
+
+  const directoryQueries = queryClient.getQueryCache().findAll({ queryKey: issueQueryKeys.workspace(workspaceId) });
+
+  directoryQueries.forEach((query) => {
+    if (query.queryKey[2] !== 'directory') return;
+    const params = query.queryKey[3] as { status?: string } | undefined;
+    const filterStatus = params?.status;
+
+    queryClient.setQueryData<IssueDirectoryData>(query.queryKey, (data) => {
+      if (!data?.pages) return data;
+
+      // Status-agnostic query (flat "all issues" feed, calendar source, etc.) —
+      // the issue stays in the same list either way, just patch its fields.
+      if (!filterStatus) {
+        let touched = false;
+        const pages = data.pages.map((page) => {
+          const items = page.items.map((item) => {
+            if (item.id !== updatedIssue.id) return item;
+            touched = true;
+            return { ...item, ...updatedIssue };
+          });
+          return touched ? { ...page, items } : page;
+        });
+        return touched ? { ...data, pages } : data;
+      }
+
+      // Unrelated column/group for some other status — leave completely alone.
+      if (filterStatus !== previousStatus && filterStatus !== newStatus) return data;
+
+      if (filterStatus === previousStatus) {
+        let removed = false;
+        const pages = data.pages.map((page, index) => {
+          if (!page.items.some((item) => item.id === updatedIssue.id)) return page;
+          removed = true;
+          const items = page.items.filter((item) => item.id !== updatedIssue.id);
+          return index === 0
+            ? { ...page, items, meta: { ...page.meta, total: Math.max(page.meta.total - 1, 0) } }
+            : { ...page, items };
+        });
+        return removed ? { ...data, pages } : data;
+      }
+
+      // filterStatus === newStatus
+      const alreadyPresent = data.pages.some((page) => page.items.some((item) => item.id === updatedIssue.id));
+      if (alreadyPresent) return data;
+
+      const pages = data.pages.map((page, index) =>
+        index === 0
+          ? {
+              ...page,
+              items: [updatedIssue as unknown as IssueSummary, ...page.items],
+              meta: { ...page.meta, total: page.meta.total + 1 },
+            }
+          : page,
+      );
+      return { ...data, pages };
+    });
+  });
+
+  queryClient.setQueryData<Record<string, number>>(issueQueryKeys.statusCounts(workspaceId), (data) => {
+    if (!data) return data;
+    return {
+      ...data,
+      [previousStatus]: Math.max((data[previousStatus] ?? 0) - 1, 0),
+      [newStatus]: (data[newStatus] ?? 0) + 1,
+    };
+  });
+
+  // Dashboard stats (e.g. "completed this week") do depend on status, but the
+  // dashboard is a different route — mark it stale for whenever it's next viewed
+  // instead of forcing a refetch right now just because it's technically mounted.
+  queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.byWorkspace(workspaceId), refetchType: 'none' });
+
+  queryClient.setQueryData(issueQueryKeys.detail(workspaceId, updatedIssue.id), updatedIssue);
+}
+
 export const useIssuesDirectory = (params: ListIssuesInput = {}, options?: { enabled?: boolean }) => {
   const workspaceId = useAuthStore((s) => s.workspace?.id);
 
@@ -107,6 +207,16 @@ export const useIssuesDirectory = (params: ListIssuesInput = {}, options?: { ena
       }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage.meta.cursor ?? undefined,
+    enabled: Boolean(workspaceId) && (options?.enabled ?? true),
+  });
+};
+
+export const useIssueStatusCounts = (options?: { enabled?: boolean }) => {
+  const workspaceId = useAuthStore((s) => s.workspace?.id);
+
+  return useQuery({
+    queryKey: issueQueryKeys.statusCounts(workspaceId),
+    queryFn: () => issueService.getStatusCounts(),
     enabled: Boolean(workspaceId) && (options?.enabled ?? true),
   });
 };
@@ -288,14 +398,18 @@ export const useUpdateIssueStatus = (issueId: string | undefined) => {
   const workspaceId = useAuthStore((s) => s.workspace?.id);
 
   return useMutation({
-    mutationFn: (status: NonNullable<UpdateIssueInput['status']>) =>
+    mutationFn: ({ status }: { status: NonNullable<UpdateIssueInput['status']>; previousStatus?: string }) =>
       issueService.updateStatus(issueId!, status),
-    onSuccess: (issue) => {
-      invalidateIssueRelatedQueries(queryClient, workspaceId, issueId, {
-        projectId: issue.projectId,
-        teamId: issue.teamId,
-        departmentId: issue.departmentId,
-      });
+    onSuccess: (issue, variables) => {
+      if (variables.previousStatus && variables.previousStatus !== issue.status) {
+        patchIssueStatusCaches(queryClient, workspaceId, issue, variables.previousStatus);
+      } else {
+        invalidateIssueRelatedQueries(queryClient, workspaceId, issueId, {
+          projectId: issue.projectId,
+          teamId: issue.teamId,
+          departmentId: issue.departmentId,
+        });
+      }
     },
   });
 };
@@ -339,14 +453,24 @@ export const useUpdateAnyIssueStatus = () => {
   const workspaceId = useAuthStore((s) => s.workspace?.id);
 
   return useMutation({
-    mutationFn: ({ issueId, status }: { issueId: string; status: NonNullable<UpdateIssueInput['status']> }) =>
-      issueService.updateStatus(issueId, status),
-    onSuccess: (issue) => {
-      invalidateIssueRelatedQueries(queryClient, workspaceId, issue.id, {
-        projectId: issue.projectId,
-        teamId: issue.teamId,
-        departmentId: issue.departmentId,
-      });
+    mutationFn: ({
+      issueId,
+      status,
+    }: {
+      issueId: string;
+      status: NonNullable<UpdateIssueInput['status']>;
+      previousStatus?: string;
+    }) => issueService.updateStatus(issueId, status),
+    onSuccess: (issue, variables) => {
+      if (variables.previousStatus && variables.previousStatus !== issue.status) {
+        patchIssueStatusCaches(queryClient, workspaceId, issue, variables.previousStatus);
+      } else {
+        invalidateIssueRelatedQueries(queryClient, workspaceId, issue.id, {
+          projectId: issue.projectId,
+          teamId: issue.teamId,
+          departmentId: issue.departmentId,
+        });
+      }
     },
   });
 };
