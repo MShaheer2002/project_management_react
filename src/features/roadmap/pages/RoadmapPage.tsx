@@ -12,7 +12,6 @@ import {
 } from 'lucide-react';
 import { useDepartmentOptions } from '@features/department';
 import { useTeamOptions } from '@features/team';
-import { useWorkspaceMemberOptions } from '@features/workspace';
 import { useRoadmapList } from '../hooks/useRoadmapData';
 import type { RoadmapHealth, RoadmapItem, RoadmapProjectStatus, RoadmapView } from '../types';
 
@@ -216,7 +215,6 @@ export const RoadmapPage: React.FC = () => {
   const view = (searchParams.get('view') === 'MONTH' ? 'MONTH' : 'QUARTER') as RoadmapView;
   const from = searchParams.get('from') || undefined;
   const departmentId = searchParams.get('departmentId') || undefined;
-  const leadId = searchParams.get('leadId') || undefined;
   const status = (searchParams.get('status') as RoadmapProjectStatus | null) || undefined;
   const health = (searchParams.get('health') as RoadmapHealth | null) || undefined;
   const includeUnscheduled = searchParams.get('includeUnscheduled') === 'true';
@@ -236,7 +234,6 @@ export const RoadmapPage: React.FC = () => {
     from,
     teamId,
     departmentId,
-    leadId,
     status,
     health,
     includeUnscheduled,
@@ -247,11 +244,9 @@ export const RoadmapPage: React.FC = () => {
 
   const teamOptionsQuery = useTeamOptions({ limit: 100, sort: 'name:asc' }, { enabled: true });
   const departmentOptionsQuery = useDepartmentOptions({ limit: 100, sort: 'name:asc' }, { enabled: true });
-  const leadOptionsQuery = useWorkspaceMemberOptions({ limit: 100, sort: 'name:asc' }, { enabled: true });
 
   const teamOptions = teamOptionsQuery.data?.pages.flatMap((page) => page.items) ?? [];
   const departmentOptions = departmentOptionsQuery.data?.pages.flatMap((page) => page.items) ?? [];
-  const leadOptions = leadOptionsQuery.data?.pages.flatMap((page) => page.items) ?? [];
 
   const pages = roadmapQuery.data?.pages ?? [];
   const firstPage = pages[0];
@@ -396,23 +391,9 @@ export const RoadmapPage: React.FC = () => {
             />
           </div>
 
-          <select value={teamId ?? ''} onChange={(event) => updateSearchParams({ teamId: event.target.value || null })} className={selectClass}>
-            <option value="">All teams</option>
-            {teamOptions.map((option) => (
-              <option key={option.id} value={option.id}>{option.name}</option>
-            ))}
-          </select>
-
           <select value={departmentId ?? ''} onChange={(event) => updateSearchParams({ departmentId: event.target.value || null })} className={selectClass}>
             <option value="">All departments</option>
             {departmentOptions.map((option) => (
-              <option key={option.id} value={option.id}>{option.name}</option>
-            ))}
-          </select>
-
-          <select value={leadId ?? ''} onChange={(event) => updateSearchParams({ leadId: event.target.value || null })} className={selectClass}>
-            <option value="">All leads</option>
-            {leadOptions.map((option) => (
               <option key={option.id} value={option.id}>{option.name}</option>
             ))}
           </select>

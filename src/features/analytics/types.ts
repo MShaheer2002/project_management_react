@@ -56,6 +56,8 @@ export interface WorkspaceAnalyticsData {
     activeProjects: MetricWithTrend;
     teamWorkload: MetricWithTrend;
     overdueIssues: MetricWithTrend;
+    progress: number;
+    totalIssues: number;
     openVsClosed: { open: number; closed: number };
   };
   charts: {
@@ -148,6 +150,9 @@ export interface TeamAnalyticsData {
   summary: {
     velocity: MetricWithTrend;
     avgResolutionTime: ResolutionMetric;
+    progress: number;
+    totalIssues: number;
+    completedIssues: number;
   };
   charts: {
     completionVelocity: VelocityPoint[];

@@ -467,6 +467,24 @@ export const SettingsPage: React.FC = () => {
               </SettingsItem>
             </SettingsSection>
 
+            {workspace && canManageSettings && (
+              <UploadPolicySection workspaceId={workspace.id} />
+            )}
+
+            {workspace && (
+              <div className="-mx-6">
+                <DocumentsPanel
+                  scope="workspace"
+                  workspaceId={workspace.id}
+                  entityId={workspace.id}
+                  title="Workspace docs"
+                  description="Workspace docs keep policies, onboarding, and shared references in one place."
+                  emptyTitle="No workspace docs yet"
+                  emptyDescription="Add shared references, policies, and onboarding material for everyone in this workspace."
+                />
+              </div>
+            )}
+
             {canManageSettings && (
               <div className="flex justify-end pt-8">
                 <button
@@ -514,22 +532,6 @@ export const SettingsPage: React.FC = () => {
                 }}
                 getStatusUsage={(statusKey, limit) => workspaceService.getStatusUsage(workspace.id, statusKey, limit)}
                 onMergeStatus={(sourceKey, targetStatusKey) => workspaceService.mergeStatus(workspace.id, sourceKey, targetStatusKey)}
-              />
-            )}
-
-            {workspace && canManageSettings && (
-              <UploadPolicySection workspaceId={workspace.id} />
-            )}
-
-            {workspace && (
-              <DocumentsPanel
-                scope="workspace"
-                workspaceId={workspace.id}
-                entityId={workspace.id}
-                title="Workspace docs"
-                description="Workspace docs keep policies, onboarding, and shared references in one place."
-                emptyTitle="No workspace docs yet"
-                emptyDescription="Add shared references, policies, and onboarding material for everyone in this workspace."
               />
             )}
 

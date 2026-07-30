@@ -31,6 +31,7 @@ const TOOLTIP_STYLE = {
 };
 
 const AXIS_TICK = { fontSize: 12, fill: '#888' };
+const PRIMARY = '#5f72ea';
 
 export const TeamAnalytics: React.FC<TeamAnalyticsProps> = ({
   teamId,
@@ -45,9 +46,30 @@ export const TeamAnalytics: React.FC<TeamAnalyticsProps> = ({
   if (!analytics) return <EmptyAnalyticsState title="No team data" description="Analytics will appear once the team has activity." />;
 
   const { summary, charts, tables } = analytics;
+  const progressPct = Math.min(100, Math.max(0, summary.progress));
 
   return (
     <div className="space-y-6">
+      {/* ── Progress Bar Hero ── */}
+      <div className="bg-white dark:bg-card-dark p-6 rounded-xl border border-gray-200 dark:border-border-dark shadow-sm">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400">Team Progress</h3>
+          <span className="text-2xl font-bold text-gray-900 dark:text-white">
+            {progressPct}%
+          </span>
+        </div>
+        <div className="w-full h-4 bg-gray-100 dark:bg-white/5 rounded-full overflow-hidden">
+          <div
+            className="h-full rounded-full transition-all duration-500"
+            style={{ width: `${progressPct}%`, backgroundColor: PRIMARY }}
+          />
+        </div>
+        <div className="flex items-center justify-between mt-2 text-xs text-gray-400">
+          <span>{summary.completedIssues} completed</span>
+          <span>{summary.totalIssues} total</span>
+        </div>
+      </div>
+
       {/* Stats Row */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <StatCard
@@ -78,10 +100,10 @@ export const TeamAnalytics: React.FC<TeamAnalyticsProps> = ({
               <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.1} />
               <XAxis dataKey="date" axisLine={false} tickLine={false} tick={AXIS_TICK} />
               <YAxis axisLine={false} tickLine={false} tick={AXIS_TICK} />
-              <Tooltip contentStyle={TOOLTIP_STYLE} />
+              <Tooltip contentStyle={TOOLTIP_STYLE} cursor={false} />
               <Legend />
-              <Bar dataKey="created" fill="#9CA3AF" radius={[4, 4, 0, 0]} name="Created" />
-              <Bar dataKey="completed" fill="#5f72ea" radius={[4, 4, 0, 0]} name="Completed" />
+              <Bar dataKey="created" fill="#9CA3AF" radius={[4, 4, 0, 0]} name="Created" barSize={14} />
+              <Bar dataKey="completed" fill="#5f72ea" radius={[4, 4, 0, 0]} name="Completed" barSize={14} />
             </BarChart>
           </ResponsiveContainer>
         )}
@@ -105,10 +127,10 @@ export const TeamAnalytics: React.FC<TeamAnalyticsProps> = ({
                   tick={AXIS_TICK}
                   width={100}
                 />
-                <Tooltip contentStyle={TOOLTIP_STYLE} />
+                <Tooltip contentStyle={TOOLTIP_STYLE} cursor={false} />
                 <Legend />
-                <Bar dataKey="assigned" fill="#5f72ea" radius={[0, 4, 4, 0]} name="Assigned" />
-                <Bar dataKey="open" fill="#9CA3AF" radius={[0, 4, 4, 0]} name="Open" />
+                <Bar dataKey="assigned" fill="#5f72ea" radius={[0, 4, 4, 0]} name="Assigned" barSize={16} />
+                <Bar dataKey="open" fill="#9CA3AF" radius={[0, 4, 4, 0]} name="Open" barSize={16} />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -139,9 +161,10 @@ export const TeamAnalytics: React.FC<TeamAnalyticsProps> = ({
                 />
                 <Tooltip
                   contentStyle={TOOLTIP_STYLE}
+                  cursor={false}
                   formatter={(value: number) => [`${value}%`, 'Completion Rate']}
                 />
-                <Bar dataKey="completionRate" fill="#10B981" radius={[0, 4, 4, 0]} name="Completion Rate" />
+                <Bar dataKey="completionRate" fill="#10B981" radius={[0, 4, 4, 0]} name="Completion Rate" barSize={16} />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -160,12 +183,13 @@ export const TeamAnalytics: React.FC<TeamAnalyticsProps> = ({
               <YAxis axisLine={false} tickLine={false} tick={AXIS_TICK} />
               <Tooltip
                 contentStyle={TOOLTIP_STYLE}
+                cursor={false}
                 formatter={(value: number, name: string) => [value, name]}
                 labelFormatter={(label: string) => label}
               />
               <Legend />
-              <Bar dataKey="total" fill="#9CA3AF" radius={[4, 4, 0, 0]} name="Total" />
-              <Bar dataKey="completed" fill="#5f72ea" radius={[4, 4, 0, 0]} name="Completed" />
+              <Bar dataKey="total" fill="#9CA3AF" radius={[4, 4, 0, 0]} name="Total" barSize={14} />
+              <Bar dataKey="completed" fill="#5f72ea" radius={[4, 4, 0, 0]} name="Completed" barSize={14} />
             </BarChart>
           </ResponsiveContainer>
         )}

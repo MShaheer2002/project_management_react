@@ -207,8 +207,9 @@ export const DashboardPage: React.FC = () => {
                 <Tooltip
                   contentStyle={{ backgroundColor: '#1C1F2B', border: 'none', borderRadius: '8px', color: '#fff' }}
                   itemStyle={{ color: '#5f72ea' }}
+                  cursor={false}
                 />
-                <Bar dataKey="completed" fill="#5f72ea" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="completed" fill="#5f72ea" radius={[4, 4, 0, 0]} barSize={24} />
               </BarChart>
             </ResponsiveContainer>
           </div>

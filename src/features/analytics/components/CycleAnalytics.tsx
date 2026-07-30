@@ -201,10 +201,22 @@ export const CycleAnalytics: React.FC<CycleAnalyticsProps> = ({
         <ChartCard title="Burndown">
           {charts.burndown.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={charts.burndown} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+              <LineChart data={charts.burndown} margin={{ top: 8, right: 16, left: 20, bottom: 24 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.1} />
-                <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#888' }} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#888' }} />
+                <XAxis
+                  dataKey="date"
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fontSize: 12, fill: '#888' }}
+                  interval="preserveStartEnd"
+                  label={{ value: 'Date', position: 'insideBottom', offset: -16, style: { fontSize: 11, fill: '#888' } }}
+                />
+                <YAxis
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fontSize: 12, fill: '#888' }}
+                  label={{ value: 'Issues Remaining', angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: '#888', textAnchor: 'middle' } }}
+                />
                 <Tooltip contentStyle={TOOLTIP_STYLE} />
                 <Line
                   type="monotone"
@@ -225,14 +237,26 @@ export const CycleAnalytics: React.FC<CycleAnalyticsProps> = ({
         <ChartCard title="Daily Velocity">
           {charts.dailyVelocity.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={charts.dailyVelocity} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+              <BarChart data={charts.dailyVelocity} margin={{ top: 8, right: 16, left: 20, bottom: 24 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.1} />
-                <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#888' }} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#888' }} />
-                <Tooltip contentStyle={TOOLTIP_STYLE} />
+                <XAxis
+                  dataKey="date"
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fontSize: 12, fill: '#888' }}
+                  interval="preserveStartEnd"
+                  label={{ value: 'Date', position: 'insideBottom', offset: -16, style: { fontSize: 11, fill: '#888' } }}
+                />
+                <YAxis
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fontSize: 12, fill: '#888' }}
+                  label={{ value: 'Issues', angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: '#888', textAnchor: 'middle' } }}
+                />
+                <Tooltip contentStyle={TOOLTIP_STYLE} cursor={false} />
                 <Legend />
-                <Bar dataKey="created" name="Created" fill="#F59E0B" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="completed" name="Completed" fill="#10B981" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="created" name="Created" fill="#F59E0B" radius={[4, 4, 0, 0]} barSize={14} />
+                <Bar dataKey="completed" name="Completed" fill="#10B981" radius={[4, 4, 0, 0]} barSize={14} />
               </BarChart>
             </ResponsiveContainer>
           ) : (

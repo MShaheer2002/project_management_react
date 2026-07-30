@@ -72,11 +72,12 @@ export const ReportsPage: React.FC = () => {
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#333" opacity={0.1} />
                   <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#888' }} />
                   <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#888' }} />
-                  <Tooltip 
+                  <Tooltip
                     contentStyle={{ backgroundColor: '#1C1F2B', border: 'none', borderRadius: '8px', color: '#fff' }}
                     itemStyle={{ color: '#5f72ea' }}
+                    cursor={false}
                   />
-                  <Bar dataKey="completed" fill="#5f72ea" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="completed" fill="#5f72ea" radius={[4, 4, 0, 0]} barSize={24} />
                 </BarChart>
               </ResponsiveContainer>
             </div>

@@ -978,7 +978,7 @@ const TemplateFormView: React.FC<{ mode: 'create' | 'edit'; template?: IssueTemp
 
             {showStatusComposer && (
               <div
-                className="fixed inset-0 z-50 bg-black/45 backdrop-blur-sm"
+                className="fixed inset-0 z-[100] bg-black/45 backdrop-blur-sm"
                 onMouseDown={(event) => {
                   if (event.target === event.currentTarget) {
                     setShowStatusComposer(false);
@@ -1036,7 +1036,7 @@ const TemplateFormView: React.FC<{ mode: 'create' | 'edit'; template?: IssueTemp
 
             {showCategoryComposer && (
               <div
-                className="fixed inset-0 z-50 bg-black/45 backdrop-blur-sm"
+                className="fixed inset-0 z-[100] bg-black/45 backdrop-blur-sm"
                 onMouseDown={(event) => {
                   if (event.target === event.currentTarget) {
                     setShowCategoryComposer(false);
@@ -1098,7 +1098,7 @@ const TemplateFormView: React.FC<{ mode: 'create' | 'edit'; template?: IssueTemp
 
             {showPriorityComposer && (
               <div
-                className="fixed inset-0 z-50 bg-black/45 backdrop-blur-sm"
+                className="fixed inset-0 z-[100] bg-black/45 backdrop-blur-sm"
                 onMouseDown={(event) => {
                   if (event.target === event.currentTarget) {
                     setShowPriorityComposer(false);
@@ -1352,7 +1352,7 @@ const TemplateDetailView: React.FC<{ templateId: string }> = ({ templateId }) =>
       </div>
       {activationConflict && (
         <div
-          className="fixed inset-0 z-50 bg-black/45 backdrop-blur-sm"
+          className="fixed inset-0 z-[100] bg-black/45 backdrop-blur-sm"
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) setActivationConflict(null);
           }}

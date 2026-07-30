@@ -209,10 +209,10 @@ export const ProjectAnalytics: React.FC<ProjectAnalyticsProps> = ({
                 <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.1} />
                 <XAxis dataKey="date" axisLine={false} tickLine={false} tick={AXIS_TICK} />
                 <YAxis axisLine={false} tickLine={false} tick={AXIS_TICK} />
-                <Tooltip contentStyle={TOOLTIP_STYLE} />
+                <Tooltip contentStyle={TOOLTIP_STYLE} cursor={false} />
                 <Legend />
-                <Bar dataKey="created" fill="#9CA3AF" radius={[4, 4, 0, 0]} name="Created" />
-                <Bar dataKey="completed" fill="#5f72ea" radius={[4, 4, 0, 0]} name="Completed" />
+                <Bar dataKey="created" fill="#9CA3AF" radius={[4, 4, 0, 0]} name="Created" barSize={14} />
+                <Bar dataKey="completed" fill="#5f72ea" radius={[4, 4, 0, 0]} name="Completed" barSize={14} />
               </BarChart>
             </ResponsiveContainer>
           )}

@@ -19,6 +19,7 @@ import {
   Layers,
   AlertTriangle,
   User,
+  PieChart as PieChartIcon,
 } from 'lucide-react';
 
 import { useWorkspaceAnalytics } from '../hooks/useAnalyticsData';
@@ -185,7 +186,13 @@ export const WorkspaceAnalytics: React.FC<WorkspaceAnalyticsProps> = ({ period }
   return (
     <div className="space-y-8">
       {/* ── Summary Cards ── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        <StatCard
+          label="Progress"
+          value={summary.progress}
+          suffix="%"
+          icon={<PieChartIcon size={20} />}
+        />
         <StatCard
           label="Tasks Completed"
           value={summary.tasksCompleted.value}
@@ -253,7 +260,7 @@ export const WorkspaceAnalytics: React.FC<WorkspaceAnalyticsProps> = ({ period }
               <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.1} />
               <XAxis dataKey="date" {...axisProps} />
               <YAxis {...axisProps} />
-              <Tooltip contentStyle={tooltipContentStyle} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
+              <Tooltip contentStyle={tooltipContentStyle} cursor={false} />
               <Bar dataKey="created" name="Created" fill="#9CA3AF" radius={[4, 4, 0, 0]} barSize={14} />
               <Bar dataKey="completed" name="Completed" fill="#5f72ea" radius={[4, 4, 0, 0]} barSize={14} />
             </BarChart>
@@ -302,7 +309,7 @@ export const WorkspaceAnalytics: React.FC<WorkspaceAnalyticsProps> = ({ period }
                 width={80}
                 tickFormatter={formatLabel}
               />
-              <Tooltip contentStyle={tooltipContentStyle} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
+              <Tooltip contentStyle={tooltipContentStyle} cursor={false} />
               <Bar dataKey="value" name="Issues" radius={[0, 4, 4, 0]}>
                 {piePriorityData.map((entry) => (
                   <Cell key={entry.name} fill={PRIORITY_COLORS[entry.name] || '#9CA3AF'} />

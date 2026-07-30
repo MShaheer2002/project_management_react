@@ -170,7 +170,7 @@ const ConfirmDialog: React.FC<{
 }> = ({ action, loading, onClose }) => {
   if (!action) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
       <button type="button" aria-label="Close confirmation" onClick={onClose} className="absolute inset-0 bg-black/50 backdrop-blur-[1px]" />
       <div className="relative z-10 w-full max-w-md rounded-2xl border border-gray-200 bg-white p-5 shadow-2xl dark:border-border-dark dark:bg-card-dark">
         <h2 className="text-lg font-bold">{action.title}</h2>
@@ -1377,7 +1377,7 @@ export const CycleDetailPage: React.FC = () => {
         </div>
       </div>
       {isPlanDialogOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <button
             type="button"
             aria-label="Close plan issues dialog"

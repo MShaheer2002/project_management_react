@@ -7,9 +7,12 @@ import {
   Users,
   User,
   RotateCcw,
+  Search,
 } from 'lucide-react';
 import { useAuthStore } from '@/app/stores/useAuthStore';
 import { privateApi } from '@shared/services/privateApi';
+import { MemberSearchDialog } from '@shared/components/ui/MemberSearchDialog';
+import type { WorkspaceMemberOption } from '@features/workspace';
 import type { AnalyticsPeriod, ExportScope } from '../types';
 import { WorkspaceAnalytics } from './WorkspaceAnalytics';
 import { ProjectAnalytics } from './ProjectAnalytics';
@@ -75,32 +78,77 @@ export const AnalyticsPage: React.FC = () => {
   // Entity lists for selectors (fetched from existing data sources)
   const [projects, setProjects] = useState<EntityOption[]>([]);
   const [teams, setTeams] = useState<EntityOption[]>([]);
-  const [members, setMembers] = useState<EntityOption[]>([]);
   const [cycles, setCycles] = useState<EntityOption[]>([]);
+
+  // Member selection uses a dedicated searchable dialog (MemberSearchDialog) instead of a
+  // static list — workspaces can have thousands of members, so a plain fetched-once dropdown
+  // doesn't scale. selectedMemberLabel just tracks what to show in the trigger button.
+  const [memberDialogOpen, setMemberDialogOpen] = useState(false);
+  const [selectedMemberLabel, setSelectedMemberLabel] = useState<string | null>(null);
+
+  // Team analytics is owner/admin/team-lead only. A non-admin who doesn't lead any team can
+  // never use the Team tab (the picker would always be empty), so hide the tab entirely for
+  // them rather than showing a tab that permanently reads "Select a team" with nothing to pick.
+  const [hasLedTeams, setHasLedTeams] = useState(isAdmin);
+  useEffect(() => {
+    if (isAdmin || !currentUser?.id) return;
+    let cancelled = false;
+    privateApi
+      .get('/teams', { params: { leadId: currentUser.id, limit: 1 } })
+      .then(({ data }) => {
+        if (cancelled) return;
+        const items = data.data ?? data;
+        setHasLedTeams(Array.isArray(items) && items.length > 0);
+      })
+      .catch(() => {
+        if (!cancelled) setHasLedTeams(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isAdmin, currentUser?.id]);
 
   // Load entity lists when tabs change
   useEffect(() => {
     const loadEntities = async () => {
       try {
         if (activeTab === 'project' && projects.length === 0) {
-          const { data } = await privateApi.get('/projects', { params: { limit: 100 } });
+          // Non-admins can only view analytics for projects they lead (matches the backend's
+          // analytics access rule) — scope the picker to those instead of listing every project
+          // in the workspace, which would otherwise let them pick one and hit an Access Denied.
+          const { data } = await privateApi.get('/projects', {
+            params: isAdmin ? { limit: 100 } : { limit: 100, leadId: currentUser?.id },
+          });
           const items = data.data ?? data;
           setProjects(Array.isArray(items) ? items.map((p: any) => ({ id: p.id, name: p.name })) : []);
         }
         if (activeTab === 'team' && teams.length === 0) {
-          const { data } = await privateApi.get('/teams');
+          // Non-admins can only view analytics for teams they lead — same reasoning as projects
+          // above, otherwise the picker lists teams that just lead to an Access Denied.
+          const { data } = await privateApi.get('/teams', {
+            params: isAdmin ? {} : { leadId: currentUser?.id },
+          });
           const items = data.data ?? data;
           setTeams(Array.isArray(items) ? items.map((t: any) => ({ id: t.id, name: t.name })) : []);
         }
-        if (activeTab === 'member' && members.length === 0) {
-          const { data } = await privateApi.get('/workspaces/members');
-          const items = data.data ?? data;
-          setMembers(Array.isArray(items) ? items.map((m: any) => ({ id: m.userId ?? m.id, name: m.user?.name ?? m.name })) : []);
-        }
         if (activeTab === 'cycle' && cycles.length === 0) {
-          const { data } = await privateApi.get('/cycles', { params: { limit: 50 } });
-          const items = data.data ?? data;
-          setCycles(Array.isArray(items) ? items.map((c: any) => ({ id: c.id, name: c.name })) : []);
+          if (isAdmin) {
+            const { data } = await privateApi.get('/cycles', { params: { limit: 50 } });
+            const items = data.data ?? data;
+            setCycles(Array.isArray(items) ? items.map((c: any) => ({ id: c.id, name: c.name })) : []);
+          } else if (currentUser?.id) {
+            // Cycle access follows the parent team's lead — there's no direct "teams I lead"
+            // filter on /cycles, so resolve led teams first, then fetch each one's cycles.
+            const { data: teamsData } = await privateApi.get('/teams', { params: { leadId: currentUser.id } });
+            const ledTeams = (teamsData.data ?? teamsData) as any[];
+            const cycleLists = await Promise.all(
+              (Array.isArray(ledTeams) ? ledTeams : []).map((team) =>
+                privateApi.get('/cycles', { params: { teamId: team.id, limit: 50 } }),
+              ),
+            );
+            const items = cycleLists.flatMap((res) => (res.data.data ?? res.data) as any[]);
+            setCycles(items.map((c: any) => ({ id: c.id, name: c.name })));
+          }
         }
       } catch {
         // Silently handle — user can still type IDs manually
@@ -109,6 +157,16 @@ export const AnalyticsPage: React.FC = () => {
     loadEntities();
   }, [activeTab]);
 
+  // Non-admins can only ever view their own member analytics (backend enforces this) — always
+  // land on themselves rather than relying solely on the tab-switch handler, so a direct link or
+  // browser back/forward into ?tab=member never leaves them on an empty "select a member" state.
+  useEffect(() => {
+    if (activeTab === 'member' && !isAdmin && currentUser?.id && entityId !== currentUser.id) {
+      setSearchParams({ tab: 'member', id: currentUser.id }, { replace: true });
+      setSelectedMemberLabel(currentUser.name ?? null);
+    }
+  }, [activeTab, isAdmin, currentUser, entityId, setSearchParams]);
+
   const setTab = (tab: AnalyticsTab) => {
     const params: Record<string, string> = { tab };
     // Keep entity ID if switching back to same tab type
@@ -116,6 +174,7 @@ export const AnalyticsPage: React.FC = () => {
       // For member tab, default to current user if not admin
       if (tab === 'member' && !isAdmin && currentUser?.id) {
         params.id = currentUser.id;
+        setSelectedMemberLabel(currentUser.name ?? null);
       }
     } else if (entityId) {
       params.id = entityId;
@@ -125,6 +184,12 @@ export const AnalyticsPage: React.FC = () => {
 
   const setEntityId = (id: string) => {
     setSearchParams({ tab: activeTab, id });
+  };
+
+  const handleMemberSelect = (member: WorkspaceMemberOption) => {
+    setSelectedMemberLabel(member.name);
+    setEntityId(member.id);
+    setMemberDialogOpen(false);
   };
 
   const renderEntitySelector = () => {
@@ -148,13 +213,23 @@ export const AnalyticsPage: React.FC = () => {
           />
         );
       case 'member':
+        // Non-admins can only ever see their own analytics — no picker to show, they're always
+        // auto-landed on themselves. Only admins/owners get to search and pick any member.
+        if (!isAdmin) return null;
         return (
-          <EntitySelector
-            label="Member"
-            options={members}
-            value={entityId}
-            onChange={setEntityId}
-          />
+          <div className="flex items-center gap-3">
+            <label className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-400">
+              Member
+            </label>
+            <button
+              type="button"
+              onClick={() => setMemberDialogOpen(true)}
+              className="flex min-w-[200px] items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-900 outline-none transition-all hover:border-primary/50 focus:border-primary focus:ring-2 focus:ring-primary/20 dark:border-border-dark dark:bg-white/5 dark:text-gray-100"
+            >
+              <Search size={14} className="text-gray-400" />
+              {selectedMemberLabel ?? 'Select member...'}
+            </button>
+          </div>
         );
       case 'cycle':
         return (
@@ -192,6 +267,9 @@ export const AnalyticsPage: React.FC = () => {
   // Period/Export controls only make sense once there's data to show — workspace
   // always has data, other scopes need an entity selected first.
   const showPeriodControls = activeTab === 'workspace' || Boolean(entityId);
+  // Exporting team/cycle analytics is admin/owner-only (matches the backend's export
+  // restriction) even though a team lead can view those tabs in the app.
+  const canExport = activeTab === 'team' || activeTab === 'cycle' ? isAdmin : true;
 
   return (
     <div className="flex flex-col h-full">
@@ -209,7 +287,9 @@ export const AnalyticsPage: React.FC = () => {
             {showPeriodControls && (
               <>
                 <PeriodSelector value={period} onChange={setPeriod} />
-                <ExportButton scope={activeTab as ExportScope} scopeId={entityId || undefined} params={{ period }} />
+                {canExport && (
+                  <ExportButton scope={activeTab as ExportScope} scopeId={entityId || undefined} params={{ period }} />
+                )}
               </>
             )}
           </div>
@@ -220,6 +300,8 @@ export const AnalyticsPage: React.FC = () => {
           {tabs.map((tab) => {
             // Hide workspace tab for non-admins
             if (tab.value === 'workspace' && !isAdmin) return null;
+            // Hide team tab for non-admins who don't lead any team — nothing for them to select
+            if (tab.value === 'team' && !isAdmin && !hasLedTeams) return null;
             const isActive = activeTab === tab.value;
             return (
               <button
@@ -251,6 +333,14 @@ export const AnalyticsPage: React.FC = () => {
       <div className="flex-1 overflow-y-auto bg-gray-50/30 dark:bg-black/10 p-6 scrollbar-hide">
         {renderContent()}
       </div>
+
+      <MemberSearchDialog
+        isOpen={memberDialogOpen}
+        onClose={() => setMemberDialogOpen(false)}
+        onSelect={handleMemberSelect}
+        title="Select member"
+        placeholder="Search members..."
+      />
     </div>
   );
 };

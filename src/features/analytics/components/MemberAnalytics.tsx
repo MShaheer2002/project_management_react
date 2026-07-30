@@ -295,10 +295,10 @@ export const MemberAnalytics: React.FC<MemberAnalyticsProps> = ({
                   tick={{ fontSize: 12, fill: '#888' }}
                   width={120}
                 />
-                <Tooltip contentStyle={TOOLTIP_STYLE} />
+                <Tooltip contentStyle={TOOLTIP_STYLE} cursor={false} />
                 <Legend />
-                <Bar dataKey="assigned" name="Assigned" fill={PRIMARY} radius={[0, 4, 4, 0]} />
-                <Bar dataKey="completed" name="Completed" fill="#10B981" radius={[0, 4, 4, 0]} />
+                <Bar dataKey="assigned" name="Assigned" fill={PRIMARY} radius={[0, 4, 4, 0]} barSize={16} />
+                <Bar dataKey="completed" name="Completed" fill="#10B981" radius={[0, 4, 4, 0]} barSize={16} />
               </BarChart>
             </ResponsiveContainer>
           ) : (
@@ -325,10 +325,10 @@ export const MemberAnalytics: React.FC<MemberAnalyticsProps> = ({
                   tick={{ fontSize: 12, fill: '#888' }}
                   width={120}
                 />
-                <Tooltip contentStyle={TOOLTIP_STYLE} />
+                <Tooltip contentStyle={TOOLTIP_STYLE} cursor={false} />
                 <Legend />
-                <Bar dataKey="assigned" name="Assigned" fill={PRIMARY} radius={[0, 4, 4, 0]} />
-                <Bar dataKey="completed" name="Completed" fill="#10B981" radius={[0, 4, 4, 0]} />
+                <Bar dataKey="assigned" name="Assigned" fill={PRIMARY} radius={[0, 4, 4, 0]} barSize={16} />
+                <Bar dataKey="completed" name="Completed" fill="#10B981" radius={[0, 4, 4, 0]} barSize={16} />
               </BarChart>
             </ResponsiveContainer>
           ) : (
