@@ -860,7 +860,15 @@ export const TrussenAiPanel: React.FC = () => {
             )}
 
             {messages
-              .filter((m) => m.role === 'USER' || m.role === 'ASSISTANT')
+              .filter((m) => (
+                // ASSISTANT rows with empty content are tool_calls-only bookkeeping saved
+                // per intermediate round of a multi-step tool-calling turn (see ai.chat.ts's
+                // tool loop) — not meant for display. Rendering them as bubbles produced one
+                // empty rounded pill per tool round above the real answer. Live progress for
+                // an in-flight turn is already shown separately via the toolActivity indicator
+                // below, gated on isStreaming.
+                (m.role === 'USER' || m.role === 'ASSISTANT') && m.content.trim().length > 0
+              ))
               .map((msg) => (
                 <div key={msg.id} className={`flex ${msg.role === 'USER' ? 'justify-end' : 'justify-start'}`}>
                   <div className={msg.role === 'USER' ? 'max-w-[88%]' : 'max-w-[88%] space-y-1.5'}>
