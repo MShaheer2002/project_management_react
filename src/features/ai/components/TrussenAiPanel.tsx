@@ -21,7 +21,8 @@ import { aiService } from '../services/aiService';
 import { AiMarkdown } from './AiMarkdown';
 import { MentionDropdown } from './MentionDropdown';
 import { useMentionAutocomplete } from '../hooks/useMentionAutocomplete';
-import type { AiMessage, AiSuggestion } from '../types';
+import { AiChangeCard } from './AiChangeCard';
+import type { AiMessage, AiMutationRecord, AiSuggestion } from '../types';
 
 const relativeTime = (value: string) => {
   const date = new Date(value);
@@ -179,6 +180,35 @@ const findSuggestionAnchorMessageId = (messages: AiMessage[], suggestion: AiSugg
   return matches[0]?.message.id ?? null;
 };
 
+/** Turns a tool name into something worth showing a user mid-turn. */
+const describeToolActivity = (tool: unknown): string => {
+  if (typeof tool !== 'string' || !tool) return 'Working...';
+  const [domain, ...rest] = tool.split('_');
+  const action = rest.join(' ');
+  if (!action) return 'Working...';
+  return `${action.charAt(0).toUpperCase()}${action.slice(1)} ${domain}...`;
+};
+
+/**
+ * Builds a card-ready record from the streamed mutation event. The event carries
+ * only what is needed to render immediately; the authoritative record is
+ * refetched once the turn settles.
+ */
+const mutationFromEvent = (data: Record<string, unknown>): AiMutationRecord => ({
+  id: String(data.mutationId ?? ''),
+  messageId: null,
+  toolName: '',
+  kind: 'UPDATE',
+  status: 'PENDING',
+  targetType: '',
+  targetId: '',
+  targetLabel: String(data.targetLabel ?? 'Change'),
+  summary: String(data.summary ?? 'Updated'),
+  revertable: true,
+  revertError: null,
+  createdAt: new Date().toISOString(),
+});
+
 export const TrussenAiPanel: React.FC = () => {
   const setOpen = useUIStore((s) => s.setAiPanelOpen);
   const activeConvId = useUIStore((s) => s.activeConversationId);
@@ -200,7 +230,13 @@ export const TrussenAiPanel: React.FC = () => {
   const [actionSuggestionId, setActionSuggestionId] = useState<string | null>(null);
   const [selectedLabelIds, setSelectedLabelIds] = useState<Record<string, string[]>>({});
   const [selectedSprintIssueIds, setSelectedSprintIssueIds] = useState<Record<string, string[]>>({});
+  const [mutations, setMutations] = useState<AiMutationRecord[]>([]);
+  const [wasInterrupted, setWasInterrupted] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  // Held so Escape (and unmount) can abort the in-flight turn. Aborting closes
+  // the stream, which the server reads as a stop request and halts the agent
+  // loop rather than letting it run on and keep billing.
+  const abortRef = useRef<AbortController | null>(null);
 
   // @ mention autocomplete
   const mention = useMentionAutocomplete();
@@ -265,25 +301,48 @@ export const TrussenAiPanel: React.FC = () => {
     return acc;
   }, {});
 
+  // Changes are anchored to the assistant message that produced them. Anything
+  // not yet anchored (streamed mid-turn, before the message row exists) falls
+  // back to the newest assistant message so it is never rendered orphaned.
+  const lastAssistantMessageId = [...messages].reverse().find((m) => m.role === 'ASSISTANT')?.id ?? null;
+  const mutationsByMessageId = mutations.reduce<Record<string, AiMutationRecord[]>>((acc, mutation) => {
+    const anchorId = mutation.messageId ?? lastAssistantMessageId;
+    if (!anchorId) return acc;
+    acc[anchorId] = [...(acc[anchorId] ?? []), mutation];
+    return acc;
+  }, {});
+
   useEffect(() => {
     if (!activeConvId) {
       setMessages([]);
+      setMutations([]);
       setIsLoadingMessages(false);
       return;
     }
 
     setIsLoadingMessages(true);
     setPanelError(null);
+    setWasInterrupted(false);
 
-    aiService.getConversationMessages(activeConvId)
-      .then(setMessages)
+    Promise.all([
+      aiService.getConversationMessages(activeConvId),
+      // Changes are supplementary: failing to load them should not blank the
+      // conversation itself.
+      aiService.getConversationMutations(activeConvId).catch(() => [] as AiMutationRecord[]),
+    ])
+      .then(([loadedMessages, loadedMutations]) => {
+        setMessages(loadedMessages);
+        setMutations(loadedMutations);
+      })
       .catch((err) => {
         console.error('[TrussenAI] Failed to load messages:', err);
         setPanelError('Failed to load this conversation. Try selecting it again.');
         setMessages([]);
+        setMutations([]);
       })
       .finally(() => setIsLoadingMessages(false));
   }, [activeConvId]);
+
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -305,6 +364,9 @@ export const TrussenAiPanel: React.FC = () => {
       createdAt: new Date().toISOString(),
     };
 
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     setMessages((prev) => [...prev, userMsg]);
     setInput('');
     setIsStreaming(true);
@@ -312,6 +374,7 @@ export const TrussenAiPanel: React.FC = () => {
     setToolActivity(null);
     setPanelError(null);
     setLastResponseMeta(null);
+    setWasInterrupted(false);
 
     // Reset textarea height properly
     requestAnimationFrame(() => {
@@ -326,11 +389,18 @@ export const TrussenAiPanel: React.FC = () => {
         conversationId: activeConvId,
         message: trimmed,
         workspaceId: workspaceId ?? '',
+        signal: controller.signal,
         onEvent: (eventType, data) => {
           if (eventType === 'tool_call') {
-            setToolActivity('Trussen AI is working...');
+            setToolActivity(describeToolActivity(data.tool));
           } else if (eventType === 'tool_result') {
             setToolActivity(null);
+          } else if (eventType === 'mutation') {
+            // Render the review card as soon as the change lands, rather than
+            // waiting for the whole turn to finish.
+            setMutations((prev) => [...prev, mutationFromEvent(data)]);
+          } else if (eventType === 'interrupted') {
+            setWasInterrupted(true);
           } else if (eventType === 'message' && typeof data.content === 'string') {
             setStreamingContent(data.content);
             setLastResponseMeta({
@@ -351,12 +421,33 @@ export const TrussenAiPanel: React.FC = () => {
       }
 
       if (convId) {
-        const updated = await aiService.getConversationMessages(convId);
+        // Refetch rather than trusting local state: the server persists partial
+        // work on an interrupted turn, and that record is the accurate one.
+        const [updated, changes] = await Promise.all([
+          aiService.getConversationMessages(convId),
+          aiService.getConversationMutations(convId).catch(() => [] as AiMutationRecord[]),
+        ]);
         setMessages(updated);
+        setMutations(changes);
       }
 
       queryClient.invalidateQueries({ queryKey: ['ai', 'conversations'] });
     } catch (error) {
+      // A user-initiated stop surfaces here as an AbortError. That is not a
+      // failure and must not be rendered as one.
+      if (controller.signal.aborted) {
+        setWasInterrupted(true);
+        if (activeConvId) {
+          const [updated, changes] = await Promise.all([
+            aiService.getConversationMessages(activeConvId).catch(() => null),
+            aiService.getConversationMutations(activeConvId).catch(() => [] as AiMutationRecord[]),
+          ]);
+          if (updated) setMessages(updated);
+          setMutations(changes);
+        }
+        return;
+      }
+
       const err = error as Error & { code?: string };
       const errMsg = err.code === 'AI_PLAN_UPGRADE_REQUIRED' || err.code === 'AI_FEATURE_DISABLED'
         ? 'This workspace plan does not currently allow AI access.'
@@ -369,11 +460,54 @@ export const TrussenAiPanel: React.FC = () => {
         { id: crypto.randomUUID(), role: 'ASSISTANT', content: errMsg, createdAt: new Date().toISOString() },
       ]);
     } finally {
+      abortRef.current = null;
       setIsStreaming(false);
       setStreamingContent('');
       setToolActivity(null);
     }
   }, [isStreaming, activeConvId, workspaceId, queryClient, setActiveConvId, inputRef]);
+
+  /** Stops the in-flight turn. Work already completed server-side is kept. */
+  const stopStreaming = useCallback(() => {
+    abortRef.current?.abort();
+  }, []);
+
+  // Escape stops an in-flight turn, matching the convention users already expect
+  // from terminal-style agents. Only bound while streaming so it does not
+  // interfere with closing dropdowns or the panel itself.
+  useEffect(() => {
+    if (!isStreaming) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      stopStreaming();
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isStreaming, stopStreaming]);
+
+  // Abort on unmount so closing the panel does not leave a turn running.
+  useEffect(() => () => abortRef.current?.abort(), []);
+
+  const handleAcceptMutation = useCallback(async (mutationId: string) => {
+    const result = await aiService.acceptMutation(mutationId);
+    setMutations((prev) =>
+      prev.map((m) => (m.id === mutationId ? { ...m, status: result.status as AiMutationRecord['status'] } : m)),
+    );
+  }, []);
+
+  const handleRevertMutation = useCallback(async (mutationId: string) => {
+    const result = await aiService.revertMutation(mutationId);
+    setMutations((prev) =>
+      prev.map((m) => (m.id === mutationId ? { ...m, status: result.status as AiMutationRecord['status'] } : m)),
+    );
+    showToast(result.message, result.reverted ? 'success' : 'info');
+    // The underlying entity changed, so any view showing it is now stale.
+    queryClient.invalidateQueries({ queryKey: ['issues'] });
+    queryClient.invalidateQueries({ queryKey: ['projects'] });
+  }, [queryClient, showToast]);
 
   const handleSend = useCallback(async () => {
     await sendMessage(input);
@@ -889,6 +1023,22 @@ export const TrussenAiPanel: React.FC = () => {
                         />
                       )}
                     </div>
+                    {msg.role === 'ASSISTANT' && (mutationsByMessageId[msg.id]?.length ?? 0) > 0 && (
+                      <div className="space-y-1.5 pt-0.5">
+                        <div className="flex items-center gap-2 px-1 text-[10px] text-gray-400">
+                          <span className="font-semibold uppercase tracking-[0.14em]">Changes made</span>
+                          <span className="h-px flex-1 bg-gray-200 dark:bg-border-dark" />
+                        </div>
+                        {mutationsByMessageId[msg.id]!.map((mutation) => (
+                          <AiChangeCard
+                            key={mutation.id}
+                            mutation={mutation}
+                            onAccept={handleAcceptMutation}
+                            onRevert={handleRevertMutation}
+                          />
+                        ))}
+                      </div>
+                    )}
                     {msg.role === 'ASSISTANT' && (suggestionsByMessageId[msg.id]?.length ?? 0) > 0 && (
                       <div className="space-y-1.5 pt-0.5">
                         <div className="flex items-center gap-2 px-1 text-[10px] text-gray-400">
@@ -923,6 +1073,26 @@ export const TrussenAiPanel: React.FC = () => {
                       <span>Thinking...</span>
                     </div>
                   )}
+                  <button
+                    type="button"
+                    onClick={stopStreaming}
+                    className="mt-1.5 inline-flex items-center gap-1 text-[10px] text-gray-400 transition-colors hover:text-gray-600 dark:hover:text-gray-300"
+                  >
+                    <X size={9} />
+                    Stop
+                    <kbd className="rounded border border-gray-300 px-1 font-sans text-[9px] dark:border-border-dark">
+                      esc
+                    </kbd>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {wasInterrupted && !isStreaming && (
+              <div className="flex justify-start">
+                <div className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300/50 bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-400">
+                  <AlertCircle size={11} />
+                  <span>Interrupted — anything already done was kept.</span>
                 </div>
               </div>
             )}

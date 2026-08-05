@@ -9,6 +9,7 @@ import type {
   AiGenerateIssueResponse,
   AiMessage,
   AiModelInfo,
+  AiMutationRecord,
   AiSuggestion,
   AiSuggestionsListResult,
   AiUsagePeriod,
@@ -159,6 +160,32 @@ export const aiService = {
     return data.data;
   },
 
+  /** GET /ai/conversations/:id/mutations — Reviewable changes the AI made */
+  getConversationMutations: async (conversationId: string): Promise<AiMutationRecord[]> => {
+    const { data } = await privateApi.get<ApiResponse<AiMutationRecord[]>>(
+      `/ai/conversations/${conversationId}/mutations`,
+    );
+    return data.data;
+  },
+
+  /** POST /ai/mutations/:id/accept — Keep an AI change */
+  acceptMutation: async (mutationId: string): Promise<{ id: string; status: string }> => {
+    const { data } = await privateApi.post<ApiResponse<{ id: string; status: string }>>(
+      `/ai/mutations/${mutationId}/accept`,
+    );
+    return data.data;
+  },
+
+  /** POST /ai/mutations/:id/revert — Undo an AI change */
+  revertMutation: async (
+    mutationId: string,
+  ): Promise<{ id: string; status: string; reverted: boolean; message: string }> => {
+    const { data } = await privateApi.post<
+      ApiResponse<{ id: string; status: string; reverted: boolean; message: string }>
+    >(`/ai/mutations/${mutationId}/revert`);
+    return data.data;
+  },
+
   /** DELETE /ai/conversations/:id — Delete a conversation */
   deleteConversation: async (conversationId: string): Promise<void> => {
     await privateApi.delete(`/ai/conversations/${conversationId}`);
@@ -170,6 +197,8 @@ export const aiService = {
     message: string;
     workspaceId: string;
     onEvent: (eventType: AiChatEventType, data: ChatStreamEvent) => void;
+    /** Aborting closes the stream, which the server treats as a stop request. */
+    signal?: AbortSignal;
   }): Promise<void> => {
     if (!input.workspaceId) {
       throw new Error('Workspace not selected');
@@ -193,6 +222,7 @@ export const aiService = {
         conversationId: input.conversationId ?? undefined,
         message: input.message,
       }),
+      ...(input.signal ? { signal: input.signal } : {}),
     });
 
     if (!response.ok) {

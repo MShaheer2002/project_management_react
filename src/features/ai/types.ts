@@ -96,7 +96,32 @@ export interface AiMessage {
 }
 
 /** SSE event types from POST /ai/chat */
-export type AiChatEventType = 'message' | 'tool_call' | 'tool_result' | 'done' | 'error' | 'close';
+export type AiChatEventType =
+  | 'message'
+  | 'tool_call'
+  | 'tool_result'
+  | 'mutation'
+  | 'interrupted'
+  | 'conversation'
+  | 'done'
+  | 'error'
+  | 'close';
+
+/** A workspace change the AI made, offered for review in the chat. */
+export interface AiMutationRecord {
+  id: string;
+  messageId: string | null;
+  toolName: string;
+  kind: 'CREATE' | 'UPDATE';
+  status: 'PENDING' | 'ACCEPTED' | 'REVERTED' | 'REJECTED' | 'EXPIRED';
+  targetType: string;
+  targetId: string;
+  targetLabel: string;
+  summary: string;
+  revertable: boolean;
+  revertError: string | null;
+  createdAt: string;
+}
 
 export type AiUsagePeriod = '7d' | '30d' | '90d' | 'custom';
 
