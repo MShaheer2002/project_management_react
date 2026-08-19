@@ -1,7 +1,18 @@
+export type AiConnectionClientId =
+  | 'codex'
+  | 'claude_desktop'
+  | 'claude_code'
+  | 'chatgpt'
+  | 'gemini_cli'
+  | 'windsurf'
+  | 'vscode'
+  | 'cursor'
+  | 'generic_mcp';
+
 export interface AiConnection {
   id: string;
   name: string;
-  client: 'codex' | 'claude_desktop' | 'cursor' | 'generic_mcp';
+  client: AiConnectionClientId;
   authType: 'pat';
   status: 'active' | 'expired' | 'revoked';
   scopes: string[];
@@ -45,13 +56,14 @@ export interface AiConnection {
 export interface CreateAiConnectionInput {
   name: string;
   expiresAt?: string;
-  primaryClient?: 'codex' | 'claude_desktop' | 'cursor' | 'generic_mcp';
+  primaryClient?: AiConnectionClientId;
   authType?: 'pat' | 'oauth';
+  scopes?: string[];
 }
 
 export interface AiConnectionSetupBlock {
   client: string;
-  format: 'toml' | 'json' | 'guide';
+  format: 'toml' | 'json' | 'guide' | 'shell';
   title: string;
   config?: string;
   endpoint?: string;
@@ -67,13 +79,18 @@ export interface AiConnectionCreateResponse {
   setup: {
     codex: AiConnectionSetupBlock;
     claudeDesktop: AiConnectionSetupBlock;
+    claudeCode: AiConnectionSetupBlock;
+    chatgpt: AiConnectionSetupBlock;
+    geminiCli: AiConnectionSetupBlock;
+    windsurf: AiConnectionSetupBlock;
+    vscode: AiConnectionSetupBlock;
     cursor: AiConnectionSetupBlock;
     genericMcp: AiConnectionSetupBlock;
   };
 }
 
 export interface AiConnectionCatalogClient {
-  id: 'codex' | 'claude_desktop' | 'cursor' | 'generic_mcp';
+  id: AiConnectionClientId;
   label: string;
   availableAuthMethods: Array<'pat' | 'oauth'>;
   supportsPAT: boolean;
@@ -118,7 +135,7 @@ export interface AiConnectionHealthResponse {
 
 export interface AiConnectionSession {
   id: string;
-  client: 'codex' | 'claude_desktop' | 'cursor' | 'generic_mcp';
+  client: AiConnectionClientId;
   authType: 'pat';
   transport: string;
   status: 'active' | 'succeeded' | 'failed' | 'rejected';

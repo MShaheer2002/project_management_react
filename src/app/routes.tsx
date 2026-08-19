@@ -39,7 +39,6 @@ import { CyclesPage } from '@/pages/CyclesPage';
 import { CycleDetailPage } from '@/pages/CycleDetailPage';
 import { BillingPage } from '@/pages/BillingPage';
 import { AiUsagePage } from '@/pages/AiUsagePage';
-import { ApiKeysPage } from '@/pages/ApiKeysPage';
 import { AiConnectionsPage } from '@/pages/AiConnectionsPage';
 import { ProjectDetailPage } from '@/features/projects/pages/ProjectDetailPage';
 import { DepartmentsPage } from '@/features/department/pages/DepartmentsPage';
@@ -164,7 +163,6 @@ export const AppRoutes: React.FC = () => {
           <Route path="/templates/:templateId" element={isAdmin ? <TemplatesPage /> : <Navigate to="/" />} />
           <Route path="/templates/:templateId/edit" element={isAdmin ? <TemplatesPage /> : <Navigate to="/" />} />
           <Route path="/templates/:templateId/apply" element={isAdmin ? <TemplatesPage /> : <Navigate to="/" />} />
-          <Route path="/api-keys" element={isAdmin ? <ApiKeysPage /> : <Navigate to="/" />} />
           <Route path="/ai-connections" element={isAdmin ? <AiConnectionsPage /> : <Navigate to="/" />} />
           <Route path="/billing" element={isAdmin ? <BillingPage /> : <Navigate to="/" />} />
           <Route path="/ai-usage" element={isAdmin ? <AiUsagePage /> : <Navigate to="/" />} />

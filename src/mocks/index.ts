@@ -6,5 +6,4 @@ export { MOCK_ISSUES } from './issues';
 export { MOCK_NOTIFICATIONS } from './notifications';
 export { MOCK_ACTIVITIES } from './activities';
 export { MOCK_CYCLES } from './cycles';
-export { MOCK_API_KEYS } from './apiKeys';
 export { MOCK_ORGANIZATIONS } from './organizations';

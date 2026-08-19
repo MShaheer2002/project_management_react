@@ -54,4 +54,13 @@ export const aiConnectionService = {
     );
     return data.data;
   },
+
+  updateScopes: async (id: string, scopes: string[]): Promise<AiConnection> => {
+    const { data } = await privateApi.patch<ApiResponse<AiConnection>>(
+      `/ai-connections/${id}/scopes`,
+      { scopes },
+      { skipGlobalErrorToast: true } as AxiosRequestConfig & { skipGlobalErrorToast: boolean },
+    );
+    return data.data;
+  },
 };

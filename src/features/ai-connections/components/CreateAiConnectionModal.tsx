@@ -4,7 +4,9 @@ import { AlertTriangle, Check, Copy, ExternalLink, Loader2 } from 'lucide-react'
 import type { ApiAxiosError } from '@shared/services/types';
 import { useCreateAiConnection } from '../hooks/useAiConnectionMutations';
 import { useAiConnectionCatalog } from '../hooks/useAiConnectionData';
-import type { AiConnectionCreateResponse, CreateAiConnectionInput } from '../types';
+import { ScopesField } from './ScopesField';
+import { ADMIN_SCOPE } from '../scopes';
+import type { AiConnectionClientId, AiConnectionCreateResponse, CreateAiConnectionInput } from '../types';
 
 const EXPIRY_OPTIONS = [
   { label: 'Never', days: 0 },
@@ -14,12 +16,31 @@ const EXPIRY_OPTIONS = [
   { label: '1 year', days: 365 },
 ];
 
+const DEFAULT_EXPIRY_DAYS = 30;
+
 const CLIENT_OPTIONS = [
   { value: 'codex', label: 'Codex' },
   { value: 'claude_desktop', label: 'Claude Desktop' },
+  { value: 'claude_code', label: 'Claude Code' },
+  { value: 'chatgpt', label: 'ChatGPT' },
+  { value: 'gemini_cli', label: 'Gemini CLI' },
+  { value: 'windsurf', label: 'Windsurf' },
+  { value: 'vscode', label: 'VS Code' },
   { value: 'cursor', label: 'Cursor' },
   { value: 'generic_mcp', label: 'Generic MCP' },
 ] as const;
+
+const SETUP_KEY_BY_CLIENT: Record<AiConnectionClientId, keyof AiConnectionCreateResponse['setup']> = {
+  codex: 'codex',
+  claude_desktop: 'claudeDesktop',
+  claude_code: 'claudeCode',
+  chatgpt: 'chatgpt',
+  gemini_cli: 'geminiCli',
+  windsurf: 'windsurf',
+  vscode: 'vscode',
+  cursor: 'cursor',
+  generic_mcp: 'genericMcp',
+};
 
 type SetupGuide = {
   title: string;
@@ -31,7 +52,7 @@ type SetupGuide = {
 };
 
 function getSetupGuide(
-  client: 'codex' | 'claude_desktop' | 'cursor' | 'generic_mcp',
+  client: AiConnectionClientId,
   endpoint: string | undefined,
 ): SetupGuide {
   switch (client) {
@@ -61,6 +82,72 @@ function getSetupGuide(
           'Completely quit and restart Claude Desktop.',
         ],
         verify: 'After restart, check that Claude shows the MCP server indicator, then ask it to list your Trussen projects.',
+      };
+    case 'claude_code':
+      return {
+        title: 'Connect in Claude Code',
+        docsLabel: 'Claude Code MCP docs',
+        docsUrl: 'https://code.claude.com/docs/en/mcp',
+        notes: 'Claude Code adds remote MCP servers with a single CLI command — no config file editing required.',
+        steps: [
+          'Open a terminal in your project (or your home directory for a global connection).',
+          'Run the command shown below. It registers Trussen as a remote HTTP MCP server with your token attached.',
+          'Start or restart your Claude Code session.',
+        ],
+        verify: 'Run `/mcp` inside Claude Code to confirm Trussen is listed, then ask it to list your Trussen projects.',
+      };
+    case 'chatgpt':
+      return {
+        title: 'Connect in ChatGPT',
+        docsLabel: 'OpenAI connectors & MCP guide',
+        docsUrl: 'https://developers.openai.com/api/docs/guides/tools-connectors-mcp',
+        notes: 'ChatGPT connects to remote MCP servers through custom connectors, which need Developer mode turned on first.',
+        steps: [
+          'In ChatGPT, go to Settings > Connectors > Advanced settings and turn on Developer mode.',
+          'Back in Connectors, click Create, name it Trussen, and paste the MCP server URL shown below.',
+          'Set Authentication to Custom Headers and add the Authorization header shown below.',
+          'Save, then enable the Trussen connector from a chat’s tools/connectors menu.',
+        ],
+        verify: 'Enable the Trussen connector in a chat and ask it to list your Trussen projects.',
+      };
+    case 'gemini_cli':
+      return {
+        title: 'Connect in Gemini CLI',
+        docsLabel: 'Gemini CLI MCP docs',
+        docsUrl: 'https://geminicli.com/docs/tools/mcp-server/',
+        notes: 'Gemini CLI reads MCP servers from settings.json. Trussen is a remote HTTP server, so it uses the httpUrl field.',
+        steps: [
+          'Open `~/.gemini/settings.json` (or `.gemini/settings.json` in your project for a project-only connection).',
+          'Merge the `mcpServers.trussen` entry shown below into the file, then save it.',
+          'Start a new Gemini CLI session.',
+        ],
+        verify: 'Run `/mcp` in Gemini CLI to confirm Trussen is connected, then ask it to list your Trussen projects.',
+      };
+    case 'windsurf':
+      return {
+        title: 'Connect in Windsurf',
+        docsLabel: 'Windsurf Cascade MCP docs',
+        docsUrl: 'https://docs.windsurf.com/plugins/cascade/mcp',
+        notes: 'Windsurf manages MCP servers through Cascade’s settings, backed by a JSON config file.',
+        steps: [
+          'Open Windsurf Settings, go to the Cascade section, and make sure MCP is turned on.',
+          'Click the MCPs icon in the Cascade panel and choose "View raw config" to open `mcp_config.json`.',
+          'Merge the `mcpServers.trussen` entry shown below into the file, then save it and restart Windsurf.',
+        ],
+        verify: 'Ask Cascade to list your Trussen projects. If it returns live project data, the connection is working.',
+      };
+    case 'vscode':
+      return {
+        title: 'Connect in VS Code',
+        docsLabel: 'VS Code MCP server docs',
+        docsUrl: 'https://code.visualstudio.com/docs/agent-customization/mcp-servers',
+        notes: 'VS Code stores MCP servers under a top-level "servers" key — different from most other clients, so use the block exactly as shown.',
+        steps: [
+          'Create (or open) `.vscode/mcp.json` in your workspace, or add the same block to your user settings.',
+          'Paste the JSON block shown below and save the file.',
+          'When prompted, confirm you trust the Trussen server to start it.',
+        ],
+        verify: 'Open GitHub Copilot Chat in agent mode and ask it to list your Trussen projects.',
       };
     case 'cursor':
       return {
@@ -126,9 +213,10 @@ export const CreateAiConnectionModal: React.FC<CreateAiConnectionModalProps> = (
   const createAiConnection = useCreateAiConnection();
   const catalogQuery = useAiConnectionCatalog();
   const [name, setName] = useState('');
-  const [expiryDays, setExpiryDays] = useState(0);
-  const [primaryClient, setPrimaryClient] = useState<'codex' | 'claude_desktop' | 'cursor' | 'generic_mcp'>('codex');
+  const [expiryDays, setExpiryDays] = useState(DEFAULT_EXPIRY_DAYS);
+  const [primaryClient, setPrimaryClient] = useState<AiConnectionClientId>('codex');
   const [authType, setAuthType] = useState<'pat' | 'oauth'>('pat');
+  const [scopes, setScopes] = useState<string[]>([ADMIN_SCOPE]);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<AiConnectionCreateResponse | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
@@ -136,6 +224,9 @@ export const CreateAiConnectionModal: React.FC<CreateAiConnectionModalProps> = (
   useEffect(() => {
     if (isOpen) {
       setCreated(presetResult);
+      if (presetResult?.primaryClient && presetResult.primaryClient in SETUP_KEY_BY_CLIENT) {
+        setPrimaryClient(presetResult.primaryClient as AiConnectionClientId);
+      }
       setCopiedField(null);
       setError(null);
     }
@@ -143,9 +234,10 @@ export const CreateAiConnectionModal: React.FC<CreateAiConnectionModalProps> = (
 
   const reset = () => {
     setName('');
-    setExpiryDays(0);
+    setExpiryDays(DEFAULT_EXPIRY_DAYS);
     setPrimaryClient('codex');
     setAuthType('pat');
+    setScopes([ADMIN_SCOPE]);
     setError(null);
     setCreated(null);
     setCopiedField(null);
@@ -179,6 +271,7 @@ export const CreateAiConnectionModal: React.FC<CreateAiConnectionModalProps> = (
         name: name.trim(),
         primaryClient,
         authType,
+        scopes,
         expiresAt: expiryDays > 0 ? addDays(new Date(), expiryDays) : undefined,
       };
       const result = await createAiConnection.mutateAsync(payload);
@@ -201,21 +294,14 @@ export const CreateAiConnectionModal: React.FC<CreateAiConnectionModalProps> = (
   const patMethod = catalogQuery.data?.authMethods.find((method) => method.type === 'pat');
   const oauthMethod = catalogQuery.data?.authMethods.find((method) => method.type === 'oauth');
 
-  const preferredSetup =
-    created?.setup[
-      primaryClient === 'claude_desktop'
-        ? 'claudeDesktop'
-        : primaryClient === 'generic_mcp'
-          ? 'genericMcp'
-          : primaryClient
-    ];
+  const preferredSetup = created?.setup[SETUP_KEY_BY_CLIENT[primaryClient]];
   const setupGuide = created ? getSetupGuide(primaryClient, 'endpoint' in preferredSetup! ? preferredSetup.endpoint : undefined) : null;
 
   return (
     <Modal
       isOpen={isOpen}
       onClose={handleClose}
-      title={created ? 'Your AI connection token is ready' : 'Generate AI Connection Token'}
+      title={created ? 'Your personal access token is ready' : 'Generate Personal Access Token'}
       maxWidth={created ? 'max-w-2xl' : 'max-w-md'}
     >
       {!created ? (
@@ -294,6 +380,8 @@ export const CreateAiConnectionModal: React.FC<CreateAiConnectionModalProps> = (
             </div>
           </div>
 
+          <ScopesField value={scopes} onChange={setScopes} />
+
           <div className="space-y-1.5">
             <label className="text-xs font-bold uppercase tracking-wider text-gray-400">Expiration</label>
             <select
@@ -307,10 +395,6 @@ export const CreateAiConnectionModal: React.FC<CreateAiConnectionModalProps> = (
                 </option>
               ))}
             </select>
-          </div>
-
-          <div className="rounded-xl border border-blue-500/10 bg-blue-500/[0.06] px-4 py-3 text-xs text-blue-700 dark:text-blue-300/80 leading-relaxed">
-            This creates a Trussen-scoped AI connection token for remote MCP clients. The generated setup points directly at the Trussen MCP endpoint, so normal users only need to paste the config and token into their AI client.
           </div>
 
           {clientCatalog && (
@@ -339,7 +423,7 @@ export const CreateAiConnectionModal: React.FC<CreateAiConnectionModalProps> = (
             </button>
             <button
               type="submit"
-              disabled={createAiConnection.isPending || !name.trim()}
+              disabled={createAiConnection.isPending || !name.trim() || scopes.length === 0}
               className="px-5 py-2 bg-primary text-white text-sm font-bold rounded-lg hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 disabled:opacity-50 disabled:shadow-none flex items-center gap-2"
             >
               {createAiConnection.isPending && <Loader2 size={16} className="animate-spin" />}
@@ -386,7 +470,7 @@ export const CreateAiConnectionModal: React.FC<CreateAiConnectionModalProps> = (
           )}
 
           <div>
-            <p className="text-[11px] font-medium text-gray-400 dark:text-gray-500 mb-1.5">AI connection token</p>
+            <p className="text-[11px] font-medium text-gray-400 dark:text-gray-500 mb-1.5">Personal access token</p>
             <button
               type="button"
               onClick={() => handleCopy('token', created.token)}

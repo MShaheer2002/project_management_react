@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Activity, Bot, Cable, Clock, KeyRound, Plus, RefreshCw, Shield, Trash2, Wrench } from 'lucide-react';
+import { Activity, Bot, Cable, Clock, KeyRound, Plus, RefreshCw, Shield, ShieldCheck, Trash2, Wrench } from 'lucide-react';
 import {
   useAiConnectionHealthCheck,
   useAiConnectionSessions,
@@ -8,6 +8,7 @@ import {
 } from '@features/ai-connections';
 import { CreateAiConnectionModal } from '@features/ai-connections/components/CreateAiConnectionModal';
 import { RevokeAiConnectionDialog } from '@features/ai-connections/components/RevokeAiConnectionDialog';
+import { EditScopesDialog } from '@features/ai-connections/components/EditScopesDialog';
 import type { AiConnection, AiConnectionCreateResponse, AiConnectionSession } from '@features/ai-connections/types';
 import { useToastStore } from '@/app/stores/useToastStore';
 
@@ -47,6 +48,16 @@ function formatClientLabel(client: AiConnection['client']): string {
       return 'Codex';
     case 'claude_desktop':
       return 'Claude Desktop';
+    case 'claude_code':
+      return 'Claude Code';
+    case 'chatgpt':
+      return 'ChatGPT';
+    case 'gemini_cli':
+      return 'Gemini CLI';
+    case 'windsurf':
+      return 'Windsurf';
+    case 'vscode':
+      return 'VS Code';
     case 'cursor':
       return 'Cursor';
     case 'generic_mcp':
@@ -120,6 +131,7 @@ export const AiConnectionsPage: React.FC<AiConnectionsPageProps> = ({ embedded =
   const [createOpen, setCreateOpen] = useState(false);
   const [tokenResult, setTokenResult] = useState<AiConnectionCreateResponse | null>(null);
   const [revokeTarget, setRevokeTarget] = useState<AiConnection | null>(null);
+  const [scopesTarget, setScopesTarget] = useState<AiConnection | null>(null);
   const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null);
   const sessionsQuery = useAiConnectionSessions(selectedConnectionId);
 
@@ -168,7 +180,7 @@ export const AiConnectionsPage: React.FC<AiConnectionsPageProps> = ({ embedded =
     <div className={embedded ? '' : 'flex flex-col h-full'}>
       <header className={`flex items-center justify-between ${embedded ? 'pb-4' : 'px-6 py-4 border-b border-gray-200 dark:border-border-dark'}`}>
         <div className="flex items-center gap-3">
-          <h1 className="text-lg font-semibold dark:text-white">AI Connections</h1>
+          <h1 className="text-lg font-semibold dark:text-white">Personal Access Tokens</h1>
           {!isLoading && (
             <span className="text-[11px] font-medium text-gray-400 px-1.5 py-0.5 rounded-md bg-gray-100 dark:bg-white/[0.06]">
               {connections.length}
@@ -331,6 +343,17 @@ export const AiConnectionsPage: React.FC<AiConnectionsPageProps> = ({ embedded =
                         <button
                           onClick={(event) => {
                             event.stopPropagation();
+                            setScopesTarget(connection);
+                          }}
+                          className="inline-flex items-center gap-1 rounded-lg px-2.5 py-2 text-xs font-medium text-gray-400 hover:text-primary hover:bg-primary/10 transition-colors"
+                          title="Edit access scopes"
+                        >
+                          <ShieldCheck size={14} />
+                          Scopes
+                        </button>
+                        <button
+                          onClick={(event) => {
+                            event.stopPropagation();
                             void handleRotate(connection);
                           }}
                           className="inline-flex items-center gap-1 rounded-lg px-2.5 py-2 text-xs font-medium text-gray-400 hover:text-primary hover:bg-primary/10 transition-colors"
@@ -423,7 +446,7 @@ export const AiConnectionsPage: React.FC<AiConnectionsPageProps> = ({ embedded =
             <div className="mx-auto w-14 h-14 rounded-2xl bg-gray-100 dark:bg-white/[0.04] flex items-center justify-center mb-4">
               <Cable size={24} className="text-gray-300 dark:text-gray-600" />
             </div>
-            <p className="text-sm font-medium text-gray-500 dark:text-gray-400">No AI connections yet</p>
+            <p className="text-sm font-medium text-gray-500 dark:text-gray-400">No personal access tokens yet</p>
             <p className="text-xs text-gray-400 dark:text-gray-500 mt-1 max-w-xs mx-auto">
               Generate one token and connect Trussen to external AI tools through the Trussen MCP endpoint.
             </p>
@@ -447,6 +470,7 @@ export const AiConnectionsPage: React.FC<AiConnectionsPageProps> = ({ embedded =
         presetResult={tokenResult}
       />
       <RevokeAiConnectionDialog connection={revokeTarget} onClose={() => setRevokeTarget(null)} />
+      <EditScopesDialog connection={scopesTarget} onClose={() => setScopesTarget(null)} />
     </div>
   );
 };

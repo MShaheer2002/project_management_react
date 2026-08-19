@@ -60,6 +60,25 @@ export const useAiConnectionHealthCheck = () => {
   });
 };
 
+export const useUpdateAiConnectionScopes = () => {
+  const queryClient = useQueryClient();
+  const workspaceId = useAuthStore((s) => s.workspace?.id);
+  const showToast = useToastStore((s) => s.showToast);
+
+  return useMutation({
+    mutationFn: ({ id, scopes }: { id: string; scopes: string[] }) => aiConnectionService.updateScopes(id, scopes),
+    onSuccess: (result) => {
+      queryClient.setQueryData<AiConnection[]>(
+        aiConnectionQueryKeys.list(workspaceId),
+        (current) => current?.map((connection) => (
+          connection.id === result.id ? result : connection
+        )) ?? [result],
+      );
+      showToast('Scopes updated', 'success');
+    },
+  });
+};
+
 export const useRotateAiConnection = () => {
   const queryClient = useQueryClient();
   const workspaceId = useAuthStore((s) => s.workspace?.id);

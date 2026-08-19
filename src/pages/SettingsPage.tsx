@@ -20,7 +20,6 @@ import type { UploadPolicy } from '@/app/stores/useAuthStore';
 import { useAuthStore } from '@/app/stores/useAuthStore';
 import { Modal } from '@shared/components/ui/Modal';
 import { WorkflowStatusesEditor, WorkflowAutomationEditor } from '@shared/components/workflow/WorkflowEditors';
-import { ApiKeysPage } from '@/pages/ApiKeysPage';
 import { AiConnectionsPage } from '@/pages/AiConnectionsPage';
 
 interface SettingsSectionProps {
@@ -254,7 +253,7 @@ export const SettingsPage: React.FC = () => {
     return () => window.removeEventListener('popstate', handlePopState);
   }, [hasUnsavedChanges]);
 
-  const SETTINGS_TABS = ['general', 'workspace', 'api-keys', 'ai-connections'] as const;
+  const SETTINGS_TABS = ['general', 'workspace', 'ai-connections'] as const;
   type SettingsTab = (typeof SETTINGS_TABS)[number];
   const requestedTab = searchParams.get('tab');
   const settingsTab: SettingsTab = SETTINGS_TABS.includes(requestedTab as SettingsTab)
@@ -264,8 +263,7 @@ export const SettingsPage: React.FC = () => {
   const tabs: { name: string; view: SettingsTab }[] = [
     { name: 'General', view: 'general' },
     { name: 'Workspace', view: 'workspace' },
-    { name: 'API Keys', view: 'api-keys' },
-    { name: 'AI Connections', view: 'ai-connections' },
+    { name: 'Personal Access Tokens', view: 'ai-connections' },
   ];
 
   const handleSave = async () => {
@@ -566,7 +564,6 @@ export const SettingsPage: React.FC = () => {
           </>
         )}
 
-        {settingsTab === 'api-keys' && <ApiKeysPage embedded />}
         {settingsTab === 'ai-connections' && <AiConnectionsPage embedded />}
       </div>
 
