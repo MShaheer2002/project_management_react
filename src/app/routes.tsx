@@ -40,6 +40,7 @@ import { CycleDetailPage } from '@/pages/CycleDetailPage';
 import { BillingPage } from '@/pages/BillingPage';
 import { AiUsagePage } from '@/pages/AiUsagePage';
 import { AiConnectionsPage } from '@/pages/AiConnectionsPage';
+import { ConnectAiPage } from '@/pages/ConnectAiPage';
 import { ProjectDetailPage } from '@/features/projects/pages/ProjectDetailPage';
 import { DepartmentsPage } from '@/features/department/pages/DepartmentsPage';
 import { DepartmentDetailPage } from '@/features/department/pages/DepartmentDetailPage';
@@ -170,6 +171,13 @@ export const AppRoutes: React.FC = () => {
           {/* Catch-all inside authenticated layout — redirect to dashboard */}
           <Route path="*" element={<Navigate to="/dashboard" />} />
         </Route>
+
+        {/*
+         * One-time OAuth connection setup — reached by an AI client's error
+         * message on first connect, not by navigating through the app.
+         * Deliberately outside MainLayout: no sidebar/navbar, single focused task.
+         */}
+        <Route path="/connect-ai" element={<ConnectAiPage />} />
       </Route>
     </Routes>
   );

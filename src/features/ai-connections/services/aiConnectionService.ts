@@ -63,4 +63,19 @@ export const aiConnectionService = {
     );
     return data.data;
   },
+
+  completeOAuthSetup: async (
+    workspaceId: string,
+    input: { clientId: string; name: string; primaryClient?: string; scopes: string[] },
+  ): Promise<AiConnection> => {
+    const { data } = await privateApi.post<ApiResponse<AiConnection>>(
+      '/ai-connections/oauth/complete',
+      input,
+      {
+        skipGlobalErrorToast: true,
+        headers: { 'X-Workspace-Id': workspaceId },
+      } as AxiosRequestConfig & { skipGlobalErrorToast: boolean },
+    );
+    return data.data;
+  },
 };

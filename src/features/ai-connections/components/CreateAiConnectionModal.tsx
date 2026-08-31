@@ -6,6 +6,7 @@ import { useCreateAiConnection } from '../hooks/useAiConnectionMutations';
 import { useAiConnectionCatalog } from '../hooks/useAiConnectionData';
 import { ScopesField } from './ScopesField';
 import { ADMIN_SCOPE } from '../scopes';
+import { CLIENT_OPTIONS } from '../clients';
 import type { AiConnectionClientId, AiConnectionCreateResponse, CreateAiConnectionInput } from '../types';
 
 const EXPIRY_OPTIONS = [
@@ -18,17 +19,6 @@ const EXPIRY_OPTIONS = [
 
 const DEFAULT_EXPIRY_DAYS = 30;
 
-const CLIENT_OPTIONS = [
-  { value: 'codex', label: 'Codex' },
-  { value: 'claude_desktop', label: 'Claude Desktop' },
-  { value: 'claude_code', label: 'Claude Code' },
-  { value: 'chatgpt', label: 'ChatGPT' },
-  { value: 'gemini_cli', label: 'Gemini CLI' },
-  { value: 'windsurf', label: 'Windsurf' },
-  { value: 'vscode', label: 'VS Code' },
-  { value: 'cursor', label: 'Cursor' },
-  { value: 'generic_mcp', label: 'Generic MCP' },
-] as const;
 
 const SETUP_KEY_BY_CLIENT: Record<AiConnectionClientId, keyof AiConnectionCreateResponse['setup']> = {
   codex: 'codex',
@@ -263,7 +253,7 @@ export const CreateAiConnectionModal: React.FC<CreateAiConnectionModalProps> = (
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (authType !== 'pat' || !name.trim()) return;
     setError(null);
 
     try {
@@ -282,8 +272,6 @@ export const CreateAiConnectionModal: React.FC<CreateAiConnectionModalProps> = (
 
       if (code === 'API_KEY_LIMIT_REACHED') {
         setError("You've reached the maximum AI connection tokens for your plan. Revoke an unused token or upgrade.");
-      } else if (code === 'AI_CONNECTION_AUTH_NOT_IMPLEMENTED') {
-        setError('OAuth AI connections are planned but not available in this version. Use a personal access token for now.');
       } else {
         setError(apiError.response?.data?.error?.message || 'Could not create AI connection token.');
       }
@@ -363,39 +351,51 @@ export const CreateAiConnectionModal: React.FC<CreateAiConnectionModalProps> = (
               <button
                 type="button"
                 onClick={() => setAuthType('oauth')}
-                className="rounded-xl border border-gray-200 dark:border-border-dark bg-gray-50 dark:bg-black/20 px-4 py-3 text-left opacity-70 transition-colors"
+                className={`rounded-xl border px-4 py-3 text-left transition-colors ${
+                  authType === 'oauth'
+                    ? 'border-primary bg-primary/5'
+                    : 'border-gray-200 dark:border-border-dark bg-gray-50 dark:bg-black/20'
+                }`}
               >
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <div className="text-sm font-medium text-gray-900 dark:text-white">OAuth</div>
                     <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                      {oauthMethod?.summary ?? 'Planned for hosted clients that support user-authorized remote connections.'}
+                      {oauthMethod?.summary ?? 'Sign-in-based connection, no token to copy. Start it from your AI client, not from this form.'}
                     </p>
                   </div>
-                  <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">
-                    Planned
+                  <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-400">
+                    Available
                   </span>
                 </div>
               </button>
             </div>
           </div>
 
-          <ScopesField value={scopes} onChange={setScopes} />
+          {authType === 'pat' ? (
+            <>
+              <ScopesField value={scopes} onChange={setScopes} />
 
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold uppercase tracking-wider text-gray-400">Expiration</label>
-            <select
-              value={expiryDays}
-              onChange={(e) => setExpiryDays(Number(e.target.value))}
-              className="w-full px-4 py-2.5 bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-border-dark rounded-lg outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm"
-            >
-              {EXPIRY_OPTIONS.map((opt) => (
-                <option key={opt.days} value={opt.days}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold uppercase tracking-wider text-gray-400">Expiration</label>
+                <select
+                  value={expiryDays}
+                  onChange={(e) => setExpiryDays(Number(e.target.value))}
+                  className="w-full px-4 py-2.5 bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-border-dark rounded-lg outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-sm"
+                >
+                  {EXPIRY_OPTIONS.map((opt) => (
+                    <option key={opt.days} value={opt.days}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </>
+          ) : (
+            <div className="rounded-xl border border-blue-500/10 bg-blue-500/[0.06] px-4 py-3 text-xs text-blue-700 dark:text-blue-300/80 leading-relaxed">
+              There's nothing to generate here. Open your AI client, add Trussen as a remote MCP server, and it will prompt you to sign in — you'll pick a workspace and access scopes at that point.
+            </div>
+          )}
 
           {clientCatalog && (
             <div className="rounded-xl border border-gray-200 dark:border-border-dark bg-gray-50 dark:bg-black/20 px-4 py-3 text-xs text-gray-600 dark:text-gray-400 leading-relaxed">
@@ -421,14 +421,16 @@ export const CreateAiConnectionModal: React.FC<CreateAiConnectionModalProps> = (
             >
               Cancel
             </button>
-            <button
-              type="submit"
-              disabled={createAiConnection.isPending || !name.trim() || scopes.length === 0}
-              className="px-5 py-2 bg-primary text-white text-sm font-bold rounded-lg hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 disabled:opacity-50 disabled:shadow-none flex items-center gap-2"
-            >
-              {createAiConnection.isPending && <Loader2 size={16} className="animate-spin" />}
-              {authType === 'pat' ? 'Generate Token' : 'Continue'}
-            </button>
+            {authType === 'pat' && (
+              <button
+                type="submit"
+                disabled={createAiConnection.isPending || !name.trim() || scopes.length === 0}
+                className="px-5 py-2 bg-primary text-white text-sm font-bold rounded-lg hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 disabled:opacity-50 disabled:shadow-none flex items-center gap-2"
+              >
+                {createAiConnection.isPending && <Loader2 size={16} className="animate-spin" />}
+                Generate Token
+              </button>
+            )}
           </div>
         </form>
       ) : (

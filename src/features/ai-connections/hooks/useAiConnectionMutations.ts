@@ -79,6 +79,23 @@ export const useUpdateAiConnectionScopes = () => {
   });
 };
 
+export const useCompleteOAuthSetup = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      workspaceId,
+      ...input
+    }: { workspaceId: string; clientId: string; name: string; primaryClient?: string; scopes: string[] }) =>
+      aiConnectionService.completeOAuthSetup(workspaceId, input),
+    onSuccess: (_result, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: aiConnectionQueryKeys.list(variables.workspaceId),
+      });
+    },
+  });
+};
+
 export const useRotateAiConnection = () => {
   const queryClient = useQueryClient();
   const workspaceId = useAuthStore((s) => s.workspace?.id);
