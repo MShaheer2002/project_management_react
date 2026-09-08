@@ -37,6 +37,7 @@ import {
   YAxis,
 } from 'recharts';
 import { useAuthStore } from '@/app/stores/useAuthStore';
+import { confirmDialog } from '@/app/stores/useConfirmStore';
 import { useApp } from '@/AppContext';
 import { Modal } from '@/components/modals/Modal';
 import { ActivityPage } from '@features/activity';
@@ -127,9 +128,12 @@ export const DepartmentDetailPage: React.FC = () => {
   const [isAttachTeamModalOpen, setIsAttachTeamModalOpen] = useState(false);
   const [attachTeamSearch, setAttachTeamSearch] = useState('');
   const [attachingTeamId, setAttachingTeamId] = useState<string | null>(null);
+  const [removingTeamId, setRemovingTeamId] = useState<string | null>(null);
+  const [openTeamMenuId, setOpenTeamMenuId] = useState<string | null>(null);
 
   const memberPickerRef = useRef<HTMLDivElement | null>(null);
   const headPickerRef = useRef<HTMLDivElement | null>(null);
+  const teamMenuRef = useRef<HTMLDivElement | null>(null);
   const deferredMemberPickerSearch = useDeferredValue(memberPickerSearch);
   const deferredHeadSearch = useDeferredValue(headSearch);
   const deferredAttachTeamSearch = useDeferredValue(attachTeamSearch);
@@ -226,14 +230,17 @@ export const DepartmentDetailPage: React.FC = () => {
       if (headPickerRef.current && !headPickerRef.current.contains(target)) {
         setIsHeadPickerOpen(false);
       }
+      if (teamMenuRef.current && !teamMenuRef.current.contains(target)) {
+        setOpenTeamMenuId(null);
+      }
     };
 
-    if (isMemberPickerOpen || isHeadPickerOpen) {
+    if (isMemberPickerOpen || isHeadPickerOpen || openTeamMenuId) {
       document.addEventListener('mousedown', handlePointerDown);
     }
 
     return () => document.removeEventListener('mousedown', handlePointerDown);
-  }, [isHeadPickerOpen, isMemberPickerOpen]);
+  }, [isHeadPickerOpen, isMemberPickerOpen, openTeamMenuId]);
 
   if (departmentQuery.isLoading) {
     return (
@@ -257,7 +264,7 @@ export const DepartmentDetailPage: React.FC = () => {
   }
 
   const canManage = canManageDepartment(role, currentUserId, department.head?.id ?? null);
-  const canAttachExistingTeams = role === 'owner' || role === 'admin' || role === 'member';
+  const canManageDepartmentTeams = role === 'owner' || role === 'admin';
   const tabs = [
     { id: 'overview', label: 'Overview', icon: <LayoutDashboard size={14} /> },
     { id: 'members', label: 'Members', icon: <Users size={14} /> },
@@ -322,6 +329,40 @@ export const DepartmentDetailPage: React.FC = () => {
     }
   };
 
+  const handleRemoveTeamFromDepartment = async (teamId: string) => {
+    setRemovingTeamId(teamId);
+
+    try {
+      await updateAnyTeam.mutateAsync({
+        teamId,
+        input: {
+          departmentId: null,
+        },
+      });
+      showToast('Team removed from the department.', 'success');
+    } catch (error) {
+      const code = getApiErrorCode(error);
+      if (code === 'FORBIDDEN') {
+        showToast('Only workspace admins and owners can remove a team from a department.', 'error', 'Action blocked');
+        return;
+      }
+      showToast(getApiErrorMessage(error) || 'Failed to remove the team.', 'error', 'Action failed');
+    } finally {
+      setRemovingTeamId(null);
+    }
+  };
+
+  const handleConfirmRemoveTeam = async (teamId: string, teamName: string) => {
+    setOpenTeamMenuId(null);
+    const confirmed = await confirmDialog({
+      title: `Remove ${teamName} from ${department.name}?`,
+      message: 'This team and its members will no longer be part of this department.',
+      confirmLabel: 'Remove Team',
+      tone: 'danger',
+    });
+    if (confirmed) await handleRemoveTeamFromDepartment(teamId);
+  };
+
   const handleSave = async (event: React.FormEvent) => {
     event.preventDefault();
     setFieldErrors({});
@@ -375,6 +416,10 @@ export const DepartmentDetailPage: React.FC = () => {
       showToast('Member removed from the department.', 'success');
     } catch (error) {
       const code = getApiErrorCode(error);
+      if (code === 'CANNOT_REMOVE_WORKSPACE_ADMIN') {
+        showToast('Workspace admins and owners can\'t be removed from a department. Change their role first.', 'error', 'Action blocked');
+        return;
+      }
       if (code === 'FORBIDDEN') {
         showToast('Reassign the department head before removing them.', 'error', 'Action blocked');
         return;
@@ -384,9 +429,12 @@ export const DepartmentDetailPage: React.FC = () => {
   };
 
   const handleDelete = async () => {
-    const confirmed = window.confirm(
-      `Delete ${department.name}? Teams will remain but lose their department assignment.`
-    );
+    const confirmed = await confirmDialog({
+      title: `Delete ${department.name}?`,
+      message: 'Teams will remain but lose their department assignment.',
+      tone: 'danger',
+      confirmLabel: 'Delete',
+    });
     if (!confirmed) return;
 
     try {
@@ -703,9 +751,33 @@ export const DepartmentDetailPage: React.FC = () => {
                   <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary transition-all group-hover:bg-primary group-hover:text-white">
                     <Users size={20} />
                   </div>
-                  <button className="rounded-md p-1.5 text-gray-400 opacity-0 transition-opacity hover:bg-gray-100 dark:hover:bg-white/10 group-hover:opacity-100">
-                    <MoreHorizontal size={16} />
-                  </button>
+                  {canManageDepartmentTeams && (
+                    <div className="relative" ref={openTeamMenuId === team.id ? teamMenuRef : undefined}>
+                      <button
+                        type="button"
+                        onClick={() => setOpenTeamMenuId((current) => (current === team.id ? null : team.id))}
+                        disabled={removingTeamId === team.id}
+                        className="rounded-md p-1.5 text-gray-400 opacity-0 transition-opacity hover:bg-gray-100 disabled:opacity-50 dark:hover:bg-white/10 group-hover:opacity-100"
+                      >
+                        {removingTeamId === team.id ? (
+                          <Loader2 size={16} className="animate-spin" />
+                        ) : (
+                          <MoreHorizontal size={16} />
+                        )}
+                      </button>
+                      {openTeamMenuId === team.id && (
+                        <div className="absolute right-0 top-9 z-20 min-w-[190px] rounded-xl border border-gray-200 bg-white p-1.5 shadow-xl dark:border-border-dark dark:bg-card-dark">
+                          <button
+                            type="button"
+                            onClick={() => handleConfirmRemoveTeam(team.id, team.name)}
+                            className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-red-500 transition-colors hover:bg-red-500/10"
+                          >
+                            Remove from Department
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <h4 className="mb-1 text-lg font-bold">{team.name}</h4>
@@ -1204,7 +1276,7 @@ export const DepartmentDetailPage: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-3">
-            {canAttachExistingTeams && (
+            {canManageDepartmentTeams && (
               <button
                 onClick={() => setIsAttachTeamModalOpen(true)}
                 className="rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-sm font-semibold text-gray-600 transition-all hover:border-primary/40 hover:text-primary dark:border-border-dark dark:bg-card-dark dark:text-gray-300"

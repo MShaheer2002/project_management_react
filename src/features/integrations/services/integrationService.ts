@@ -3,6 +3,7 @@ import type { ApiResponse } from '@shared/services/types';
 import type { AxiosRequestConfig } from 'axios';
 import type {
   IntegrationItem,
+  IntegrationConnectionStatus,
   // GitHub
   GitHubConnectResponse,
   GitHubSettings,
@@ -38,6 +39,13 @@ export const integrationService = {
   list: async (): Promise<IntegrationItem[]> => {
     const { data } = await privateApi.get<ApiResponse<IntegrationItem[]>>(
       '/integrations',
+    );
+    return data.data;
+  },
+
+  status: async (): Promise<IntegrationConnectionStatus[]> => {
+    const { data } = await privateApi.get<ApiResponse<IntegrationConnectionStatus[]>>(
+      '/integrations/status',
     );
     return data.data;
   },

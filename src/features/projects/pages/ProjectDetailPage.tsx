@@ -18,6 +18,7 @@ import {
 import { motion } from 'motion/react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '@/app/stores/useAuthStore';
+import { confirmDialog } from '@/app/stores/useConfirmStore';
 import { useApp } from '@/AppContext';
 import { MemberPerformancePanel } from '@/components/analytics/MemberPerformancePanel';
 import { ActivityPage } from '@features/activity';
@@ -324,7 +325,7 @@ export const ProjectDetailPage: React.FC = () => {
   };
 
   const handleDelete = async () => {
-    const confirmed = window.confirm('Delete this project permanently?');
+    const confirmed = await confirmDialog({ title: 'Delete this project permanently?', tone: 'danger', confirmLabel: 'Delete' });
     if (!confirmed) return;
 
     try {

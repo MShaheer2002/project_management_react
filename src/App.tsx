@@ -5,6 +5,7 @@ import { ThemeProvider } from '@/app/providers/ThemeProvider';
 import { AppProvider } from './AppContext';
 import { AppRoutes } from '@/app/routes';
 import { ToastContainer } from '@/components/ToastContainer';
+import { ConfirmDialogHost } from '@/components/ConfirmDialogHost';
 import { ErrorBoundary } from '@shared/components/ErrorBoundary';
 
 /**
@@ -41,6 +42,8 @@ export default function App() {
               </ErrorBoundary>
               {/* Global toast — renders on all pages (auth, dashboard, everywhere) */}
               <ToastContainer />
+              {/* Global confirm dialog — replaces window.confirm() everywhere */}
+              <ConfirmDialogHost />
             </AppProvider>
           </RealtimeNotificationProvider>
         </AuthSync>

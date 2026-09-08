@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { ExternalLink, Image, Loader2 } from 'lucide-react';
-import { useFigmaBatchPreview, useIntegrations } from '../hooks/useIntegrationData';
+import { useFigmaBatchPreview, useIntegrationStatus } from '../hooks/useIntegrationData';
 import { FIGMA_URL_REGEX, PROVIDER_META } from '../types';
 import type { FigmaPreview } from '../types';
 
@@ -66,7 +66,7 @@ export const IssueFigmaDesigns: React.FC<IssueFigmaDesignsProps> = ({
   description,
   figmaUrls: explicitUrls,
 }) => {
-  const integrationsQuery = useIntegrations();
+  const integrationsQuery = useIntegrationStatus();
   const isFigmaConnected = useMemo(
     () =>
       integrationsQuery.data?.some(

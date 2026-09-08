@@ -36,8 +36,8 @@ export const issueQueryKeys = {
   workspace: (workspaceId: string | undefined) => [...issueQueryKeys.all, workspaceId] as const,
   directory: (workspaceId: string | undefined, params: object) =>
     [...issueQueryKeys.workspace(workspaceId), 'directory', params] as const,
-  statusCounts: (workspaceId: string | undefined) =>
-    [...issueQueryKeys.workspace(workspaceId), 'status-counts'] as const,
+  statusCounts: (workspaceId: string | undefined, projectId?: string) =>
+    [...issueQueryKeys.workspace(workspaceId), 'status-counts', projectId ?? null] as const,
   options: (workspaceId: string | undefined, params: object) =>
     [...issueQueryKeys.workspace(workspaceId), 'options', params] as const,
   detail: (workspaceId: string | undefined, issueId: string | undefined) =>
@@ -178,14 +178,21 @@ function patchIssueStatusCaches(
     });
   });
 
-  queryClient.setQueryData<Record<string, number>>(issueQueryKeys.statusCounts(workspaceId), (data) => {
-    if (!data) return data;
-    return {
-      ...data,
-      [previousStatus]: Math.max((data[previousStatus] ?? 0) - 1, 0),
-      [newStatus]: (data[newStatus] ?? 0) + 1,
-    };
-  });
+  const patchStatusCounts = (queryKey: ReturnType<typeof issueQueryKeys.statusCounts>) => {
+    queryClient.setQueryData<Record<string, number>>(queryKey, (data) => {
+      if (!data) return data;
+      return {
+        ...data,
+        [previousStatus]: Math.max((data[previousStatus] ?? 0) - 1, 0),
+        [newStatus]: (data[newStatus] ?? 0) + 1,
+      };
+    });
+  };
+
+  patchStatusCounts(issueQueryKeys.statusCounts(workspaceId));
+  if (updatedIssue.projectId) {
+    patchStatusCounts(issueQueryKeys.statusCounts(workspaceId, updatedIssue.projectId));
+  }
 
   // Dashboard stats (e.g. "completed this week") do depend on status, but the
   // dashboard is a different route — mark it stale for whenever it's next viewed
@@ -193,6 +200,25 @@ function patchIssueStatusCaches(
   queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.byWorkspace(workspaceId), refetchType: 'none' });
 
   queryClient.setQueryData(issueQueryKeys.detail(workspaceId, updatedIssue.id), updatedIssue);
+}
+
+/** Finds an issue already sitting in some cached directory page, to use as the
+ *  optimistic card while the status PATCH is in flight. */
+function findCachedIssue(
+  queryClient: ReturnType<typeof useQueryClient>,
+  workspaceId: string | undefined,
+  issueId: string,
+): IssueSummary | undefined {
+  const directoryQueries = queryClient.getQueryCache().findAll({ queryKey: issueQueryKeys.workspace(workspaceId) });
+  for (const query of directoryQueries) {
+    if (query.queryKey[2] !== 'directory') continue;
+    const data = query.state.data as IssueDirectoryData | undefined;
+    for (const page of data?.pages ?? []) {
+      const found = page.items.find((item) => item.id === issueId);
+      if (found) return found;
+    }
+  }
+  return undefined;
 }
 
 export const useIssuesDirectory = (params: ListIssuesInput = {}, options?: { enabled?: boolean }) => {
@@ -211,12 +237,12 @@ export const useIssuesDirectory = (params: ListIssuesInput = {}, options?: { ena
   });
 };
 
-export const useIssueStatusCounts = (options?: { enabled?: boolean }) => {
+export const useIssueStatusCounts = (params: { projectId?: string } = {}, options?: { enabled?: boolean }) => {
   const workspaceId = useAuthStore((s) => s.workspace?.id);
 
   return useQuery({
-    queryKey: issueQueryKeys.statusCounts(workspaceId),
-    queryFn: () => issueService.getStatusCounts(),
+    queryKey: issueQueryKeys.statusCounts(workspaceId, params.projectId),
+    queryFn: () => issueService.getStatusCounts(params),
     enabled: Boolean(workspaceId) && (options?.enabled ?? true),
   });
 };
@@ -400,6 +426,23 @@ export const useUpdateIssueStatus = (issueId: string | undefined) => {
   return useMutation({
     mutationFn: ({ status }: { status: NonNullable<UpdateIssueInput['status']>; previousStatus?: string }) =>
       issueService.updateStatus(issueId!, status),
+    onMutate: (variables) => {
+      if (!variables.previousStatus || variables.previousStatus === variables.status) return;
+      const cached = findCachedIssue(queryClient, workspaceId, issueId!);
+      if (!cached) return;
+      patchIssueStatusCaches(
+        queryClient,
+        workspaceId,
+        { ...cached, status: variables.status } as IssueDetail,
+        variables.previousStatus,
+      );
+      return { rollbackIssue: cached };
+    },
+    onError: (_err, variables, context) => {
+      if (context?.rollbackIssue && variables.previousStatus) {
+        patchIssueStatusCaches(queryClient, workspaceId, context.rollbackIssue as IssueDetail, variables.status);
+      }
+    },
     onSuccess: (issue, variables) => {
       if (variables.previousStatus && variables.previousStatus !== issue.status) {
         patchIssueStatusCaches(queryClient, workspaceId, issue, variables.previousStatus);
@@ -461,6 +504,23 @@ export const useUpdateAnyIssueStatus = () => {
       status: NonNullable<UpdateIssueInput['status']>;
       previousStatus?: string;
     }) => issueService.updateStatus(issueId, status),
+    onMutate: (variables) => {
+      if (!variables.previousStatus || variables.previousStatus === variables.status) return;
+      const cached = findCachedIssue(queryClient, workspaceId, variables.issueId);
+      if (!cached) return;
+      patchIssueStatusCaches(
+        queryClient,
+        workspaceId,
+        { ...cached, status: variables.status } as IssueDetail,
+        variables.previousStatus,
+      );
+      return { rollbackIssue: cached };
+    },
+    onError: (_err, variables, context) => {
+      if (context?.rollbackIssue && variables.previousStatus) {
+        patchIssueStatusCaches(queryClient, workspaceId, context.rollbackIssue as IssueDetail, variables.status);
+      }
+    },
     onSuccess: (issue, variables) => {
       if (variables.previousStatus && variables.previousStatus !== issue.status) {
         patchIssueStatusCaches(queryClient, workspaceId, issue, variables.previousStatus);

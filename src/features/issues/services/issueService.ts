@@ -381,12 +381,15 @@ export const issueService = {
   },
 
   /**
-   * Workspace-wide per-status issue counts — read straight from a counter table the
-   * backend keeps in sync via a DB trigger (never a runtime COUNT). Unfiltered: only
-   * valid as a fast default-view total, not alongside search/project/team/type filters.
+   * Per-status issue counts — read straight from a counter table the backend keeps
+   * in sync via a DB trigger (never a runtime COUNT). Workspace-wide by default, or
+   * scoped to one project's own counter when `projectId` is given. Only valid as a
+   * fast total when no OTHER filter (search/team/department/type) is also active.
    */
-  getStatusCounts: async (): Promise<Record<string, number>> => {
-    const { data } = await privateApi.get<ApiResponse<Record<string, number>>>('/issues/status-counts');
+  getStatusCounts: async (params: { projectId?: string } = {}): Promise<Record<string, number>> => {
+    const { data } = await privateApi.get<ApiResponse<Record<string, number>>>('/issues/status-counts', {
+      params,
+    });
     return data.data;
   },
 

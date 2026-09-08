@@ -38,11 +38,13 @@ export const aiService = {
     prompt: string;
     resolvedAssigneeId?: string;
     resolvedProjectId?: string;
+    signal?: AbortSignal;
   }): Promise<AiGenerateIssueResponse> => {
+    const { prompt, resolvedAssigneeId, resolvedProjectId, signal } = input;
     const { data } = await privateApi.post<ApiResponse<AiGenerateIssueResponse>>(
       '/ai/generate-issue',
-      input,
-      { timeout: 60000 },
+      { prompt, resolvedAssigneeId, resolvedProjectId },
+      { timeout: 60000, signal },
     );
     return data.data;
   },

@@ -25,6 +25,13 @@ export function attachErrorInterceptor(instance: AxiosInstance) {
     (error: AxiosError<ApiError>) => {
       const showToast = useToastStore.getState().showToast;
 
+      // A request cancelled via AbortController (e.g. Escape while an AI
+      // generation is in flight) is a deliberate user action, not a failure —
+      // it must never surface as a "network error" toast.
+      if (error.code === 'ERR_CANCELED') {
+        return Promise.reject(error);
+      }
+
       // Network error — no response received
       if (!error.response) {
         showToast('Please check your internet connection and try again.', 'error', 'Network error');

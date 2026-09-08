@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { X, User, Calendar, Tag, MoreHorizontal, MessageSquare, History, Paperclip, CheckCircle2, AlertCircle, Clock, Trash2, ExternalLink, ChevronDown, Send, Plus, CheckSquare, Bug, Zap, Maximize2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useApp } from '@/AppContext';
+import { confirmDialog } from '@/app/stores/useConfirmStore';
 import { MOCK_ISSUES, MOCK_USERS, PRIORITY_COLORS, STATUS_LABELS, ISSUE_TYPE_CONFIG } from '@/constants';
 import { Status, Priority, IssueType } from '@/types';
 import { getStoredIssues, updateStoredIssue } from '@/lib/issue-storage';
@@ -35,8 +36,8 @@ export const ContextPanel: React.FC = () => {
 
   if (!selectedIssueId) return null;
 
-  const handleDelete = () => {
-    if (window.confirm('Are you sure you want to delete this issue?')) {
+  const handleDelete = async () => {
+    if (await confirmDialog({ title: 'Are you sure you want to delete this issue?', tone: 'danger', confirmLabel: 'Delete' })) {
       showToast('Issue deleted successfully');
       setSelectedIssueId(null);
     }

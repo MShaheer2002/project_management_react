@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '@/AppContext';
 import { useAuthStore } from '@/app/stores/useAuthStore';
+import { confirmDialog } from '@/app/stores/useConfirmStore';
 import { useProjectOptions } from '@features/projects';
 import { useTeamDetail } from '@features/team';
 import { canForceRoadmapOverride, canManageRoadmap } from '@shared/permissions';
@@ -166,9 +167,12 @@ export const ProjectRoadmapPanel: React.FC<{ projectId: string }> = ({ projectId
         const details = payload?.details as unknown as RoadmapScheduleConflictErrorDetails | undefined;
         const impactedNames = details?.affectedDependencies?.map((item) => item.blockedProject.name).join(', ');
         if (details?.allowedForceOverride && canForceOverride) {
-          const confirmed = window.confirm(
-            `This schedule change affects dependent projects${impactedNames ? `: ${impactedNames}` : ''}. Force update anyway?`
-          );
+          const confirmed = await confirmDialog({
+            title: 'Force update anyway?',
+            message: `This schedule change affects dependent projects${impactedNames ? `: ${impactedNames}` : ''}.`,
+            confirmLabel: 'Force Update',
+            tone: 'danger',
+          });
           if (confirmed) {
             await handleScheduleSave(true);
           }
@@ -236,7 +240,7 @@ export const ProjectRoadmapPanel: React.FC<{ projectId: string }> = ({ projectId
   };
 
   const handleDeleteMilestone = async (milestoneId: string) => {
-    if (!window.confirm('Delete this milestone?')) return;
+    if (!(await confirmDialog({ title: 'Delete this milestone?', tone: 'danger', confirmLabel: 'Delete' }))) return;
 
     try {
       await deleteMilestone.mutateAsync(milestoneId);
@@ -307,7 +311,12 @@ export const ProjectRoadmapPanel: React.FC<{ projectId: string }> = ({ projectId
         showToast('Dependency cancelled.', 'success');
         return;
       }
-      if (!window.confirm('Delete this dependency link? Use this only for incorrect links.')) return;
+      if (!(await confirmDialog({
+        title: 'Delete this dependency link?',
+        message: 'Use this only for incorrect links.',
+        tone: 'danger',
+        confirmLabel: 'Delete',
+      }))) return;
       await removeDependency.mutateAsync(dependency.id);
       showToast('Dependency deleted.', 'success');
     } catch (error) {

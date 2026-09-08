@@ -4,6 +4,7 @@ import {
   AlertCircle,
   Building2,
   Calendar,
+  ChevronLeft,
   Filter,
   FolderKanban,
   Loader2,
@@ -13,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '@/AppContext';
 import { useAuthStore } from '@/app/stores/useAuthStore';
+import { confirmDialog } from '@/app/stores/useConfirmStore';
 import { AssignIssuesToCycleDialog } from '@features/cycles';
 import { canDeleteIssues } from '@shared/permissions';
 import { useDepartmentsDirectory } from '@features/department';
@@ -90,6 +92,8 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
   const [selectedAssigneeIds, setSelectedAssigneeIds] = useState<string[]>([]);
   const [selectedIssueIds, setSelectedIssueIds] = useState<string[]>([]);
   const [activeIssueMenuId, setActiveIssueMenuId] = useState<string | null>(null);
+  const [bulkMenuView, setBulkMenuView] = useState<'actions' | 'status'>('actions');
+  const [isBulkChangingStatus, setIsBulkChangingStatus] = useState(false);
   const [assignmentDraft, setAssignmentDraft] = useState<{ issueIds: string[]; teamId?: string } | null>(null);
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const effectiveProjectId = projectId ?? (projectFilter === 'all' ? undefined : projectFilter);
@@ -227,12 +231,17 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
     [workspaceStatuses]
   );
 
-  // The persisted per-status counter is workspace-wide and unfiltered, so it's only
-  // valid to show as-is when nothing narrows the view below that scope.
+  // The persisted per-status counter is workspace-wide (or, when scoped to a
+  // single project, backed by that project's own counter) and unfiltered
+  // otherwise — it's only valid to show as-is when nothing else narrows the
+  // view below whichever of those two scopes applies.
   const hasActiveListFilters = Boolean(
-    boardFilters.q || boardFilters.projectId || boardFilters.teamId || boardFilters.departmentId || boardFilters.type
+    boardFilters.q || boardFilters.teamId || boardFilters.departmentId || boardFilters.type
   );
-  const statusCountsQuery = useIssueStatusCounts({ enabled: !hasActiveListFilters });
+  const statusCountsQuery = useIssueStatusCounts(
+    { projectId: boardFilters.projectId },
+    { enabled: !hasActiveListFilters }
+  );
   const statusCounts = statusCountsQuery.data;
 
   // List groups are collapsed by default so nothing loads until the user opens one —
@@ -327,11 +336,11 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
       return;
     }
 
-    const confirmed = window.confirm(
-      issueIds.length === 1
-        ? 'Delete this issue permanently?'
-        : `Delete ${issueIds.length} selected issues permanently?`
-    );
+    const confirmed = await confirmDialog({
+      title: issueIds.length === 1 ? 'Delete this issue permanently?' : `Delete ${issueIds.length} selected issues permanently?`,
+      tone: 'danger',
+      confirmLabel: 'Delete',
+    });
     if (!confirmed) return;
 
     try {
@@ -346,6 +355,56 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
       showToast('Failed to delete selected issues.', 'error', 'Delete failed');
     }
   };
+
+  const handleBulkStatusChange = async (newStatus: Status) => {
+    if (selectedIssueIds.length === 0) return;
+
+    setIsBulkChangingStatus(true);
+    try {
+      // handleIssueUpdate already checks each issue's own transition rules
+      // and toasts per-issue failures — settle all in parallel rather than
+      // aborting the whole batch on the first rejected one.
+      const results = await Promise.all(
+        selectedIssueIds.map((issueId) => handleIssueUpdate(issueId, newStatus))
+      );
+      const succeeded = results.filter(Boolean).length;
+      if (succeeded > 0) {
+        const statusLabel = workspaceStatuses.find((s) => s.key === newStatus)?.label ?? newStatus;
+        showToast(`${succeeded} issue${succeeded === 1 ? '' : 's'} moved to ${statusLabel}.`, 'success');
+      }
+    } finally {
+      setIsBulkChangingStatus(false);
+      setActiveIssueMenuId(null);
+      setBulkMenuView('actions');
+    }
+  };
+
+  // While a bulk status change is in flight, every selected row shows a
+  // loading state instead of its normal status dropdown.
+  const pendingStatusIssueIds = useMemo(
+    () => (isBulkChangingStatus ? new Set(selectedIssueIds) : new Set<string>()),
+    [isBulkChangingStatus, selectedIssueIds]
+  );
+
+  // Statuses every selected issue is already sitting in — offering those as a
+  // bulk target would be a no-op, so the picker hides them. If the selection
+  // spans more than one current status, nothing is hidden (every option is a
+  // real move for at least one of the selected issues).
+  const selectedCurrentStatuses = useMemo(() => {
+    const statuses = new Set<string>();
+    selectedIssueIds.forEach((issueId) => {
+      const issue = allLoadedIssues.find((item) => item.id === issueId);
+      if (issue) statuses.add(issue.status);
+    });
+    return statuses;
+  }, [selectedIssueIds, allLoadedIssues]);
+  const bulkStatusOptions = useMemo(
+    () =>
+      selectedCurrentStatuses.size === 1
+        ? workspaceStatuses.filter((status) => !selectedCurrentStatuses.has(status.key))
+        : workspaceStatuses,
+    [workspaceStatuses, selectedCurrentStatuses]
+  );
 
   const renderListView = () => (
     <div className="flex-1 overflow-y-auto px-4 py-5">
@@ -369,6 +428,7 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
               onAssignToCycle={openAssignDialog}
               onIssuesLoaded={handleIssuesLoaded}
               persistedCount={hasActiveListFilters ? undefined : statusCounts?.[status.key]}
+              pendingIssueIds={pendingStatusIssueIds}
             />
           ))}
         </div>
@@ -616,7 +676,10 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
           <div className="relative">
             <button
               type="button"
-              onClick={() => setActiveIssueMenuId((current) => (current === '__bulk__' ? null : '__bulk__'))}
+              onClick={() => {
+                setActiveIssueMenuId((current) => (current === '__bulk__' ? null : '__bulk__'));
+                setBulkMenuView('actions');
+              }}
               className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-50 dark:border-border-dark dark:bg-white/5 dark:text-gray-200 dark:hover:bg-white/10"
             >
               <MoreHorizontal size={15} />
@@ -624,42 +687,78 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
             </button>
             {activeIssueMenuId === '__bulk__' && (
               <div className="absolute right-0 top-11 z-20 min-w-[220px] rounded-xl border border-gray-200 bg-white p-1.5 shadow-xl dark:border-border-dark dark:bg-card-dark">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveIssueMenuId(null);
-                    navigate('/issues/create');
-                  }}
-                  className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-gray-200 dark:hover:bg-white/5 dark:hover:text-white"
-                >
-                  Add New Issue
-                </button>
-                <button
-                  type="button"
-                  onClick={() => openAssignDialog(selectedIssueIds)}
-                  className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-gray-200 dark:hover:bg-white/5 dark:hover:text-white"
-                >
-                  Add To Cycle
-                </button>
-                {canDelete && (
-                  <button
-                    type="button"
-                    onClick={() => void handleDeleteIssues(selectedIssueIds)}
-                    className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-red-500 transition-colors hover:bg-red-500/10"
-                  >
-                    Remove
-                  </button>
+                {bulkMenuView === 'status' ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setBulkMenuView('actions')}
+                      className="mb-1 flex w-full items-center gap-1 rounded-lg px-3 py-1.5 text-left text-xs font-semibold text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-white/5 dark:hover:text-gray-200"
+                    >
+                      <ChevronLeft size={12} /> Back
+                    </button>
+                    <div className="max-h-64 overflow-y-auto">
+                      {bulkStatusOptions.map((status) => (
+                        <button
+                          key={status.key}
+                          type="button"
+                          disabled={isBulkChangingStatus}
+                          onClick={() => void handleBulkStatusChange(status.key)}
+                          className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 disabled:opacity-50 dark:text-gray-200 dark:hover:bg-white/5 dark:hover:text-white"
+                        >
+                          <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: status.color }} />
+                          {status.label}
+                          {isBulkChangingStatus && <Loader2 size={12} className="ml-auto animate-spin" />}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveIssueMenuId(null);
+                        navigate('/issues/create');
+                      }}
+                      className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-gray-200 dark:hover:bg-white/5 dark:hover:text-white"
+                    >
+                      Add New Issue
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBulkMenuView('status')}
+                      className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-gray-200 dark:hover:bg-white/5 dark:hover:text-white"
+                    >
+                      Change Status
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openAssignDialog(selectedIssueIds)}
+                      className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-gray-200 dark:hover:bg-white/5 dark:hover:text-white"
+                    >
+                      Add To Cycle
+                    </button>
+                    {canDelete && (
+                      <button
+                        type="button"
+                        onClick={() => void handleDeleteIssues(selectedIssueIds)}
+                        className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-red-500 transition-colors hover:bg-red-500/10"
+                      >
+                        Remove
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedIssueIds([]);
+                        setActiveIssueMenuId(null);
+                      }}
+                      className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-gray-200 dark:hover:bg-white/5 dark:hover:text-white"
+                    >
+                      Clear
+                    </button>
+                  </>
                 )}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedIssueIds([]);
-                    setActiveIssueMenuId(null);
-                  }}
-                  className="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-gray-200 dark:hover:bg-white/5 dark:hover:text-white"
-                >
-                  Clear
-                </button>
               </div>
             )}
           </div>

@@ -13,6 +13,7 @@ import {
 import type { ApiAxiosError } from '@shared/services/types';
 import { useApp } from '../AppContext';
 import { useAuthStore } from '@/app/stores/useAuthStore';
+import { confirmDialog } from '@/app/stores/useConfirmStore';
 
 const toRole = (role: string) => role.toLowerCase() as 'owner' | 'admin' | 'member' | 'guest';
 const toInvitationRole = (role: string) => role.toUpperCase() as InvitationRole;
@@ -58,7 +59,9 @@ export const MembersPage: React.FC = () => {
   const currentUser = useAuthStore((s) => s.currentUser);
   const { data: sidebarData } = useSidebarData();
   const { data: members = [], isLoading, error, refetch } = useWorkspaceMembers();
-  const { data: invitations = [] } = useWorkspaceInvitations();
+  const canInviteMembers = sidebarData?.permissions.canInviteMembers ?? false;
+  const canManageMembers = canInviteMembers;
+  const { data: invitations = [] } = useWorkspaceInvitations({ enabled: canInviteMembers });
   const updateRole = useUpdateMemberRole();
   const removeMember = useRemoveMember();
   const revokeInvitation = useRevokeInvitation();
@@ -68,9 +71,6 @@ export const MembersPage: React.FC = () => {
   const [departmentFilter, setDepartmentFilter] = useState<string>('all');
   const [openActionId, setOpenActionId] = useState<string | null>(null);
   const actionsRef = useRef<HTMLTableCellElement | null>(null);
-
-  const canInviteMembers = sidebarData?.permissions.canInviteMembers ?? false;
-  const canManageMembers = canInviteMembers;
 
   const departments = useMemo(() => {
     const seen = new Map<string, string>();
@@ -119,7 +119,7 @@ export const MembersPage: React.FC = () => {
   };
 
   const handleRemove = async (member: WorkspaceMemberResponse) => {
-    const confirmed = window.confirm(`Remove ${memberName(member)} from this workspace?`);
+    const confirmed = await confirmDialog({ title: `Remove ${memberName(member)} from this workspace?`, tone: 'danger', confirmLabel: 'Remove' });
     if (!confirmed) return;
     try {
       await removeMember.mutateAsync(memberId(member));

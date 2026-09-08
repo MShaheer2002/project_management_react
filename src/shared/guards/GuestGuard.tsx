@@ -1,8 +1,13 @@
 import React from 'react';
 import { useUser } from '@clerk/clerk-react';
-import { Navigate, Outlet } from 'react-router-dom';
+import { Navigate, Outlet, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '@/app/stores/useAuthStore';
 import { TrussenAppLogo } from '@/assets/svg/TrussenAppLogo';
+
+function getSafeRedirect(value: string | null): string | null {
+  if (!value) return null;
+  return value.startsWith('/') && !value.startsWith('//') ? value : null;
+}
 
 /**
  * GuestGuard
@@ -10,6 +15,7 @@ import { TrussenAppLogo } from '@/assets/svg/TrussenAppLogo';
  * Protects public-only routes (login, signup, etc.) from already-authenticated users.
  *
  * If signed in:
+ *   - Has a `?redirect=` (e.g. an invite link that bounced through /login) → honor it first
  *   - Has workspace → redirect to /dashboard
  *   - No workspace  → redirect to /org-creation (must complete onboarding first)
  *
@@ -20,6 +26,7 @@ export const GuestGuard: React.FC = () => {
   const { isSignedIn, isLoaded } = useUser();
   const workspace = useAuthStore((s) => s.workspace);
   const authSyncStatus = useAuthStore((s) => s.authSyncStatus);
+  const [searchParams] = useSearchParams();
 
   // Clerk or backend workspace sync still loading — show loading state to prevent redirect flash
   if (!isLoaded || (isSignedIn && authSyncStatus !== 'ready')) {
@@ -35,6 +42,10 @@ export const GuestGuard: React.FC = () => {
 
   // Already signed in → send to dashboard or onboarding
   if (isSignedIn) {
+    const redirectTo = getSafeRedirect(searchParams.get('redirect'));
+    if (redirectTo) {
+      return <Navigate to={redirectTo} replace />;
+    }
     if (workspace) {
       return <Navigate to="/dashboard" replace />;
     }

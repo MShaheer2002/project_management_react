@@ -74,13 +74,16 @@ interface IssueStatusGroupProps {
   onAssignToCycle: (issueIds: string[]) => void;
   onIssuesLoaded?: (statusKey: string, issues: Issue[]) => void;
   /**
-   * Workspace-wide count for this status, read from the DB-trigger-maintained
-   * counter (see issue.service.ts's getStatusCounts) rather than a live query.
-   * Only meaningful when no extra filters are active — undefined otherwise, in
+   * Count for this status, read from a DB-trigger-maintained counter (see
+   * issue.service.ts's getStatusCounts) rather than a live query — workspace-wide,
+   * or scoped to one project's own counter when the view is scoped to a project.
+   * Only meaningful when no OTHER filter is active — undefined otherwise, in
    * which case nothing is shown while collapsed (no query is fired just to answer
    * "how many," matching the point of not loading anything until expanded).
    */
   persistedCount?: number;
+  /** Issue ids currently mid-bulk-status-change — their rows show a loading state instead of the status dropdown. */
+  pendingIssueIds?: Set<string>;
 }
 
 /**
@@ -106,6 +109,7 @@ export const IssueStatusGroup: React.FC<IssueStatusGroupProps> = ({
   onAssignToCycle,
   onIssuesLoaded,
   persistedCount,
+  pendingIssueIds,
 }) => {
   const query = useIssuesDirectory(
     { ...filters, status: status.key, sort: 'updatedAt:desc', limit: GROUP_PAGE_SIZE },
@@ -258,18 +262,20 @@ export const IssueStatusGroup: React.FC<IssueStatusGroupProps> = ({
             {items.map((issue) => {
               const assignee = issue.assignee;
               const isSelected = selectedIssueIds.includes(issue.id);
+              const isPending = pendingIssueIds?.has(issue.id) ?? false;
               return (
                 <div
                   key={issue.id}
                   onClick={() => onIssueSelect(issue.id)}
                   className={`grid grid-cols-[44px_40px_100px_1fr_120px_100px_150px_120px_44px] gap-4 border-t border-gray-100 px-5 py-3 transition-colors group dark:border-border-dark/50 ${
                     isSelected ? 'bg-primary/5 dark:bg-primary/10' : 'hover:bg-gray-50 dark:hover:bg-white/5'
-                  } cursor-pointer`}
+                  } cursor-pointer ${isPending ? 'opacity-60' : ''}`}
                 >
                   <div className="flex items-center justify-center" onClick={(event) => event.stopPropagation()}>
                     <input
                       type="checkbox"
                       checked={isSelected}
+                      disabled={isPending}
                       onChange={() => toggleIssueSelection(issue.id)}
                       className="h-4 w-4 rounded border-gray-300 bg-transparent text-primary focus:ring-primary/30"
                     />
@@ -287,13 +293,19 @@ export const IssueStatusGroup: React.FC<IssueStatusGroupProps> = ({
                     </div>
                   </div>
                   <div className="flex items-center" onClick={(event) => event.stopPropagation()}>
-                    <WorkflowStatusSelect
-                      value={issue.status}
-                      statuses={workspaceStatuses}
-                      onChange={(nextStatus) => {
-                        void onIssueUpdate(issue.id, nextStatus);
-                      }}
-                    />
+                    {isPending ? (
+                      <div className="flex items-center gap-1.5 text-xs text-gray-400">
+                        <Loader2 size={13} className="animate-spin" /> Updating...
+                      </div>
+                    ) : (
+                      <WorkflowStatusSelect
+                        value={issue.status}
+                        statuses={workspaceStatuses}
+                        onChange={(nextStatus) => {
+                          void onIssueUpdate(issue.id, nextStatus);
+                        }}
+                      />
+                    )}
                   </div>
                   <div className="flex items-center">
                     <TypeBadge type={issue.type || 'task'} />

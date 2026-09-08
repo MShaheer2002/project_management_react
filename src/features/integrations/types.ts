@@ -15,6 +15,11 @@ export interface IntegrationItem {
   providerMeta: Record<string, unknown> | null;
 }
 
+export interface IntegrationConnectionStatus {
+  provider: IntegrationProvider;
+  connected: boolean;
+}
+
 /** Static provider display metadata — not from API */
 export interface ProviderMeta {
   id: IntegrationProvider;

@@ -15,6 +15,7 @@ import {
 import { FolderOpenIcon } from '@/assets/svg/FolderOpenIcon';
 import { useAuthStore } from '@/app/stores/useAuthStore';
 import { useApp } from '@/AppContext';
+import { confirmDialog } from '@/app/stores/useConfirmStore';
 import { useViewUploadUrl } from '@features/upload';
 import { canManageDocuments } from '@shared/permissions';
 import { getApiErrorCode, getApiErrorMessage } from '@shared/services';
@@ -262,7 +263,7 @@ export const DocumentsPanel: React.FC<DocumentsPanelProps> = ({
   };
 
   const handleDelete = async (document: DocumentRecord) => {
-    if (!window.confirm(`Delete "${document.name}"?`)) return;
+    if (!(await confirmDialog({ title: `Delete "${document.name}"?`, tone: 'danger', confirmLabel: 'Delete' }))) return;
 
     setDeletingDocumentId(document.id);
     try {
@@ -312,7 +313,11 @@ export const DocumentsPanel: React.FC<DocumentsPanelProps> = ({
   };
 
   const handleDeleteFolder = async (folder: DocumentFolder) => {
-    if (!window.confirm(`Delete folder "${folder.name}" and all its contents?`)) return;
+    if (!(await confirmDialog({
+      title: `Delete folder "${folder.name}" and all its contents?`,
+      tone: 'danger',
+      confirmLabel: 'Delete',
+    }))) return;
 
     try {
       await deleteFolder.mutateAsync(folder.id);

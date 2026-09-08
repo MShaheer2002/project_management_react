@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import DOMPurify from 'dompurify';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   AlertCircle,
   Bug,
@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useAuthStore } from '@/app/stores/useAuthStore';
+import { confirmDialog } from '@/app/stores/useConfirmStore';
 import { useApp } from '@/AppContext';
 import { normalizeRichTextValue, RichTextEditor } from '@/components/RichTextEditor';
 import { PRIORITY_COLORS, ISSUE_TYPE_CONFIG } from '@/constants';
@@ -148,6 +149,8 @@ const renderRichText = (value: string | undefined, fallback: string) => {
 export const IssueDetailPage: React.FC = () => {
   const { issueId } = useParams<{ issueId: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const focusCommentId = searchParams.get('commentId') ?? undefined;
   const { showToast, setSelectedIssueId } = useApp();
   const currentUser = useAuthStore((state) => state.currentUser);
   const role = useAuthStore((state) => state.workspace?.role);
@@ -300,7 +303,7 @@ export const IssueDetailPage: React.FC = () => {
 
   const handleDelete = async () => {
     if (!canDelete) return;
-    const confirmed = window.confirm('Delete this issue permanently?');
+    const confirmed = await confirmDialog({ title: 'Delete this issue permanently?', tone: 'danger', confirmLabel: 'Delete' });
     if (!confirmed) return;
 
     try {
@@ -1169,7 +1172,7 @@ export const IssueDetailPage: React.FC = () => {
                   className="space-y-4"
                 >
                   {activeTab === 'comments' ? (
-                    <IssueCommentsThread issueId={issueResourceId} />
+                    <IssueCommentsThread issueId={issueResourceId} focusCommentId={focusCommentId} />
                   ) : (
                     <IssueActivityTimeline issueId={issueResourceId} />
                   )}

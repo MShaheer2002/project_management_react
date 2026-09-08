@@ -157,6 +157,9 @@ export const CreateIssuePage: React.FC = () => {
   const [aiPreviewSuggestions, setAiPreviewSuggestions] = useState<AiGeneratedIssue['previewSuggestions']>([]);
   const [newSubtask, setNewSubtask] = useState('');
   const labelRef = useRef<HTMLDivElement>(null);
+  // Set by AiIssueGenerator while an AI generation request is in flight, so
+  // Escape can cancel it instead of navigating away — see the shortcut effect.
+  const aiGenerationCancelRef = useRef<(() => void) | null>(null);
   const projectOptionsQuery = useProjectOptions({
     teamId: scopedTeamId,
     sort: 'name:asc',
@@ -241,6 +244,18 @@ export const CreateIssuePage: React.FC = () => {
   const effectiveTemplate = useMemo(() => {
     return activeTemplates.find((template) => template.issueType === type) ?? null;
   }, [activeTemplates, type]);
+
+  // `status` starts at the 'todo' literal above because workspaceStatuses isn't
+  // loaded yet at mount — apply the real computed default exactly once, as soon
+  // as it is. Declared before the draft-hydration and ?status= effects below so
+  // either of those still wins if applicable (same-commit setState calls apply
+  // in declaration order).
+  const hasAppliedDefaultStatusRef = useRef(false);
+  useEffect(() => {
+    if (hasAppliedDefaultStatusRef.current || workspaceStatuses.length === 0) return;
+    hasAppliedDefaultStatusRef.current = true;
+    setStatus(cycleId ? cyclePlanningDefaultStatus : defaultCreateStatus);
+  }, [workspaceStatuses, cycleId, cyclePlanningDefaultStatus, defaultCreateStatus]);
   const selectedLabels = selectedLabelIds
     .map((id) => labels.find((label) => label.id === id))
     .filter((label): label is IssueLabelRow => Boolean(label));
@@ -761,7 +776,11 @@ export const CreateIssuePage: React.FC = () => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') handleCreate();
-      if (e.key === 'Escape') navigate(-1);
+      // Escape no longer navigates away — it only cancels an in-flight
+      // Trussen AI generation, if one is running.
+      if (e.key === 'Escape' && aiGenerationCancelRef.current) {
+        aiGenerationCancelRef.current();
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
@@ -827,6 +846,9 @@ export const CreateIssuePage: React.FC = () => {
 
             {/* AI Issue Creator */}
             <AiIssueGenerator
+              onPendingChange={(cancel) => {
+                aiGenerationCancelRef.current = cancel;
+              }}
               onGenerated={(data: AiGeneratedIssue) => {
                 // Fill the form with AI-generated data
                 setTitle(data.title);

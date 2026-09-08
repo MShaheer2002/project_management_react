@@ -97,6 +97,58 @@ export const formatDocumentSize = (sizeBytes: number): string => {
   return `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`;
 };
 
+/**
+ * RFC4180-ish CSV parser: handles quoted fields, commas/newlines inside
+ * quotes, and escaped quotes (""). A naive `line.split(',')` breaks on any
+ * real-world CSV that quotes a field containing a comma.
+ */
+export const parseCsv = (text: string): string[][] => {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+
+    if (inQuotes) {
+      if (char === '"') {
+        if (text[i + 1] === '"') {
+          field += '"';
+          i++;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        field += char;
+      }
+      continue;
+    }
+
+    if (char === '"') {
+      inQuotes = true;
+    } else if (char === ',') {
+      row.push(field);
+      field = '';
+    } else if (char === '\n' || char === '\r') {
+      if (char === '\r' && text[i + 1] === '\n') i++;
+      row.push(field);
+      rows.push(row);
+      row = [];
+      field = '';
+    } else {
+      field += char;
+    }
+  }
+
+  if (field.length > 0 || row.length > 0) {
+    row.push(field);
+    rows.push(row);
+  }
+
+  return rows.filter((r) => !(r.length === 1 && r[0] === ''));
+};
+
 export const getDocumentTypeLabel = (document: Pick<DocumentRecord, 'fileName' | 'mimeType'>): string => {
   const extension = document.fileName.split('.').pop()?.toLowerCase() ?? '';
   if (extension && readableTypeMap[extension]) {

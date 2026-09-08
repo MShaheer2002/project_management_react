@@ -13,6 +13,8 @@ export const integrationQueryKeys = {
   all: ['integrations'] as const,
   list: (wId: string | undefined) =>
     [...integrationQueryKeys.all, 'list', wId] as const,
+  status: (wId: string | undefined) =>
+    [...integrationQueryKeys.all, 'status', wId] as const,
   githubSettings: (wId: string | undefined) =>
     [...integrationQueryKeys.all, 'github', 'settings', wId] as const,
   slackSettings: (wId: string | undefined) =>
@@ -32,6 +34,17 @@ export const useIntegrations = () => {
   return useQuery({
     queryKey: integrationQueryKeys.list(wId),
     queryFn: integrationService.list,
+    enabled: Boolean(wId),
+  });
+};
+
+// Connection status only (no config/connectedBy) — usable by any workspace
+// member, unlike useIntegrations() which requires ADMIN/OWNER.
+export const useIntegrationStatus = () => {
+  const wId = useAuthStore((s) => s.workspace?.id);
+  return useQuery({
+    queryKey: integrationQueryKeys.status(wId),
+    queryFn: integrationService.status,
     enabled: Boolean(wId),
   });
 };

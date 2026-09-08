@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Loader2,
   MessageSquare,
@@ -29,6 +29,7 @@ import type { IssueComment, IssueCommentAttachmentInput } from '../types';
 type IssueCommentsThreadProps = {
   issueId: string;
   compact?: boolean;
+  focusCommentId?: string;
 };
 
 type ThreadComment = IssueComment & { children: ThreadComment[] };
@@ -554,6 +555,7 @@ const CommentNode: React.FC<{
   compact?: boolean;
   currentUserId?: string;
   role?: string;
+  highlightedCommentId?: string | null;
   onReply: (parentId: string, body: string, attachments: IssueCommentAttachmentInput[]) => Promise<void>;
   onUpdate: (commentId: string, body: string, attachments?: IssueCommentAttachmentInput[]) => Promise<void>;
   onDelete: (commentId: string) => Promise<void>;
@@ -566,6 +568,7 @@ const CommentNode: React.FC<{
   compact,
   currentUserId,
   role,
+  highlightedCommentId,
   onReply,
   onUpdate,
   onDelete,
@@ -582,6 +585,7 @@ const CommentNode: React.FC<{
   const uploadFile = useUploadFile();
   const canEdit = currentUserId === comment.author.id;
   const canDelete = canEdit || role === 'admin' || role === 'owner';
+  const highlighted = highlightedCommentId === comment.id;
 
   const handleSaveEdit = async () => {
     const trimmed = editValue.trim();
@@ -628,8 +632,17 @@ const CommentNode: React.FC<{
   };
 
   return (
-    <div className={`${depth > 0 ? 'mt-3 border-l border-gray-200 pl-4 dark:border-border-dark' : ''}`}>
-      <div className="rounded-xl border border-gray-100 bg-white/80 p-3 shadow-sm dark:border-border-dark dark:bg-white/[0.01]">
+    <div
+      id={`comment-${comment.id}`}
+      className={`scroll-mt-24 ${depth > 0 ? 'mt-3 border-l border-gray-200 pl-4 dark:border-border-dark' : ''}`}
+    >
+      <div
+        className={`rounded-xl border p-3 shadow-sm transition-colors duration-500 dark:bg-white/[0.01] ${
+          highlighted
+            ? 'border-primary bg-primary/5 ring-2 ring-primary/30 dark:border-primary'
+            : 'border-gray-100 bg-white/80 dark:border-border-dark'
+        }`}
+      >
         {depth > 0 && (
           <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
             Reply
@@ -762,6 +775,7 @@ const CommentNode: React.FC<{
               compact={compact}
               currentUserId={currentUserId}
               role={role}
+              highlightedCommentId={highlightedCommentId}
               onReply={onReply}
               onUpdate={onUpdate}
               onDelete={onDelete}
@@ -823,7 +837,7 @@ const MediaViewer: React.FC<{
   );
 };
 
-export const IssueCommentsThread: React.FC<IssueCommentsThreadProps> = ({ issueId, compact }) => {
+export const IssueCommentsThread: React.FC<IssueCommentsThreadProps> = ({ issueId, compact, focusCommentId }) => {
   const { showToast } = useApp();
   const currentUserId = useAuthStore((state) => state.currentUser?.id);
   const role = useAuthStore((state) => state.workspace?.role);
@@ -835,12 +849,33 @@ export const IssueCommentsThread: React.FC<IssueCommentsThreadProps> = ({ issueI
   const addCommentAttachments = useAddIssueCommentAttachments(issueId);
   const removeCommentAttachment = useRemoveIssueCommentAttachment(issueId);
   const [viewerAttachment, setViewerAttachment] = useState<NonNullable<IssueComment['attachments']>[number] | null>(null);
+  const [highlightedCommentId, setHighlightedCommentId] = useState<string | null>(null);
+  const hasScrolledToFocusRef = useRef(false);
 
   const allComments = useMemo(
     () => commentsQuery.data?.pages.flatMap((page) => page.items) ?? [],
     [commentsQuery.data]
   );
   const threadedComments = useMemo(() => buildThread(allComments), [allComments]);
+
+  useEffect(() => {
+    if (!focusCommentId || hasScrolledToFocusRef.current) return;
+
+    const target = allComments.find((comment) => comment.id === focusCommentId);
+    if (target) {
+      hasScrolledToFocusRef.current = true;
+      requestAnimationFrame(() => {
+        document.getElementById(`comment-${focusCommentId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+      setHighlightedCommentId(focusCommentId);
+      const timeout = setTimeout(() => setHighlightedCommentId(null), 2500);
+      return () => clearTimeout(timeout);
+    }
+
+    if (commentsQuery.hasNextPage && !commentsQuery.isFetchingNextPage) {
+      commentsQuery.fetchNextPage();
+    }
+  }, [focusCommentId, allComments, commentsQuery]);
 
   const handleCreate = async (body: string, parentId?: string, attachments: IssueCommentAttachmentInput[] = []) => {
     try {
@@ -894,6 +929,7 @@ export const IssueCommentsThread: React.FC<IssueCommentsThreadProps> = ({ issueI
               compact={compact}
               currentUserId={currentUserId}
               role={role}
+              highlightedCommentId={highlightedCommentId}
               onReply={(parentId, body, attachments) => handleCreate(body, parentId, attachments)}
               onUpdate={handleUpdate}
               onDelete={handleDelete}

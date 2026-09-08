@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '@/app/stores/useAuthStore';
+import { confirmDialog } from '@/app/stores/useConfirmStore';
 import { useApp } from '@/AppContext';
 import { ISSUE_TYPE_CONFIG } from '@shared/constants';
 import { canManageTemplates } from '@shared/permissions';
@@ -308,7 +309,12 @@ const TemplatesListView: React.FC = () => {
   };
 
   const handleDelete = async (template: IssueTemplate) => {
-    if (!window.confirm(`Delete ${template.name}? Existing issues created from this template will not change.`)) return;
+    if (!(await confirmDialog({
+      title: `Delete ${template.name}?`,
+      message: 'Existing issues created from this template will not change.',
+      tone: 'danger',
+      confirmLabel: 'Delete',
+    }))) return;
     await deleteTemplate.mutateAsync(template.id);
     showToast('Template deleted.', 'success');
   };
@@ -1206,7 +1212,11 @@ const TemplateDetailView: React.FC<{ templateId: string }> = ({ templateId }) =>
 
   const handleDeactivate = async () => {
     if (!template) return;
-    if (!window.confirm(`Deactivate ${template.name}? It will remain available but will no longer be the active template.`)) return;
+    if (!(await confirmDialog({
+      title: `Deactivate ${template.name}?`,
+      message: 'It will remain available but will no longer be the active template.',
+      confirmLabel: 'Deactivate',
+    }))) return;
     try {
       await deactivateTemplate.mutateAsync(template.id);
       showToast('Template deactivated.', 'success');
@@ -1216,7 +1226,13 @@ const TemplateDetailView: React.FC<{ templateId: string }> = ({ templateId }) =>
   };
 
   const handleDelete = async () => {
-    if (!template || !window.confirm(`Delete ${template.name}? Existing generated issues will remain unchanged.`)) return;
+    if (!template) return;
+    if (!(await confirmDialog({
+      title: `Delete ${template.name}?`,
+      message: 'Existing generated issues will remain unchanged.',
+      tone: 'danger',
+      confirmLabel: 'Delete',
+    }))) return;
     await deleteTemplate.mutateAsync(template.id);
     showToast('Template deleted.', 'success');
     navigate('/templates');

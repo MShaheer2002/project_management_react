@@ -8,9 +8,13 @@ export const useGenerateIssue = () => {
   const showToast = useToastStore((s) => s.showToast);
 
   return useMutation({
-    mutationFn: (input: { prompt: string; resolvedAssigneeId?: string; resolvedProjectId?: string }) =>
+    mutationFn: (input: { prompt: string; resolvedAssigneeId?: string; resolvedProjectId?: string; signal?: AbortSignal }) =>
       aiService.generateIssue(input),
-    onError: (err: ApiAxiosError) => {
+    onError: (err: ApiAxiosError, variables) => {
+      // A user-initiated cancel (Escape while generating) surfaces here as an
+      // aborted request — not a failure, so it must not show an error toast.
+      if (variables.signal?.aborted) return;
+
       console.error('[AI Generation Error]', err.response?.data || err.message);
       const code = err.response?.data?.error?.code;
       if (code === 'AI_NOT_CONFIGURED') {

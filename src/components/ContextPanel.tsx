@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useAuthStore } from '@/app/stores/useAuthStore';
+import { confirmDialog } from '@/app/stores/useConfirmStore';
 import { useApp } from '@/AppContext';
 import { ISSUE_TYPE_CONFIG, PRIORITY_COLORS, STATUS_LABELS } from '@/constants';
 import { useEffectiveWorkflowStatuses } from '@shared/hooks/useEffectiveWorkflowStatuses';
@@ -131,7 +132,7 @@ export const ContextPanel: React.FC = () => {
 
   const handleDelete = async () => {
     if (!canDelete || !selectedIssueId) return;
-    const confirmed = window.confirm('Delete this issue permanently?');
+    const confirmed = await confirmDialog({ title: 'Delete this issue permanently?', tone: 'danger', confirmLabel: 'Delete' });
     if (!confirmed) return;
 
     try {

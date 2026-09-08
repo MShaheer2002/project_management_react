@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/app/stores/useAuthStore';
+import { confirmDialog } from '@/app/stores/useConfirmStore';
 import { useApp } from '../AppContext';
 import { PRIORITY_COLORS, ISSUE_TYPE_CONFIG } from '../constants';
 import { getStatusLabel, isStatusFinal } from '@shared/constants/statuses';
@@ -215,11 +216,11 @@ export const MyIssuesPage: React.FC = () => {
       return;
     }
 
-    const confirmed = window.confirm(
-      issueIds.length === 1
-        ? 'Delete this issue permanently?'
-        : `Delete ${issueIds.length} selected issues permanently?`
-    );
+    const confirmed = await confirmDialog({
+      title: issueIds.length === 1 ? 'Delete this issue permanently?' : `Delete ${issueIds.length} selected issues permanently?`,
+      tone: 'danger',
+      confirmLabel: 'Delete',
+    });
     if (!confirmed) return;
 
     try {
@@ -448,32 +449,46 @@ export const MyIssuesPage: React.FC = () => {
     </div>
   );
 
-  if (issuesQuery.isLoading && myIssues.length === 0) {
-    return (
-      <div className="flex h-full items-center justify-center text-sm text-gray-400">
-        Loading your issues...
-      </div>
-    );
-  }
-
-  if (issuesQuery.isError) {
-    return (
-      <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
-        <AlertCircle size={26} className="text-red-500" />
-        <div className="space-y-1">
-          <h1 className="text-lg font-bold">Failed to load issues</h1>
-          <p className="text-sm text-gray-400">The My Issues request did not complete.</p>
+  const renderContent = () => {
+    if (issuesQuery.isLoading && myIssues.length === 0) {
+      return (
+        <div className="flex h-full items-center justify-center text-sm text-gray-400">
+          Loading your issues...
         </div>
-        <button
-          type="button"
-          onClick={() => issuesQuery.refetch()}
-          className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white"
-        >
-          Retry
-        </button>
-      </div>
+      );
+    }
+
+    if (issuesQuery.isError) {
+      return (
+        <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+          <AlertCircle size={26} className="text-red-500" />
+          <div className="space-y-1">
+            <h1 className="text-lg font-bold">Failed to load issues</h1>
+            <p className="text-sm text-gray-400">The My Issues request did not complete.</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => issuesQuery.refetch()}
+            className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white"
+          >
+            Retry
+          </button>
+        </div>
+      );
+    }
+
+    return viewMode === 'list' ? (
+      renderListView()
+    ) : (
+      <KanbanBoard
+        issues={myIssues}
+        onIssueUpdate={handleIssueUpdate}
+        onNewIssue={() => {}}
+        hideNewIssueButton={true}
+        statuses={workspaceStatuses}
+      />
     );
-  }
+  };
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -631,17 +646,7 @@ export const MyIssuesPage: React.FC = () => {
       </div>
 
       <div className="flex-1 overflow-hidden flex flex-col">
-        {viewMode === 'list' ? (
-          renderListView()
-        ) : (
-          <KanbanBoard
-            issues={myIssues}
-            onIssueUpdate={handleIssueUpdate}
-            onNewIssue={() => {}}
-            hideNewIssueButton={true}
-            statuses={workspaceStatuses}
-          />
-        )}
+        {renderContent()}
 
         {issuesQuery.hasNextPage && (
           <div className="border-t border-gray-100 px-6 py-3 dark:border-border-dark">

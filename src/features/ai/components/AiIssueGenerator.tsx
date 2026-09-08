@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   AlertCircle,
   ArrowUp,
@@ -23,6 +23,12 @@ import type { AiGeneratedIssue, AiClarificationNeeded } from '../types';
 
 type AiIssueGeneratorProps = {
   onGenerated: (data: AiGeneratedIssue) => void;
+  /**
+   * Called with a cancel function while generation is in flight, and with
+   * null once it settles — lets a parent page-level shortcut (e.g. Escape)
+   * stop the request instead of navigating away mid-generation.
+   */
+  onPendingChange?: (cancel: (() => void) | null) => void;
 };
 
 // All supported @ mention types
@@ -37,13 +43,14 @@ const ENTITY_TYPES = [
   { mode: 'issue' as const, label: 'Issue', prefix: 'issue:', icon: Hash, hint: '@issue:ID or title', color: 'text-green-600 bg-green-100 dark:text-green-400 dark:bg-green-500/15' },
 ];
 
-export const AiIssueGenerator: React.FC<AiIssueGeneratorProps> = ({ onGenerated }) => {
+export const AiIssueGenerator: React.FC<AiIssueGeneratorProps> = ({ onGenerated, onPendingChange }) => {
   const [prompt, setPrompt] = useState('');
   const [isFocused, setIsFocused] = useState(false);
   const [clarification, setClarification] = useState<AiClarificationNeeded | null>(null);
   const [showSuccess, setShowSuccess] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const generateIssue = useGenerateIssue();
+  const abortRef = useRef<AbortController | null>(null);
 
   // Mention state
   const [mentionMode, setMentionMode] = useState<MentionMode>('idle');
@@ -182,11 +189,15 @@ export const AiIssueGenerator: React.FC<AiIssueGeneratorProps> = ({ onGenerated 
     setShowSuccess(false);
     closeMention();
 
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     try {
       const result = await generateIssue.mutateAsync({
         prompt: trimmed,
         resolvedAssigneeId,
         resolvedProjectId,
+        signal: controller.signal,
       });
 
       if (result.status === 'clarification_needed') {
@@ -201,9 +212,21 @@ export const AiIssueGenerator: React.FC<AiIssueGeneratorProps> = ({ onGenerated 
       setResolvedProjectId(undefined);
       setTimeout(() => setShowSuccess(false), 4000);
     } catch {
-      // Error handled by mutation onError
+      // Error handled by mutation onError (or silently ignored if cancelled)
+    } finally {
+      abortRef.current = null;
     }
   }, [prompt, generateIssue, onGenerated, resolvedAssigneeId, resolvedProjectId]);
+
+  // Report a cancel function up while generating, so a parent page-level
+  // shortcut (e.g. Escape) can stop the request instead of navigating away.
+  useEffect(() => {
+    if (!onPendingChange) return;
+    onPendingChange(generateIssue.isPending ? () => abortRef.current?.abort() : null);
+  }, [generateIssue.isPending, onPendingChange]);
+
+  // Abort on unmount so navigating away mid-generation doesn't leave it running.
+  useEffect(() => () => abortRef.current?.abort(), []);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     const isOpen = mentionMode !== 'idle';

@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '@/app/stores/useAuthStore';
+import { confirmDialog } from '@/app/stores/useConfirmStore';
 import { useApp } from '@/AppContext';
 import { MemberPerformancePanel } from '@/components/analytics/MemberPerformancePanel';
 import { ActivityPage } from '@features/activity';
@@ -99,7 +100,11 @@ export const TeamDetailPage: React.FC = () => {
     },
     { enabled: Boolean(id) }
   );
-  const recentDocsQuery = useTeamDocuments(id, { sort: 'createdAt:desc', limit: 5 }, { enabled: Boolean(id) });
+  const recentDocsQuery = useTeamDocuments(
+    id,
+    { sort: 'createdAt:desc', limit: 5 },
+    { enabled: Boolean(id) && role !== 'guest' },
+  );
   const recentDocs: DocumentRecord[] = recentDocsQuery.data?.pages.flatMap((page) => page.items).slice(0, 5) ?? [];
 
   const addMembers = useAddTeamMembers(id);
@@ -169,9 +174,16 @@ export const TeamDetailPage: React.FC = () => {
   }, [isLeadPickerOpen, isMemberPickerOpen]);
 
   const canManage = canManageTeam(role, currentUserId, team?.lead?.id ?? null);
-  const allowedTabs = canManage
-    ? ['overview', 'members', 'projects', 'docs', 'issues', 'activity', 'settings']
-    : ['overview', 'members', 'projects', 'docs', 'issues', 'activity'];
+  const canViewDocs = role !== 'guest';
+  const allowedTabs = [
+    'overview',
+    'members',
+    'projects',
+    ...(canViewDocs ? ['docs'] : []),
+    'issues',
+    'activity',
+    ...(canManage ? ['settings'] : []),
+  ];
   const rawTab = searchParams.get('tab');
   const activeTab = allowedTabs.includes(rawTab ?? '') ? (rawTab as (typeof allowedTabs)[number]) : 'overview';
 
@@ -190,14 +202,16 @@ export const TeamDetailPage: React.FC = () => {
     setSearchParams(next, { replace: true });
   };
 
-  const tabs = [
-    { id: 'overview', label: 'Overview', icon: <LayoutDashboard size={14} /> },
-    { id: 'members', label: 'Members', icon: <Users size={14} /> },
-    { id: 'projects', label: 'Projects', icon: <Layers size={14} /> },
-    { id: 'docs', label: 'Docs', icon: <FileText size={14} /> },
-    { id: 'issues', label: 'Issues', icon: <Filter size={14} /> },
-    { id: 'activity', label: 'Activity', icon: <Activity size={14} /> },
-  ] as const;
+  const tabs = (
+    [
+      { id: 'overview', label: 'Overview', icon: <LayoutDashboard size={14} /> },
+      { id: 'members', label: 'Members', icon: <Users size={14} /> },
+      { id: 'projects', label: 'Projects', icon: <Layers size={14} /> },
+      { id: 'docs', label: 'Docs', icon: <FileText size={14} /> },
+      { id: 'issues', label: 'Issues', icon: <Filter size={14} /> },
+      { id: 'activity', label: 'Activity', icon: <Activity size={14} /> },
+    ] as const
+  ).filter((tab) => tab.id !== 'docs' || canViewDocs);
   const selectedLead =
     leadOptions.find((option) => option.id === leadId) ??
     (team?.lead && team.lead.id === leadId
@@ -324,7 +338,12 @@ export const TeamDetailPage: React.FC = () => {
   };
 
   const handleDelete = async () => {
-    const confirmed = window.confirm(`Delete ${team.name}? This cannot be undone.`);
+    const confirmed = await confirmDialog({
+      title: `Delete ${team.name}?`,
+      message: 'This cannot be undone.',
+      tone: 'danger',
+      confirmLabel: 'Delete',
+    });
     if (!confirmed) return;
 
     try {
@@ -419,10 +438,13 @@ export const TeamDetailPage: React.FC = () => {
     </div>
   );
 
-  const renderOverview = () => (
+  const renderOverview = () => {
+    const showDocsCard = canViewDocs && recentDocs.length > 0;
+
+    return (
     <div className="space-y-6 p-6">
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2">
+        <div className={showDocsCard ? 'lg:col-span-2' : 'lg:col-span-3'}>
           <MemberPerformancePanel
             title="Member Performance"
             subtitle="Completion progress for issues assigned across this team."
@@ -433,6 +455,7 @@ export const TeamDetailPage: React.FC = () => {
           />
         </div>
 
+        {showDocsCard && (
         <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm dark:border-border-dark dark:bg-card-dark">
           <div className="mb-4 flex items-center justify-between">
             <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400">Docs</h3>
@@ -443,37 +466,30 @@ export const TeamDetailPage: React.FC = () => {
               View all
             </button>
           </div>
-          {recentDocs.length === 0 ? (
-            <div className="flex flex-col items-center py-6 text-center">
-              <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-gray-100 text-gray-300 dark:bg-white/5 dark:text-gray-600">
-                <FileText size={18} />
-              </div>
-              <p className="text-xs text-gray-400">No docs attached yet</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {recentDocs.map((doc) => (
-                <button
-                  key={doc.id}
-                  type="button"
-                  onClick={() => handleTabChange('docs')}
-                  className="flex w-full items-center gap-3 rounded-lg p-2 text-left transition-colors hover:bg-gray-50 dark:hover:bg-white/5"
-                >
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                    <FileText size={14} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold">{doc.name}</p>
-                    <p className="truncate text-[11px] text-gray-400">{doc.fileName}</p>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
+          <div className="space-y-2">
+            {recentDocs.map((doc) => (
+              <button
+                key={doc.id}
+                type="button"
+                onClick={() => handleTabChange('docs')}
+                className="flex w-full items-center gap-3 rounded-lg p-2 text-left transition-colors hover:bg-gray-50 dark:hover:bg-white/5"
+              >
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                  <FileText size={14} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold">{doc.name}</p>
+                  <p className="truncate text-[11px] text-gray-400">{doc.fileName}</p>
+                </div>
+              </button>
+            ))}
+          </div>
         </div>
+        )}
       </div>
     </div>
-  );
+    );
+  };
 
   const renderProjects = () => (
     <div className="grid grid-cols-1 gap-6 p-6 md:grid-cols-2 lg:grid-cols-3">

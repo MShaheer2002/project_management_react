@@ -16,13 +16,13 @@ export const useWorkspaceMembers = () => {
   });
 };
 
-export const useWorkspaceInvitations = () => {
+export const useWorkspaceInvitations = (options?: { enabled?: boolean }) => {
   const workspaceId = useAuthStore((s) => s.workspace?.id);
 
   return useQuery({
     queryKey: workspaceQueryKeys.invitations(workspaceId),
     queryFn: () => workspaceService.getInvitations(workspaceId!),
-    enabled: Boolean(workspaceId),
+    enabled: Boolean(workspaceId) && (options?.enabled ?? true),
   });
 };
 
