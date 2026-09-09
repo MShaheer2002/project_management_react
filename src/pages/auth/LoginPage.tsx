@@ -4,6 +4,7 @@ import { motion } from 'motion/react';
 import { Mail, Lock, Chrome, Github, Layers, Star } from 'lucide-react';
 import { useSignIn } from '@clerk/clerk-react';
 import { useToastStore } from '@/app/stores/useToastStore';
+import { useTenantStore } from '@/app/stores/useTenantStore';
 import { Logo, FormInput, SocialButton, Divider, SubmitButton, AuthFooter } from './shared';
 
 /**
@@ -18,6 +19,11 @@ export const LoginPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const showToast = useToastStore((s) => s.showToast);
   const redirectTo = getSafeRedirect(searchParams.get('redirect')) || '/dashboard';
+  // A company subdomain never offers signup — a new company is only ever
+  // created from the bare domain (routes.tsx already redirects /signup
+  // away here too; this hides the link itself so it's never even shown).
+  const tenantSlug = useTenantStore((s) => s.slug);
+  const tenantWorkspace = useTenantStore((s) => s.workspace);
 
   // Clerk's headless sign-in hook — handles all auth logic
   const { signIn, setActive, isLoaded } = useSignIn();
@@ -204,7 +210,9 @@ export const LoginPage: React.FC = () => {
             className="w-full max-w-[420px]"
           >
             <h1 className="text-2xl sm:text-3xl font-bold dark:text-white tracking-tight">Welcome back</h1>
-            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Sign in to your workspace to continue.</p>
+            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+              {tenantWorkspace ? `Sign in to ${tenantWorkspace.name} to continue.` : 'Sign in to your workspace to continue.'}
+            </p>
 
             {/* OAuth buttons — Google and GitHub */}
             <div className="mt-8 grid grid-cols-2 gap-3">
@@ -237,11 +245,14 @@ export const LoginPage: React.FC = () => {
               </div>
             </form>
 
-            {/* Link to signup */}
-            <p className="mt-8 text-center text-sm text-gray-500 dark:text-gray-400">
-              Don't have an account?{' '}
-              <button onClick={() => navigate('/signup')} className="text-primary font-semibold hover:underline">Sign up</button>
-            </p>
+            {/* Link to signup — hidden on a company subdomain, where a new
+                company can't be created (only the bare domain does that). */}
+            {!tenantSlug && (
+              <p className="mt-8 text-center text-sm text-gray-500 dark:text-gray-400">
+                Don't have an account?{' '}
+                <button onClick={() => navigate('/signup')} className="text-primary font-semibold hover:underline">Sign up</button>
+              </p>
+            )}
           </motion.div>
         </div>
 

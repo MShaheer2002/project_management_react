@@ -2,6 +2,7 @@ import React from 'react';
 import { useUser } from '@clerk/clerk-react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from '@/app/stores/useAuthStore';
+import { useTenantStore } from '@/app/stores/useTenantStore';
 import { MainLayout } from '@/app/layouts/MainLayout';
 import { AuthGuard } from '@shared/guards/AuthGuard';
 import { GuestGuard } from '@shared/guards/GuestGuard';
@@ -15,6 +16,7 @@ import {
   CreateWorkspacePage,
   SelectWorkspacePage,
   InvitePage,
+  NoWorkspaceAccessPage,
   ForgotPasswordPage,
   ResetPasswordPage,
   SSOCallbackPage,
@@ -57,7 +59,20 @@ const RootPage: React.FC = () => {
   const { isSignedIn, isLoaded } = useUser();
   const workspace = useAuthStore((s) => s.workspace);
   const authSyncStatus = useAuthStore((s) => s.authSyncStatus);
+  const tenantSlug = useTenantStore((s) => s.slug);
 
+  // The bare domain's root ALWAYS shows the landing page — signed in or
+  // not. Same pattern as atlassian.com or slack.com: the marketing domain
+  // never auto-drops a visitor into a specific tenant just because a
+  // session happens to exist: entering a workspace is an explicit action
+  // (signing in on /login, which — unlike this page — DOES redirect to the
+  // workspace's subdomain once resolved; see AuthSync's
+  // STAY_ON_BARE_DOMAIN_PATHS, which deliberately excludes /login).
+  if (!tenantSlug) {
+    return <MarketingPage />;
+  }
+
+  // On a company subdomain, root IS the app's entry point.
   if (!isLoaded || (isSignedIn && authSyncStatus !== 'ready')) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-white dark:bg-bg-dark">
@@ -69,8 +84,10 @@ const RootPage: React.FC = () => {
     );
   }
 
+  // A company subdomain never shows a signup form — see the /signup route
+  // below, which redirects here too.
   if (!isSignedIn) {
-    return <MarketingPage />;
+    return <LoginPage />;
   }
 
   if (workspace) {
@@ -86,6 +103,9 @@ export const AppRoutes: React.FC = () => {
   const role = workspace?.role;
   const isAdmin = role === 'owner' || role === 'admin';
   const isLead = isAdmin || role === 'member';
+  // Company subdomains are sign-in only — a new company is only ever
+  // created from the bare domain, so /signup redirects there instead.
+  const tenantSlug = useTenantStore((s) => s.slug);
 
   return (
     <Routes>
@@ -111,7 +131,7 @@ export const AppRoutes: React.FC = () => {
        */}
       <Route element={<GuestGuard />}>
         <Route path="/login" element={<LoginPage />} />
-        <Route path="/signup" element={<SignupPage />} />
+        <Route path="/signup" element={tenantSlug ? <Navigate to="/login" replace /> : <SignupPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
       </Route>
@@ -128,6 +148,7 @@ export const AppRoutes: React.FC = () => {
       <Route path="/org-creation" element={<CreateWorkspacePage />} />
       <Route path="/select-workspace" element={<SelectWorkspacePage />} />
       <Route path="/invite" element={<InvitePage />} />
+      <Route path="/no-access" element={<NoWorkspaceAccessPage />} />
 
       {/*
        * Authenticated routes — only accessible when signed in.

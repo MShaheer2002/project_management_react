@@ -2,6 +2,8 @@ import React, { useEffect } from 'react';
 import { useUser, useAuth } from '@clerk/clerk-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore, type AuthWorkspace } from '@/app/stores/useAuthStore';
+import { useTenantStore } from '@/app/stores/useTenantStore';
+import { buildWorkspaceUrl } from '@shared/utils/tenant';
 import axios from 'axios';
 import { authService } from '@features/auth';
 
@@ -38,13 +40,41 @@ const ONBOARDING_EXEMPT_PATHS = [
   '/invite',
   '/org-creation',         // Already on onboarding — don't redirect in a loop
   '/select-workspace',     // Workspace picker — user is choosing which workspace to enter
+  '/no-access',            // Signed in, but not a member of this subdomain's workspace
 ];
+
+/**
+ * Bare-domain paths where landing on a resolved workspace should NOT cross
+ * over to that workspace's subdomain — a different concern from
+ * ONBOARDING_EXEMPT_PATHS above (which is about not force-redirecting to
+ * /org-creation). "/" and "/marketing" are the landing page and must stay
+ * put — like atlassian.com or slack.com, the bare domain always shows
+ * marketing, signed in or not; typing it never drops you into a specific
+ * tenant. "/select-workspace" and "/invite" are mid-flow pages the user is
+ * deliberately on.
+ *
+ * "/login" is deliberately NOT here — successfully signing in on the bare
+ * domain is exactly when the redirect to the workspace's subdomain should
+ * happen (that's the whole point of a central login page in this pattern).
+ */
+const STAY_ON_BARE_DOMAIN_PATHS = ['/', '/marketing', '/select-workspace', '/invite', '/org-creation'];
 
 const setDevJwt = (token: string | null) => {
   if (!import.meta.env.DEV) return;
   const devWindow = window as Window & { __TRUSSEN_JWT__?: string | null };
   devWindow.__TRUSSEN_JWT__ = token;
   console.log('[AuthSync] JWT for Postman:', token);
+};
+
+/**
+ * Every workspace lives on its own subdomain — being on the bare domain
+ * with an active workspace resolved is a transitional state, not a place
+ * the dashboard should actually render. This is a full browser navigation
+ * (different origin), not a client-side route change.
+ */
+const goToWorkspaceSubdomain = (slug: string) => {
+  const currentPath = window.location.pathname + window.location.search;
+  window.location.href = buildWorkspaceUrl(slug, currentPath === '/' ? '/dashboard' : currentPath);
 };
 
 const setDevWorkspaceId = (workspaceId: string | null) => {
@@ -178,9 +208,36 @@ export const AuthSync: React.FC<{ children: React.ReactNode }> = ({ children }) 
       const isExemptPage = ONBOARDING_EXEMPT_PATHS.some(
         (p) => currentPath === p || (p !== '/' && currentPath.startsWith(p + '/'))
       );
+      const shouldStayOnBareDomain = STAY_ON_BARE_DOMAIN_PATHS.some(
+        (p) => currentPath === p || (p !== '/' && currentPath.startsWith(p + '/'))
+      );
+
+      // On a company subdomain, that subdomain's workspace is the ONLY
+      // acceptable one — never fall back to a persisted or "first"
+      // workspace the user happens to also belong to. Skips the normal
+      // persisted/single/multiple picking below entirely.
+      const tenantSlug = useTenantStore.getState().slug;
 
       if (backendWorkspaces !== null) {
         // Backend answered
+        if (tenantSlug) {
+          const tenantMatch = backendWorkspaces.find((ws) => ws.slug === tenantSlug);
+
+          if (tenantMatch) {
+            console.log('[AuthSync] Subdomain workspace match:', tenantMatch.name);
+            setDevWorkspaceId(tenantMatch.id);
+            if (!cancelled) setAuth(backendUser, tenantMatch);
+          } else {
+            // Signed in, but this account has no membership in the
+            // workspace this subdomain belongs to — do not silently switch
+            // them into a different one of their own workspaces instead.
+            console.log('[AuthSync] User has no membership in this subdomain\'s workspace');
+            if (!cancelled) setAuth(backendUser, null);
+            if (!isExemptPage && !cancelled) navigate('/no-access', { replace: true });
+          }
+          return;
+        }
+
         if (backendWorkspaces.length > 0) {
           // ✅ User HAS workspaces — pick the right one
           const match = persistedWorkspace
@@ -192,12 +249,18 @@ export const AuthSync: React.FC<{ children: React.ReactNode }> = ({ children }) 
             console.log('[AuthSync] Active workspace:', match.name, '| Role:', match.role);
             setDevWorkspaceId(match.id);
             if (!cancelled) setAuth(backendUser, match);
+            // Don't yank the user off the landing page or a page like
+            // /select-workspace they navigated to on purpose — but DO
+            // redirect from /login, since that's exactly what signing in
+            // on the central login page is supposed to do.
+            if (!shouldStayOnBareDomain && !cancelled) goToWorkspaceSubdomain(match.slug);
           } else if (backendWorkspaces.length === 1) {
             // Only one workspace — auto-select it
             const active = backendWorkspaces[0];
             console.log('[AuthSync] Single workspace, auto-selecting:', active.name);
             setDevWorkspaceId(active.id);
             if (!cancelled) setAuth(backendUser, active);
+            if (!shouldStayOnBareDomain && !cancelled) goToWorkspaceSubdomain(active.slug);
           } else {
             // Multiple workspaces but no persisted preference — let user choose.
             // Temporarily set first workspace so AuthGuard doesn't redirect to /org-creation,

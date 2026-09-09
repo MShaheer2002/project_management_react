@@ -1,23 +1,18 @@
 import { useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
-import { useAuth } from '@clerk/clerk-react';
 import { useAuthStore, type AuthWorkspace } from '@/app/stores/useAuthStore';
-import { realtimeSocket } from '@shared/services/realtimeSocket';
+import { buildWorkspaceUrl } from '@shared/utils/tenant';
 import type { WorkspaceResponse } from '../services/workspaceService';
 
 /**
- * Encapsulates the full workspace switch sequence:
- *   1. Update Zustand store (interceptor picks up new ID immediately)
- *   2. Disconnect + reconnect Socket.IO to new workspace room
- *   3. Invalidate ALL workspace-scoped React Query cache
- *   4. Navigate to /dashboard (deep routes reference workspace-specific entities)
+ * Switching workspaces means switching subdomains — <slug>.trussen.app is a
+ * different browser origin, so this ends in a real navigation
+ * (window.location), not a client-side route change. That full reload is
+ * what used to require manually reconnecting Socket.IO and invalidating
+ * every React Query cache entry by hand: a fresh origin gets a fresh
+ * instance of all of that for free, so there's nothing left to invalidate.
  */
 export function useWorkspaceSwitch() {
   const setWorkspace = useAuthStore((s) => s.setWorkspace);
-  const queryClient = useQueryClient();
-  const navigate = useNavigate();
-  const { getToken } = useAuth();
 
   const switchWorkspace = useCallback(
     async (workspace: WorkspaceResponse) => {
@@ -26,7 +21,6 @@ export function useWorkspaceSwitch() {
       // No-op if switching to the same workspace
       if (activeWorkspace?.id === workspace.id) return;
 
-      // 1. Update Zustand store
       const authWorkspace: AuthWorkspace = {
         id: workspace.id,
         name: workspace.name,
@@ -40,14 +34,9 @@ export function useWorkspaceSwitch() {
       };
       setWorkspace(authWorkspace);
 
-      // 2. Reconnect Socket.IO to new workspace
-      const token = await getToken();
-      if (token) {
-        realtimeSocket.disconnect();
-        realtimeSocket.connect({ token, workspaceId: workspace.id });
-      }
-
-      // 3. Clear workspace-scoped localStorage drafts
+      // Clear workspace-scoped localStorage drafts on THIS origin before
+      // leaving it — the destination subdomain has its own separate storage,
+      // so these would otherwise just sit here stale forever.
       const keysToRemove: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
@@ -55,14 +44,9 @@ export function useWorkspaceSwitch() {
       }
       keysToRemove.forEach((key) => localStorage.removeItem(key));
 
-      // 4. Invalidate all queries — stale data from old workspace must not leak
-      queryClient.invalidateQueries();
-
-      // 5. Navigate to dashboard — deep routes like /projects/abc123 reference
-      //    entities that don't exist in the new workspace
-      navigate('/dashboard', { replace: true });
+      window.location.href = buildWorkspaceUrl(workspace.slug, '/dashboard');
     },
-    [setWorkspace, queryClient, navigate, getToken],
+    [setWorkspace],
   );
 
   return switchWorkspace;

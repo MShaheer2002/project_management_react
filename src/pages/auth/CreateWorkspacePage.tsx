@@ -8,6 +8,7 @@ import { useAuthStore } from '@/app/stores/useAuthStore';
 import { useToastStore } from '@/app/stores/useToastStore';
 import { workspaceService, workspaceQueryKeys } from '@/features/workspace';
 import { sidebarQueryKeys } from '@features/sidebar';
+import { buildWorkspaceUrl } from '@shared/utils/tenant';
 import { Logo, FormInput, SubmitButton, AuthFooter } from './shared';
 import { TrussenAppLogo } from '@/assets/svg/TrussenAppLogo';
 
@@ -211,8 +212,10 @@ export const CreateWorkspacePage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: sidebarQueryKeys.all });
 
       showToast('Workspace created!', 'success', 'Welcome to Trussen');
-      console.log('[Workspace] Redirecting to /dashboard');
-      navigate('/dashboard');
+      // The new workspace lives at its own subdomain — a real browser
+      // navigation there, not a client-side route change on this domain.
+      console.log('[Workspace] Redirecting to', workspace.slug, 'subdomain');
+      window.location.href = buildWorkspaceUrl(workspace.slug, '/dashboard');
     } catch (err: any) {
       const status = err.response?.status;
       const errorCode = err.response?.data?.error?.code;

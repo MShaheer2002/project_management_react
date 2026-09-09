@@ -25,6 +25,11 @@ export default defineConfig(({mode}) => {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',
+      // Vite rejects requests with an unrecognized Host header by default (DNS
+      // rebinding protection) — without this, testing company subdomains locally
+      // (e.g. fissiontech.localhost:3000, which needs no /etc/hosts entry since
+      // browsers resolve *.localhost to 127.0.0.1 on their own) gets a 403.
+      allowedHosts: ['.localhost'],
     },
   };
 });

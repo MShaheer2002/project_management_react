@@ -6,6 +6,7 @@ import { Building2, Check, Loader2, Plus } from 'lucide-react';
 import { useAuthStore } from '@/app/stores/useAuthStore';
 import { useWorkspaces, useWorkspaceSwitch } from '@features/workspace';
 import type { WorkspaceResponse } from '@features/workspace';
+import { buildWorkspaceUrl } from '@shared/utils/tenant';
 import { Logo } from './shared';
 
 const ROLE_COLORS: Record<string, string> = {
@@ -43,7 +44,8 @@ export const SelectWorkspacePage: React.FC = () => {
 
   const handleSelect = async (ws: WorkspaceResponse) => {
     if (ws.id === activeWorkspace?.id) {
-      navigate('/dashboard', { replace: true });
+      // Already active — still a subdomain switch if picked from the bare domain.
+      window.location.href = buildWorkspaceUrl(ws.slug, '/dashboard');
       return;
     }
     await switchWorkspace(ws);
@@ -188,7 +190,7 @@ export const SelectWorkspacePage: React.FC = () => {
             <div className="mt-6 text-center">
               <button
                 type="button"
-                onClick={() => navigate('/dashboard', { replace: true })}
+                onClick={() => window.location.href = buildWorkspaceUrl(activeWorkspace.slug, '/dashboard')}
                 className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
               >
                 Back to {activeWorkspace.name}

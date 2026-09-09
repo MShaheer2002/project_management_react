@@ -1,4 +1,5 @@
 import { ClerkTokenBridge } from '@/app/providers/ClerkTokenBridge';
+import { TenantResolver } from '@/app/providers/TenantResolver';
 import { AuthSync } from '@/app/providers/AuthSync';
 import { RealtimeNotificationProvider } from '@/app/providers/RealtimeNotificationProvider';
 import { ThemeProvider } from '@/app/providers/ThemeProvider';
@@ -28,25 +29,29 @@ export default function App() {
   return (
     <ThemeProvider>
       <ClerkTokenBridge>
-        <AuthSync>
-          <RealtimeNotificationProvider>
-            <AppProvider>
-              {/* Root-level safety net for crashes outside MainLayout (auth pages, routing
-                  itself) — MainLayout has its own boundary around just the page Outlet so a
-                  crash there doesn't take down the sidebar too; this one is the last resort. */}
-              <ErrorBoundary
-                title="Trussen hit an unexpected error"
-                description="Reloading usually fixes this. If it keeps happening, let us know what you were doing right before it appeared."
-              >
-                <AppRoutes />
-              </ErrorBoundary>
-              {/* Global toast — renders on all pages (auth, dashboard, everywhere) */}
-              <ToastContainer />
-              {/* Global confirm dialog — replaces window.confirm() everywhere */}
-              <ConfirmDialogHost />
-            </AppProvider>
-          </RealtimeNotificationProvider>
-        </AuthSync>
+        {/* Resolves the company subdomain (if any) before anything else renders —
+            redirects off unknown ones, so AuthSync/routes never see a fake tenant. */}
+        <TenantResolver>
+          <AuthSync>
+            <RealtimeNotificationProvider>
+              <AppProvider>
+                {/* Root-level safety net for crashes outside MainLayout (auth pages, routing
+                    itself) — MainLayout has its own boundary around just the page Outlet so a
+                    crash there doesn't take down the sidebar too; this one is the last resort. */}
+                <ErrorBoundary
+                  title="Trussen hit an unexpected error"
+                  description="Reloading usually fixes this. If it keeps happening, let us know what you were doing right before it appeared."
+                >
+                  <AppRoutes />
+                </ErrorBoundary>
+                {/* Global toast — renders on all pages (auth, dashboard, everywhere) */}
+                <ToastContainer />
+                {/* Global confirm dialog — replaces window.confirm() everywhere */}
+                <ConfirmDialogHost />
+              </AppProvider>
+            </RealtimeNotificationProvider>
+          </AuthSync>
+        </TenantResolver>
       </ClerkTokenBridge>
     </ThemeProvider>
   );
