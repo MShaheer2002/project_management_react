@@ -67,7 +67,7 @@ const RootPage: React.FC = () => {
   // session happens to exist: entering a workspace is an explicit action
   // (signing in on /login, which — unlike this page — DOES redirect to the
   // workspace's subdomain once resolved; see AuthSync's
-  // STAY_ON_BARE_DOMAIN_PATHS, which deliberately excludes /login).
+  // REDIRECT_TO_SUBDOMAIN_PATHS, which is exactly ['/login']).
   if (!tenantSlug) {
     return <MarketingPage />;
   }

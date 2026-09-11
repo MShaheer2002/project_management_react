@@ -158,8 +158,13 @@ export const ResetPasswordPage: React.FC = () => {
         console.log('[ResetPassword] Password reset complete. Activating session.');
         await setActive({ session: result.createdSessionId });
         showToast('Password reset successfully!', 'success');
-        console.log('[ResetPassword] Redirecting to /dashboard');
-        navigate('/dashboard');
+        // Not /dashboard directly — this page only runs on the bare domain,
+        // and we don't know which of the user's workspace subdomains to send
+        // them to from here. /login already has that exact logic (GuestGuard
+        // + AuthSync redirect to the right one once signed in), so route
+        // through it instead of re-deriving the same decision here.
+        console.log('[ResetPassword] Redirecting to /login to resolve the right workspace');
+        navigate('/login');
       } else {
         console.log('[ResetPassword] Reset not complete. Status:', result.status);
       }

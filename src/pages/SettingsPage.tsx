@@ -8,7 +8,9 @@ import {
   useUpdateWorkspace,
   useWorkspaces,
   useWorkspaceDetails,
+  InviteDomainPolicyPicker,
 } from '@features/workspace';
+import type { InviteDomainPolicy } from '@features/workspace';
 import { workspaceService } from '@features/workspace/services/workspaceService';
 import { useThemeStore } from '@/app/stores/useThemeStore';
 import { useToastStore } from '@/app/stores/useToastStore';
@@ -21,6 +23,7 @@ import { useAuthStore } from '@/app/stores/useAuthStore';
 import { Modal } from '@shared/components/ui/Modal';
 import { WorkflowStatusesEditor, WorkflowAutomationEditor } from '@shared/components/workflow/WorkflowEditors';
 import { AiConnectionsPage } from '@/pages/AiConnectionsPage';
+import { buildWorkspaceUrl, buildLandingUrl } from '@shared/utils/tenant';
 
 interface SettingsSectionProps {
   title: string;
@@ -51,6 +54,46 @@ const SettingsItem: React.FC<SettingsItemProps> = ({ label, description, childre
   </div>
 );
 
+
+/** Dedicated invite domain policy editor — isolated mutation, same reasoning as UploadPolicySection below */
+const InviteDomainPolicySection: React.FC<{ workspaceId: string }> = ({ workspaceId }) => {
+  const showToast = useToastStore((s) => s.showToast);
+  const activeWorkspace = useAuthStore((s) => s.workspace);
+  const setWorkspace = useAuthStore((s) => s.setWorkspace);
+
+  const policyMutation = useMutation({
+    mutationFn: (vars: { policy: InviteDomainPolicy; domains: string[] }) =>
+      workspaceService.updateInviteDomainPolicy({
+        workspaceId,
+        inviteDomainPolicy: vars.policy,
+        allowedEmailDomains: vars.policy === 'CUSTOM' ? vars.domains : undefined,
+      }),
+    onSuccess: (updated) => {
+      const prev = useAuthStore.getState().workspace;
+      if (prev) {
+        setWorkspace({
+          ...prev,
+          inviteDomainPolicy: updated.inviteDomainPolicy,
+          allowedEmailDomains: updated.allowedEmailDomains,
+        });
+      }
+      showToast('Invite access updated', 'success');
+    },
+    onError: (err: ApiAxiosError) => {
+      showToast(err.response?.data?.error?.message || 'Failed to update invite access', 'error');
+    },
+  });
+
+  return (
+    <SettingsSection title="Invite Access">
+      <InviteDomainPolicyPicker
+        policy={activeWorkspace?.inviteDomainPolicy ?? 'ANY'}
+        domains={activeWorkspace?.allowedEmailDomains ?? []}
+        onChange={(policy, domains) => policyMutation.mutate({ policy, domains })}
+      />
+    </SettingsSection>
+  );
+};
 
 /** Dedicated upload policy selector — isolated mutation to avoid racing with "Save Changes" */
 const UploadPolicySection: React.FC<{ workspaceId: string }> = ({ workspaceId }) => {
@@ -305,7 +348,10 @@ export const SettingsPage: React.FC = () => {
           uploadPolicy: nextWorkspace.uploadPolicy,
         });
         showToast('Workspace deleted. Switched to another workspace.', 'success');
-        navigate('/dashboard', { replace: true });
+        // Currently sitting on the just-deleted workspace's own subdomain —
+        // the replacement lives on a DIFFERENT subdomain, a different
+        // origin, so this has to be a real navigation, not a route change.
+        window.location.href = buildWorkspaceUrl(nextWorkspace.slug, '/dashboard');
         return;
       }
 
@@ -313,7 +359,9 @@ export const SettingsPage: React.FC = () => {
         setAuth(currentUser, null);
       }
       showToast('Workspace deleted. Create a new workspace to continue.', 'success');
-      navigate('/org-creation', { replace: true });
+      // No workspace left — /org-creation only exists on the bare domain,
+      // and we're currently on the (now-deleted) workspace's own subdomain.
+      window.location.href = buildLandingUrl('/org-creation');
     } catch (error) {
       const apiError = error as ApiAxiosError;
       showToast(apiError.response?.data?.error?.message || 'Failed to delete workspace.', 'error');
@@ -464,6 +512,12 @@ export const SettingsPage: React.FC = () => {
                 </div>
               </SettingsItem>
             </SettingsSection>
+
+            {/* Invite domain policy: OWNER only — not admins. Deciding who can be
+                invited at all is a step above day-to-day member management. */}
+            {workspace && canDeleteWorkspace && (
+              <InviteDomainPolicySection workspaceId={workspace.id} />
+            )}
 
             {workspace && canManageSettings && (
               <UploadPolicySection workspaceId={workspace.id} />

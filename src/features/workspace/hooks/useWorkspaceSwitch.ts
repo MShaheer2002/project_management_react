@@ -31,6 +31,8 @@ export function useWorkspaceSwitch() {
         customStatuses: workspace.customStatuses,
         workflowAutomation: workspace.workflowAutomation,
         uploadPolicy: workspace.uploadPolicy,
+        inviteDomainPolicy: workspace.inviteDomainPolicy,
+        allowedEmailDomains: workspace.allowedEmailDomains,
       };
       setWorkspace(authWorkspace);
 

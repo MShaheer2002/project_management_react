@@ -5,5 +5,6 @@ export { CreateWorkspacePage } from './CreateWorkspacePage';
 export { SelectWorkspacePage } from './SelectWorkspacePage';
 export { InvitePage } from './InvitePage';
 export { NoWorkspaceAccessPage } from './NoWorkspaceAccessPage';
+export { WorkspaceNotFoundPage } from './WorkspaceNotFoundPage';
 export { ForgotPasswordPage, ResetPasswordPage } from './ForgotPasswordPage';
 export { SSOCallbackPage } from './SSOCallbackPage';

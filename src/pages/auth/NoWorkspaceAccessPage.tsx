@@ -2,6 +2,7 @@ import React from 'react';
 import { useAuth, useUser } from '@clerk/clerk-react';
 import { ShieldAlert } from 'lucide-react';
 import { useTenantStore } from '@/app/stores/useTenantStore';
+import { useToastStore } from '@/app/stores/useToastStore';
 import { Logo, AuthFooter } from './shared';
 
 /**
@@ -18,6 +19,15 @@ export const NoWorkspaceAccessPage: React.FC = () => {
   const { signOut } = useAuth();
   const { user } = useUser();
   const workspace = useTenantStore((s) => s.workspace);
+
+  const handleSignOut = async () => {
+    try {
+      await signOut({ redirectUrl: '/login' });
+    } catch (error) {
+      console.error('[NoWorkspaceAccessPage] Sign out failed:', error);
+      useToastStore.getState().showToast('Failed to sign out. Please try again.', 'error');
+    }
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-white dark:bg-bg-dark">
@@ -40,7 +50,7 @@ export const NoWorkspaceAccessPage: React.FC = () => {
           </p>
 
           <button
-            onClick={() => signOut({ redirectUrl: '/login' })}
+            onClick={handleSignOut}
             className="mt-6 w-full h-11 rounded-xl bg-primary text-white text-sm font-semibold hover:opacity-90 transition-opacity"
           >
             Sign out and try a different account

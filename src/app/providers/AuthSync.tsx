@@ -4,60 +4,24 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore, type AuthWorkspace } from '@/app/stores/useAuthStore';
 import { useTenantStore } from '@/app/stores/useTenantStore';
 import { buildWorkspaceUrl } from '@shared/utils/tenant';
+import { getSafeRedirectPath } from '@shared/utils/safeRedirect';
+import { decideWorkspaceDestination, isOnboardingExempt } from '@/app/auth/workspaceDecision';
 import axios from 'axios';
 import { authService } from '@features/auth';
 
 /**
  * AuthSync
  *
- * Syncs Clerk auth state → Zustand auth store on every app load.
+ * Syncs Clerk auth state → Zustand auth store on every app load, then hands
+ * the result to decideWorkspaceDestination (app/auth/workspaceDecision.ts)
+ * for the actual "where should this user end up" decision — this file's
+ * job is fetching the data that decision needs and executing whatever it
+ * returns (set the active workspace, and navigate if the decision calls
+ * for it), not deciding the routing logic itself.
  *
  * CRITICAL FLOW — new user onboarding:
  *   Signup → Verify OTP → /org-creation (workspace) → /dashboard
- *
- * The workspace check (GET /workspaces) runs on every load:
- * - If user has workspaces → set active workspace, allow dashboard
- * - If user has NO workspaces → FORCE redirect to /org-creation
- *   (user CANNOT reach dashboard without a workspace)
- *
- * This redirect happens REGARDLESS of where the user tries to navigate.
- * The only pages exempt from this redirect are listed in ONBOARDING_EXEMPT_PATHS.
  */
-
-/**
- * Paths where we do NOT redirect to /org-creation even if no workspace exists.
- * These are: public pages, auth flow pages, and the onboarding page itself.
- */
-const ONBOARDING_EXEMPT_PATHS = [
-  '/',              // Marketing landing page
-  '/marketing',     // Marketing alias
-  '/login',
-  '/signup',
-  '/email-verification',
-  '/forgot-password',
-  '/reset-password',
-  '/sso-callback',
-  '/invite',
-  '/org-creation',         // Already on onboarding — don't redirect in a loop
-  '/select-workspace',     // Workspace picker — user is choosing which workspace to enter
-  '/no-access',            // Signed in, but not a member of this subdomain's workspace
-];
-
-/**
- * Bare-domain paths where landing on a resolved workspace should NOT cross
- * over to that workspace's subdomain — a different concern from
- * ONBOARDING_EXEMPT_PATHS above (which is about not force-redirecting to
- * /org-creation). "/" and "/marketing" are the landing page and must stay
- * put — like atlassian.com or slack.com, the bare domain always shows
- * marketing, signed in or not; typing it never drops you into a specific
- * tenant. "/select-workspace" and "/invite" are mid-flow pages the user is
- * deliberately on.
- *
- * "/login" is deliberately NOT here — successfully signing in on the bare
- * domain is exactly when the redirect to the workspace's subdomain should
- * happen (that's the whole point of a central login page in this pattern).
- */
-const STAY_ON_BARE_DOMAIN_PATHS = ['/', '/marketing', '/select-workspace', '/invite', '/org-creation'];
 
 const setDevJwt = (token: string | null) => {
   if (!import.meta.env.DEV) return;
@@ -71,10 +35,17 @@ const setDevJwt = (token: string | null) => {
  * with an active workspace resolved is a transitional state, not a place
  * the dashboard should actually render. This is a full browser navigation
  * (different origin), not a client-side route change.
+ *
+ * This only ever fires from /login (see shouldCrossToSubdomain) — so the
+ * one thing worth preserving across the jump isn't the current path
+ * itself (that's always literally "/login", not a useful destination),
+ * it's whatever `?redirect=` AuthGuard or the 401 handler attached to get
+ * the user to /login in the first place.
  */
 const goToWorkspaceSubdomain = (slug: string) => {
-  const currentPath = window.location.pathname + window.location.search;
-  window.location.href = buildWorkspaceUrl(slug, currentPath === '/' ? '/dashboard' : currentPath);
+  const params = new URLSearchParams(window.location.search);
+  const destination = getSafeRedirectPath(params.get('redirect')) ?? '/dashboard';
+  window.location.href = buildWorkspaceUrl(slug, destination);
 };
 
 const setDevWorkspaceId = (workspaceId: string | null) => {
@@ -126,9 +97,16 @@ export const AuthSync: React.FC<{ children: React.ReactNode }> = ({ children }) 
     const syncUser = async () => {
       const token = await getToken();
       if (!token) {
+        // isSignedIn is still true here (Clerk hasn't signed them out) but
+        // no token was available — without markReady(), the guards' loading
+        // check (isSignedIn && authSyncStatus !== 'ready') would spin
+        // forever, since nothing else re-triggers this effect.
         setDevJwt(null);
         setDevWorkspaceId(null);
-        if (!cancelled) clear();
+        if (!cancelled) {
+          clear();
+          markReady();
+        }
         return;
       }
       setDevJwt(token);
@@ -195,6 +173,8 @@ export const AuthSync: React.FC<{ children: React.ReactNode }> = ({ children }) 
             customStatuses: ws.customStatuses || undefined,
             workflowAutomation: ws.workflowAutomation || undefined,
             uploadPolicy: ws.uploadPolicy || 'BOTH',
+            inviteDomainPolicy: ws.inviteDomainPolicy || 'ANY',
+            allowedEmailDomains: ws.allowedEmailDomains || [],
           }));
           console.log('[AuthSync] GET /workspaces returned', backendWorkspaces?.length, 'workspace(s)');
         }
@@ -202,102 +182,54 @@ export const AuthSync: React.FC<{ children: React.ReactNode }> = ({ children }) 
         console.log('[AuthSync] Backend /workspaces unreachable. Using persisted workspace if available.');
       }
 
-      // ── Step 3: Decide — workspace exists or onboarding needed ──
+      // ── Step 3: Decide — delegate to the centralized decision function ──
       const persistedWorkspace = useAuthStore.getState().workspace;
       const currentPath = window.location.pathname;
-      const isExemptPage = ONBOARDING_EXEMPT_PATHS.some(
-        (p) => currentPath === p || (p !== '/' && currentPath.startsWith(p + '/'))
-      );
-      const shouldStayOnBareDomain = STAY_ON_BARE_DOMAIN_PATHS.some(
-        (p) => currentPath === p || (p !== '/' && currentPath.startsWith(p + '/'))
-      );
-
-      // On a company subdomain, that subdomain's workspace is the ONLY
-      // acceptable one — never fall back to a persisted or "first"
-      // workspace the user happens to also belong to. Skips the normal
-      // persisted/single/multiple picking below entirely.
       const tenantSlug = useTenantStore.getState().slug;
+      const isExemptPage = isOnboardingExempt(currentPath);
 
-      if (backendWorkspaces !== null) {
-        // Backend answered
-        if (tenantSlug) {
-          const tenantMatch = backendWorkspaces.find((ws) => ws.slug === tenantSlug);
+      const decision = decideWorkspaceDestination({
+        tenantSlug,
+        backendWorkspaces,
+        persistedWorkspace,
+        currentPath,
+      });
 
-          if (tenantMatch) {
-            console.log('[AuthSync] Subdomain workspace match:', tenantMatch.name);
-            setDevWorkspaceId(tenantMatch.id);
-            if (!cancelled) setAuth(backendUser, tenantMatch);
-          } else {
-            // Signed in, but this account has no membership in the
-            // workspace this subdomain belongs to — do not silently switch
-            // them into a different one of their own workspaces instead.
-            console.log('[AuthSync] User has no membership in this subdomain\'s workspace');
-            if (!cancelled) setAuth(backendUser, null);
-            if (!isExemptPage && !cancelled) navigate('/no-access', { replace: true });
-          }
-          return;
+      switch (decision.type) {
+        case 'ENTER_WORKSPACE': {
+          console.log('[AuthSync] Active workspace:', decision.workspace.name, '| Role:', decision.workspace.role);
+          setDevWorkspaceId(decision.workspace.id);
+          if (!cancelled) setAuth(backendUser, decision.workspace);
+          if (decision.crossToSubdomain && !cancelled) goToWorkspaceSubdomain(decision.workspace.slug);
+          break;
         }
 
-        if (backendWorkspaces.length > 0) {
-          // ✅ User HAS workspaces — pick the right one
-          const match = persistedWorkspace
-            ? backendWorkspaces.find((ws) => ws.id === persistedWorkspace.id)
-            : null;
-
-          if (match) {
-            // Persisted workspace still valid — use it
-            console.log('[AuthSync] Active workspace:', match.name, '| Role:', match.role);
-            setDevWorkspaceId(match.id);
-            if (!cancelled) setAuth(backendUser, match);
-            // Don't yank the user off the landing page or a page like
-            // /select-workspace they navigated to on purpose — but DO
-            // redirect from /login, since that's exactly what signing in
-            // on the central login page is supposed to do.
-            if (!shouldStayOnBareDomain && !cancelled) goToWorkspaceSubdomain(match.slug);
-          } else if (backendWorkspaces.length === 1) {
-            // Only one workspace — auto-select it
-            const active = backendWorkspaces[0];
-            console.log('[AuthSync] Single workspace, auto-selecting:', active.name);
-            setDevWorkspaceId(active.id);
-            if (!cancelled) setAuth(backendUser, active);
-            if (!shouldStayOnBareDomain && !cancelled) goToWorkspaceSubdomain(active.slug);
-          } else {
-            // Multiple workspaces but no persisted preference — let user choose.
-            // Temporarily set first workspace so AuthGuard doesn't redirect to /org-creation,
-            // then navigate to the picker page where user picks the one they want.
-            const fallback = backendWorkspaces[0];
-            console.log('[AuthSync] Multiple workspaces, no preference — showing picker (temp:', fallback.name, ')');
-            setDevWorkspaceId(fallback.id);
-            if (!cancelled) setAuth(backendUser, fallback);
-            if (!isExemptPage) {
-              if (!cancelled) navigate('/select-workspace', { replace: true });
-            }
-          }
-        } else {
-          // ❌ User has ZERO workspaces — MUST create one before using the app
-          console.log('[AuthSync] User has no workspaces (confirmed by backend)');
-          setDevWorkspaceId(null);
+        case 'NO_ACCESS': {
+          // Signed in, but this account has no membership in the workspace
+          // this subdomain belongs to — do not silently switch them into a
+          // different one of their own workspaces instead.
+          console.log('[AuthSync] User has no membership in this subdomain\'s workspace');
           if (!cancelled) setAuth(backendUser, null);
-          if (!isExemptPage) {
-            console.log('[AuthSync] REDIRECTING to /org-creation (no workspace)');
-            if (!cancelled) navigate('/org-creation', { replace: true });
-          }
+          if (!isExemptPage && !cancelled) navigate('/no-access', { replace: true });
+          break;
         }
-      } else {
-        // Backend unreachable — check persisted workspace
-        if (persistedWorkspace) {
-          console.log('[AuthSync] Using persisted workspace:', persistedWorkspace.name);
-          setDevWorkspaceId(persistedWorkspace.id);
-          if (!cancelled) setAuth(backendUser, persistedWorkspace);
-        } else {
-          // No backend, no persisted workspace — onboarding required
-          console.log('[AuthSync] No workspace found anywhere (backend down, nothing persisted)');
+
+        case 'SELECT_WORKSPACE': {
+          // Temporarily set the first workspace so AuthGuard doesn't bounce
+          // to /org-creation while the picker page itself loads.
+          console.log('[AuthSync] Multiple workspaces, no preference — showing picker (temp:', decision.temporaryWorkspace.name, ')');
+          setDevWorkspaceId(decision.temporaryWorkspace.id);
+          if (!cancelled) setAuth(backendUser, decision.temporaryWorkspace);
+          if (!isExemptPage && !cancelled) navigate('/select-workspace', { replace: true });
+          break;
+        }
+
+        case 'ONBOARD': {
+          console.log('[AuthSync] No workspace anywhere — onboarding required');
           setDevWorkspaceId(null);
           if (!cancelled) setAuth(backendUser, null);
-          if (!isExemptPage) {
-            console.log('[AuthSync] REDIRECTING to /org-creation (no workspace, offline)');
-            if (!cancelled) navigate('/org-creation', { replace: true });
-          }
+          if (!isExemptPage && !cancelled) navigate('/org-creation', { replace: true });
+          break;
         }
       }
     };

@@ -34,6 +34,7 @@ import { useAuthStore } from '@/app/stores/useAuthStore';
 import { useApp } from '../AppContext';
 import { useSidebarData, type SidebarPermissions, type SidebarTeam } from '@features/sidebar';
 import { useWorkspaces } from '@features/workspace';
+import { buildLandingUrl } from '@shared/utils/tenant';
 
 const focusMinimal = 'outline-none focus:outline-none focus-visible:outline-none focus-visible:ring-0';
 
@@ -159,12 +160,22 @@ export const Sidebar: React.FC = () => {
   const { signOut } = useAuth();
 
   /**
-   * Logout handler — clears Zustand store + Clerk session, then redirects.
+   * Logout handler. Deliberately does NOT clear the local auth store before
+   * signOut() resolves — if it fails (network blip), the Clerk session is
+   * still actually active, so clearing local state first would make the UI
+   * claim "signed out" while the server disagrees. On success, Clerk's own
+   * redirect to /login is a full navigation (no router integration is
+   * configured on ClerkProvider), which naturally resets all local state
+   * anyway.
    */
   const handleLogout = async () => {
     console.log('[Sidebar] Logging out...');
-    useAuthStore.getState().clear();          // Clear Zustand auth state
-    await signOut({ redirectUrl: '/login' }); // Clerk sign-out + redirect
+    try {
+      await signOut({ redirectUrl: '/login' });
+    } catch (error) {
+      console.error('[Sidebar] Sign out failed:', error);
+      showToast('Failed to sign out. Please try again.', 'error');
+    }
   };
 
   const isAdmin = displayUser?.role === 'owner' || displayUser?.role === 'admin';
@@ -234,10 +245,12 @@ export const Sidebar: React.FC = () => {
 
   const handleSwitchWorkspace = () => {
     setIsWorkspaceMenuOpen(false);
+    // This sidebar is only ever rendered on a workspace's own subdomain —
+    // both destinations are bare-domain-only pages, a different origin.
     if (allWorkspaces && allWorkspaces.length > 1) {
-      navigate('/select-workspace');
+      window.location.href = buildLandingUrl('/select-workspace');
     } else {
-      navigate('/org-creation?new=true');
+      window.location.href = buildLandingUrl('/org-creation?new=true');
     }
   };
 

@@ -1,7 +1,21 @@
 import type { AxiosInstance, AxiosError } from 'axios';
 import { useAuthStore } from '@/app/stores/useAuthStore';
 import { useToastStore } from '@/app/stores/useToastStore';
+import { getTenantSlugFromHost, buildLandingUrl } from '@shared/utils/tenant';
 import type { ApiError } from '../types';
+
+/**
+ * /org-creation only exists on the bare domain ("create a new company" is
+ * never a tenant-subdomain action). If this fires while sitting on
+ * acme.trussen.app, a plain relative redirect would land on
+ * acme.trussen.app/org-creation instead — a real navigation to the bare
+ * domain is needed here, same reasoning as everywhere else workspace
+ * context crosses an origin boundary.
+ */
+function goToOrgCreation() {
+  if (typeof window === 'undefined') return;
+  window.location.href = getTenantSlugFromHost() ? buildLandingUrl('/org-creation') : '/org-creation';
+}
 
 /**
  * Global error response interceptor.
@@ -49,7 +63,11 @@ export function attachErrorInterceptor(instance: AxiosInstance) {
         case 401:
           useAuthStore.getState().clear();
           if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
-            window.location.href = '/login';
+            // Preserve where they were (e.g. mid-session expiry on
+            // company.trussen.app/projects/123) so GuestGuard can send them
+            // back after re-authenticating, same mechanism AuthGuard uses.
+            const returnTo = `${window.location.pathname}${window.location.search}`;
+            window.location.href = `/login?redirect=${encodeURIComponent(returnTo)}`;
           }
           break;
 
@@ -61,9 +79,7 @@ export function attachErrorInterceptor(instance: AxiosInstance) {
               useAuthStore.getState().currentUser!,
               null
             );
-            if (typeof window !== 'undefined') {
-              window.location.href = '/org-creation';
-            }
+            goToOrgCreation();
           } else if (errorCode === 'FREE_PLAN_ACCESS_LIMIT_EXCEEDED') {
             // Still a member, just over the Free plan's seat cap — don't clear
             // the workspace or redirect to onboarding, just explain why every
@@ -82,9 +98,7 @@ export function attachErrorInterceptor(instance: AxiosInstance) {
               useAuthStore.getState().currentUser!,
               null
             );
-            if (typeof window !== 'undefined') {
-              window.location.href = '/org-creation';
-            }
+            goToOrgCreation();
           }
           // Don't toast generic 404s — let pages handle "not found" UI
           break;

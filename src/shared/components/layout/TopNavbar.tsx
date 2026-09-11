@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@clerk/clerk-react';
 import { useAuthStore } from '@/app/stores/useAuthStore';
 import { useThemeStore } from '@/app/stores/useThemeStore';
+import { useToastStore } from '@/app/stores/useToastStore';
 import { useUIStore } from '@/app/stores/useUIStore';
 import { AnimatePresence, motion } from 'motion/react';
 import {
@@ -36,12 +37,25 @@ export const TopNavbar: React.FC = () => {
   const unreadCount = unreadNotifications.data?.unread ?? 0;
   const unreadBadgeLabel = unreadCount > 9 ? '9+' : String(unreadCount);
 
-  /** Logout — clear store + Clerk sign-out */
+  /**
+   * Logout — Clerk sign-out, then its own redirect to /login (a full
+   * navigation; no router integration is configured on ClerkProvider, so
+   * this always reloads, which is what naturally resets local state).
+   * Deliberately does NOT clear the local auth store before signOut()
+   * resolves: if the request fails (network blip), the Clerk session is
+   * still actually active — clearing local state first would make the UI
+   * claim "signed out" while the server disagrees, which is worse than
+   * just telling the user it failed and leaving them as they were.
+   */
   const handleLogout = async () => {
     console.log('[TopNavbar] Logging out...');
     setUserMenuOpen(false);
-    useAuthStore.getState().clear();
-    await signOut({ redirectUrl: '/login' });
+    try {
+      await signOut({ redirectUrl: '/login' });
+    } catch (error) {
+      console.error('[TopNavbar] Sign out failed:', error);
+      useToastStore.getState().showToast('Failed to sign out. Please try again.', 'error');
+    }
   };
 
   useEffect(() => {

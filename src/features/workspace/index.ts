@@ -16,6 +16,7 @@ export {
   useWorkspaceMembers,
 } from './hooks/useWorkspaceMembers';
 export { WorkspaceSwitcher } from './components/WorkspaceSwitcher';
+export { InviteDomainPolicyPicker } from './components/InviteDomainPolicyPicker';
 export type { WorkspaceMenuItem } from './components/WorkspaceSwitcher';
 export type {
   CreateWorkspaceInput,
@@ -23,8 +24,10 @@ export type {
   InvitationAcceptResponse,
   InvitationResolveResponse,
   InvitationRole,
+  InviteDomainPolicy,
   RemoveMemberInput,
   SendInvitationInput,
+  UpdateInviteDomainPolicyInput,
   UpdateMemberRoleInput,
   UpdateWorkspaceInput,
   WorkspaceInvitationResponse,

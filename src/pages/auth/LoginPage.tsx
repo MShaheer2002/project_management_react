@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { Mail, Lock, Chrome, Github, Layers, Star } from 'lucide-react';
 import { useSignIn } from '@clerk/clerk-react';
@@ -16,9 +16,7 @@ import { Logo, FormInput, SocialButton, Divider, SubmitButton, AuthFooter } from
  */
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
   const showToast = useToastStore((s) => s.showToast);
-  const redirectTo = getSafeRedirect(searchParams.get('redirect')) || '/dashboard';
   // A company subdomain never offers signup — a new company is only ever
   // created from the bare domain (routes.tsx already redirects /signup
   // away here too; this hides the link itself so it's never even shown).
@@ -55,9 +53,15 @@ export const LoginPage: React.FC = () => {
       if (result.status === 'complete') {
         console.log('[Login] Sign-in complete. Activating session:', result.createdSessionId);
         await setActive({ session: result.createdSessionId });
-        console.log('[Login] Session activated. Redirecting to:', redirectTo);
-        // AuthSync will detect the session and populate the store
-        navigate(redirectTo);
+        // Deliberately no navigate() here. Clerk's isSignedIn flips true on
+        // the NEXT render, still on /login — that's what lets AuthSync's
+        // effect see currentPath === '/login' and cross to the right
+        // workspace subdomain. Navigating away ourselves first would win
+        // the race against that effect and land on bare-domain /dashboard
+        // instead (exactly the bug this comment is here to prevent someone
+        // from reintroducing). GuestGuard shows a loading state in the
+        // meantime — see its `isSignedIn` branch.
+        console.log('[Login] Session activated — handing off to AuthSync/GuestGuard for routing.');
       } else {
         console.log('[Login] Sign-in not complete. Status:', result.status);
       }
@@ -83,8 +87,14 @@ export const LoginPage: React.FC = () => {
     try {
       await signIn.authenticateWithRedirect({
         strategy: provider,
-        redirectUrl: '/sso-callback',        // Clerk processes the OAuth code here
-        redirectUrlComplete: redirectTo,     // Final destination after auth is done
+        redirectUrl: '/sso-callback', // Clerk processes the OAuth code here
+        // Land back on /login (preserving any ?redirect= already in the
+        // URL), NOT /dashboard — same reasoning as handleSubmit above: this
+        // is what lets AuthSync/GuestGuard, not Clerk's own redirect, own
+        // the actual "which workspace" decision. SSOCallbackPage briefly
+        // shows a loading state, then Clerk lands here with isSignedIn
+        // already true.
+        redirectUrlComplete: `/login${window.location.search}`,
       });
       // Note: this line won't execute — the browser redirects to the provider
     } catch (err: any) {
@@ -261,8 +271,3 @@ export const LoginPage: React.FC = () => {
     </div>
   );
 };
-
-function getSafeRedirect(value: string | null): string | null {
-  if (!value) return null;
-  return value.startsWith('/') && !value.startsWith('//') ? value : null;
-}

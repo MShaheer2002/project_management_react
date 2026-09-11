@@ -2,12 +2,29 @@ import React, { useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, ArrowLeft } from 'lucide-react';
 import { TrussenAppLogo } from '@/assets/svg/TrussenAppLogo';
+import { useTenantStore } from '@/app/stores/useTenantStore';
+import { buildLandingUrl } from '@shared/utils/tenant';
 
 /* ─── logo ─── */
 export const Logo: React.FC<{ className?: string }> = ({ className = '' }) => {
   const navigate = useNavigate();
+  const tenantSlug = useTenantStore((s) => s.slug);
+
+  const goHome = () => {
+    // On a company subdomain, "home" is the bare landing domain — a real
+    // browser navigation (different origin), not a route change. A
+    // client-side navigate('/marketing') here would render the marketing
+    // page AT the current subdomain (acme.trussen.app/marketing), which
+    // isn't "home", it's just a different page on the same tenant.
+    if (tenantSlug) {
+      window.location.href = buildLandingUrl('/marketing');
+      return;
+    }
+    navigate('/marketing');
+  };
+
   return (
-    <div className={`flex items-center gap-2.5 cursor-pointer ${className}`} onClick={() => navigate('/marketing')}>
+    <div className={`flex items-center gap-2.5 cursor-pointer ${className}`} onClick={goHome}>
       <TrussenAppLogo className="w-11 h-11 shrink-0" />
       <span className="text-lg font-bold tracking-tight dark:text-white">Trussen</span>
     </div>

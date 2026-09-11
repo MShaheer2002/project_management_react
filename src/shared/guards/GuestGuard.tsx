@@ -1,14 +1,10 @@
 import React from 'react';
 import { useUser } from '@clerk/clerk-react';
-import { Navigate, Outlet, useSearchParams } from 'react-router-dom';
+import { Navigate, Outlet, useLocation, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '@/app/stores/useAuthStore';
 import { useTenantStore } from '@/app/stores/useTenantStore';
+import { getSafeRedirectPath } from '@shared/utils/safeRedirect';
 import { TrussenAppLogo } from '@/assets/svg/TrussenAppLogo';
-
-function getSafeRedirect(value: string | null): string | null {
-  if (!value) return null;
-  return value.startsWith('/') && !value.startsWith('//') ? value : null;
-}
 
 const LoadingScreen: React.FC = () => (
   <div className="min-h-screen flex items-center justify-center bg-white dark:bg-bg-dark">
@@ -25,11 +21,19 @@ const LoadingScreen: React.FC = () => (
  * Protects public-only routes (login, signup, etc.) from already-authenticated users.
  *
  * If signed in:
- *   - Has a `?redirect=` (e.g. an invite link that bounced through /login) → honor it first
- *   - On a company subdomain → AuthSync already decided /dashboard or /no-access; this
- *     guard just waits for that rather than making its own competing decision
- *   - On the bare domain, has a workspace → AuthSync is mid-redirect to that workspace's
- *     own subdomain (a real browser navigation); show loading, don't flash /dashboard here first
+ *   - On a company subdomain → AuthSync is the sole authority on membership here;
+ *     wait for it to resolve, then honor `?redirect=` (e.g. AuthGuard sending back
+ *     to /projects/123) ONLY once membership is confirmed — never based on the
+ *     param alone, or on /no-access
+ *   - On the bare domain, has a `?redirect=` (e.g. an invite link that bounced
+ *     through /login) → honor it
+ *   - On the bare domain, on /signup specifically → "sign up" means "I want
+ *     something new," not "let me into my existing account" — send to
+ *     /org-creation to create an ADDITIONAL company, never into one they
+ *     already belong to
+ *   - On the bare domain, on /login, has a workspace → AuthSync is mid-redirect
+ *     to that workspace's own subdomain (a real browser navigation); show
+ *     loading, don't flash anything here first
  *   - On the bare domain, no workspace anywhere → /org-creation (must onboard first)
  *
  * If not signed in:
@@ -41,6 +45,7 @@ export const GuestGuard: React.FC = () => {
   const authSyncStatus = useAuthStore((s) => s.authSyncStatus);
   const tenantSlug = useTenantStore((s) => s.slug);
   const [searchParams] = useSearchParams();
+  const { pathname } = useLocation();
 
   // Clerk or backend workspace sync still loading — show loading state to prevent redirect flash
   if (!isLoaded || (isSignedIn && authSyncStatus !== 'ready')) {
@@ -48,23 +53,39 @@ export const GuestGuard: React.FC = () => {
   }
 
   if (isSignedIn) {
-    const redirectTo = getSafeRedirect(searchParams.get('redirect'));
+    const redirectTo = getSafeRedirectPath(searchParams.get('redirect'));
+
+    if (tenantSlug) {
+      // On a company subdomain, AuthSync is the sole authority on
+      // membership — it already resolved this to either a matched
+      // workspace or a navigate to /no-access. Deliberately checked BEFORE
+      // the redirectTo branch below: an arbitrary `?redirect=` param must
+      // never be honored on a subdomain the user isn't confirmed to belong
+      // to, even briefly — this doesn't expose any data by itself (that's
+      // still gated server-side), but a routing guard shouldn't hand out a
+      // "confirmed" destination it hasn't actually confirmed.
+      if (!workspace) return <LoadingScreen />;
+      return <Navigate to={redirectTo ?? '/dashboard'} replace />;
+    }
+
     if (redirectTo) {
       return <Navigate to={redirectTo} replace />;
     }
 
-    if (tenantSlug) {
-      // On a company subdomain, AuthSync already resolved this: /dashboard
-      // if this account is a member, or a navigate to /no-access if not.
-      // Nothing for this guard to decide independently.
-      return workspace ? <Navigate to="/dashboard" replace /> : <LoadingScreen />;
+    if (pathname === '/signup' && workspace) {
+      // Already have an account and at least one company — "sign up" here
+      // means starting a new one, same as the switcher's "create new
+      // workspace" option, not re-entering a company already joined.
+      return <Navigate to="/org-creation?new=true" replace />;
     }
 
     if (workspace) {
-      // Bare domain — AuthSync is redirecting to the workspace's own
-      // subdomain right now (window.location, not a route change).
-      // Rendering /dashboard here first would just flash the wrong domain.
-      return <LoadingScreen />;
+      // Bare domain, and AuthSync only ever redirects to a workspace
+      // subdomain from /login specifically (see REDIRECT_TO_SUBDOMAIN_PATHS
+      // in AuthSync.tsx) — so only wait here on /login itself. Landing
+      // signed-in with a workspace on /forgot-password etc. has no redirect
+      // coming; send to the landing page instead of hanging forever.
+      return pathname === '/login' ? <LoadingScreen /> : <Navigate to="/marketing" replace />;
     }
 
     // Signed in but no workspace anywhere — must create one first

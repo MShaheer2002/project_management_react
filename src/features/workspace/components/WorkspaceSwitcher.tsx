@@ -1,11 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'motion/react';
 import { Check, ChevronDown, Plus } from 'lucide-react';
 import { useAuthStore } from '@/app/stores/useAuthStore';
 import { useWorkspaces } from '../hooks/useWorkspaceDetails';
 import { useWorkspaceSwitch } from '../hooks/useWorkspaceSwitch';
 import type { WorkspaceResponse } from '../services/workspaceService';
+import { buildLandingUrl } from '@shared/utils/tenant';
 
 const focusMinimal = 'outline-none focus:outline-none focus-visible:outline-none focus-visible:ring-0';
 
@@ -65,7 +65,6 @@ export const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const navigate = useNavigate();
   const activeWorkspace = useAuthStore((s) => s.workspace);
   const { data: workspaces } = useWorkspaces();
   const switchWorkspace = useWorkspaceSwitch();
@@ -99,7 +98,9 @@ export const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({
 
   const handleCreateNew = () => {
     setIsOpen(false);
-    navigate('/org-creation?new=true');
+    // This dropdown is used while browsing a workspace's own subdomain —
+    // /org-creation only exists on the bare domain, a different origin.
+    window.location.href = buildLandingUrl('/org-creation?new=true');
   };
 
   const handleMenuItemClick = (item: WorkspaceMenuItem) => {

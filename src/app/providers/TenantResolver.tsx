@@ -1,10 +1,7 @@
 import { useEffect } from 'react';
 import { useTenantStore } from '@/app/stores/useTenantStore';
+import { WorkspaceNotFoundPage } from '@/pages/auth/WorkspaceNotFoundPage';
 import { TrussenAppLogo } from '@/assets/svg/TrussenAppLogo';
-
-const LANDING_URL = import.meta.env.DEV
-  ? `${window.location.protocol}//localhost:${window.location.port}`
-  : 'https://trussen.app';
 
 /**
  * TenantResolver — runs once, before anything else renders, to answer
@@ -12,8 +9,10 @@ const LANDING_URL = import.meta.env.DEV
  *
  * - No subdomain at all (bare trussen.app / localhost) → renders children
  *   immediately, nothing changes from today's behavior.
- * - Subdomain doesn't match any workspace → redirect off to the landing
- *   domain instead of rendering the app at all.
+ * - Subdomain doesn't match any workspace → render an explicit "workspace
+ *   not found" page instead of the app. Deliberately NOT a silent redirect
+ *   to the landing page — a visitor who mistyped a URL should be told
+ *   clearly what happened, not quietly bounced somewhere else.
  * - Subdomain matches a real workspace → renders children; routes.tsx and
  *   AuthSync read useTenantStore to show sign-in-only UI and to pick the
  *   right workspace once the user logs in.
@@ -27,8 +26,7 @@ export const TenantResolver: React.FC<{ children: React.ReactNode }> = ({ childr
   }, [resolve]);
 
   if (status === 'not-found') {
-    window.location.replace(LANDING_URL);
-    return null; // mid-redirect — render nothing rather than flash the app
+    return <WorkspaceNotFoundPage />;
   }
 
   if (status === 'checking') {

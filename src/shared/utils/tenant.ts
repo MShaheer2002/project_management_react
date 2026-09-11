@@ -39,3 +39,16 @@ export function buildWorkspaceUrl(slug: string, path: string = '/dashboard'): st
   const host = import.meta.env.DEV ? `${slug}.${LOCAL_ROOT_DOMAIN}${port}` : `${slug}.${PRODUCTION_ROOT_DOMAIN}`;
   return `${window.location.protocol}//${host}${path}`;
 }
+
+/**
+ * Builds a URL on the bare landing domain — e.g. "https://trussen.app/marketing"
+ * in production, or "http://localhost:3000/marketing" in dev. The opposite of
+ * buildWorkspaceUrl: this is "leave whatever tenant subdomain you're on and go
+ * to the plain root domain," used by the logo's "go home" link and by
+ * TenantResolver when a subdomain doesn't resolve to a real workspace.
+ */
+export function buildLandingUrl(path: string = '/'): string {
+  const port = window.location.port ? `:${window.location.port}` : '';
+  const host = import.meta.env.DEV ? `${LOCAL_ROOT_DOMAIN}${port}` : PRODUCTION_ROOT_DOMAIN;
+  return `${window.location.protocol}//${host}${path}`;
+}

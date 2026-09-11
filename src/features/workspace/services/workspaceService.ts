@@ -12,6 +12,8 @@ import type { WorkflowAutomationConfig, WorkspaceStatus } from '@/types';
  * team (same name as workspace). Store this for invite forms and first
  * project/issue creation.
  */
+export type InviteDomainPolicy = 'ANY' | 'COMPANY_ONLY' | 'CUSTOM';
+
 export interface WorkspaceResponse {
   id: string;
   name: string;
@@ -26,12 +28,22 @@ export interface WorkspaceResponse {
   createdAt?: string;
   customStatuses?: WorkspaceStatus[];
   workflowAutomation?: WorkflowAutomationConfig;
+  inviteDomainPolicy?: InviteDomainPolicy;
+  allowedEmailDomains?: string[];
 }
 
 export interface CreateWorkspaceInput {
   name: string;     // 1-100 chars, required
   slug: string;     // 3-50 chars, lowercase a-z 0-9 hyphens
   teamSize?: string; // Optional: "SMALL" | "MEDIUM" | "LARGE" | "ENTERPRISE"
+  inviteDomainPolicy?: InviteDomainPolicy; // Defaults to ANY if omitted
+  allowedEmailDomains?: string[];          // Required (>=1) when policy is CUSTOM
+}
+
+export interface UpdateInviteDomainPolicyInput {
+  workspaceId: string;
+  inviteDomainPolicy: InviteDomainPolicy;
+  allowedEmailDomains?: string[]; // Required (>=1) when policy is CUSTOM
 }
 
 export interface SlugCheckResponse {
@@ -262,6 +274,16 @@ export const workspaceService = {
 
   delete: async (workspaceId: string): Promise<void> => {
     await privateApi.delete(`/workspaces/${workspaceId}`);
+  },
+
+  /** PATCH /workspaces/:workspaceId/invite-domain-policy — ADMIN/OWNER only */
+  updateInviteDomainPolicy: async (input: UpdateInviteDomainPolicyInput): Promise<WorkspaceResponse> => {
+    const { workspaceId, ...payload } = input;
+    const { data } = await privateApi.patch<ApiResponse<WorkspaceResponse>>(
+      `/workspaces/${workspaceId}/invite-domain-policy`,
+      payload,
+    );
+    return data.data;
   },
 
   getStatuses: async (workspaceId: string): Promise<WorkspaceResponse['customStatuses']> => {

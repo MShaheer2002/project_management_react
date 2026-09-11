@@ -21,6 +21,8 @@ export interface AuthWorkspace {
   customStatuses?: WorkspaceStatus[];
   workflowAutomation?: WorkflowAutomationConfig;
   uploadPolicy?: UploadPolicy; // Controls where members can upload: BOTH (default), SYSTEM_ONLY, DRIVE_ONLY
+  inviteDomainPolicy?: 'ANY' | 'COMPANY_ONLY' | 'CUSTOM'; // Who can be invited, by email domain
+  allowedEmailDomains?: string[];
 }
 
 export type AuthSyncStatus = 'idle' | 'loading' | 'ready';

@@ -6,7 +6,8 @@ import { ArrowLeft, Building, Globe, CheckCircle2, AlertCircle, Loader2, Check }
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/app/stores/useAuthStore';
 import { useToastStore } from '@/app/stores/useToastStore';
-import { workspaceService, workspaceQueryKeys } from '@/features/workspace';
+import { workspaceService, workspaceQueryKeys, InviteDomainPolicyPicker } from '@/features/workspace';
+import type { InviteDomainPolicy } from '@/features/workspace';
 import { sidebarQueryKeys } from '@features/sidebar';
 import { buildWorkspaceUrl } from '@shared/utils/tenant';
 import { Logo, FormInput, SubmitButton, AuthFooter } from './shared';
@@ -45,7 +46,8 @@ export const CreateWorkspacePage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
-  const { isLoaded, isSignedIn } = useUser();
+  const { isLoaded, isSignedIn, user } = useUser();
+  const companyDomain = user?.primaryEmailAddress?.emailAddress.split('@')[1];
   const showToast = useToastStore((s) => s.showToast);
   const setWorkspace = useAuthStore((s) => s.setWorkspace);
   const workspace = useAuthStore((s) => s.workspace);
@@ -59,6 +61,8 @@ export const CreateWorkspacePage: React.FC = () => {
   const [slug, setSlug] = useState('');
   const [slugManuallyEdited, setSlugManuallyEdited] = useState(false); // Stop auto-gen once user edits slug
   const [teamSize, setTeamSize] = useState<string | null>(null);
+  const [inviteDomainPolicy, setInviteDomainPolicy] = useState<InviteDomainPolicy>('ANY');
+  const [allowedEmailDomains, setAllowedEmailDomains] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // ── Slug validation state ──
@@ -75,10 +79,12 @@ export const CreateWorkspacePage: React.FC = () => {
       return;
     }
 
-    // Only redirect to dashboard if user already has a workspace AND is not
-    // intentionally creating an additional one (via ?new=true from the switcher)
+    // Only redirect if user already has a workspace AND is not intentionally
+    // creating an additional one (via ?new=true from the switcher). This page
+    // only exists on the bare domain — their existing workspace lives on its
+    // own subdomain, a different origin, so this is a real navigation.
     if (authSyncStatus === 'ready' && workspace && !isAddingNew) {
-      navigate('/dashboard', { replace: true });
+      window.location.href = buildWorkspaceUrl(workspace.slug, '/dashboard');
     }
   }, [authSyncStatus, isLoaded, isSignedIn, navigate, workspace, isAddingNew]);
 
@@ -182,7 +188,12 @@ export const CreateWorkspacePage: React.FC = () => {
       return;
     }
 
-    console.log('[Workspace] Creating workspace:', { name: trimmedName, slug: finalSlug, teamSize });
+    if (inviteDomainPolicy === 'CUSTOM' && allowedEmailDomains.length === 0) {
+      showToast('Add at least one domain, or pick a different invite option', 'error', 'Validation error');
+      return;
+    }
+
+    console.log('[Workspace] Creating workspace:', { name: trimmedName, slug: finalSlug, teamSize, inviteDomainPolicy });
     setIsSubmitting(true);
 
     try {
@@ -191,6 +202,8 @@ export const CreateWorkspacePage: React.FC = () => {
         name: trimmedName,
         slug: finalSlug,
         teamSize: teamSize || undefined,
+        inviteDomainPolicy,
+        allowedEmailDomains: inviteDomainPolicy === 'CUSTOM' ? allowedEmailDomains : undefined,
       });
 
       console.log('[Workspace] Created via API:', workspace);
@@ -205,6 +218,8 @@ export const CreateWorkspacePage: React.FC = () => {
         customStatuses: workspace.customStatuses,
         workflowAutomation: workspace.workflowAutomation,
         uploadPolicy: workspace.uploadPolicy,
+        inviteDomainPolicy: workspace.inviteDomainPolicy,
+        allowedEmailDomains: workspace.allowedEmailDomains,
       });
 
       // Invalidate workspace list so the switcher sees the new workspace
@@ -424,6 +439,17 @@ export const CreateWorkspacePage: React.FC = () => {
                 ))}
               </div>
             </div>
+
+            <InviteDomainPolicyPicker
+              policy={inviteDomainPolicy}
+              domains={allowedEmailDomains}
+              onChange={(policy, domains) => {
+                setInviteDomainPolicy(policy);
+                setAllowedEmailDomains(domains);
+              }}
+              companyDomainPreview={companyDomain}
+              showChangeLaterNote
+            />
 
             {/* Submit */}
             <div className="pt-2">

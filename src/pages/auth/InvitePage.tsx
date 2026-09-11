@@ -7,6 +7,7 @@ import { useAuthStore } from '@/app/stores/useAuthStore';
 import { useToastStore } from '@/app/stores/useToastStore';
 import { workspaceService, type InvitationResolveResponse } from '@features/workspace';
 import type { ApiAxiosError } from '@shared/services/types';
+import { buildWorkspaceUrl } from '@shared/utils/tenant';
 
 const PENDING_INVITE_TOKEN_KEY = 'trussen-pending-invite-token';
 
@@ -106,7 +107,10 @@ export const InvitePage: React.FC = () => {
         uploadPolicy: 'BOTH',
       });
       showToast("You're now a member of this workspace.", 'success', 'Invitation accepted');
-      navigate('/dashboard', { replace: true });
+      // This page only ever runs on the bare domain (invite emails always
+      // link to FRONTEND_URL) — the workspace just joined lives on its own
+      // subdomain, a different origin, so this has to be a real navigation.
+      window.location.href = buildWorkspaceUrl(accepted.workspace.slug, '/dashboard');
     } catch (err) {
       const apiError = err as ApiAxiosError;
       const code = apiError.response?.data?.error?.code;
