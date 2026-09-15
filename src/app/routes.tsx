@@ -37,6 +37,22 @@ import { NotificationsPage } from '@/pages/NotificationsPage';
 import { AnalyticsPage } from '@features/analytics';
 import { IntegrationsPage } from '@/pages/IntegrationsPage';
 import { MarketingPage } from '@/pages/MarketingPage';
+import {
+  FeaturesPage,
+  IntegrationsPage as MarketingIntegrationsPage,
+  PricingPage,
+  ChangelogPage,
+  RoadmapPage as MarketingRoadmapPage,
+  AboutPage,
+  BlogPage,
+  CareersPage,
+  ContactPage,
+  PressPage,
+  PrivacyPage,
+  TermsPage,
+  CookiePolicyPage,
+  SecurityPage,
+} from '@/pages/marketing';
 import { CyclesPage } from '@/pages/CyclesPage';
 import { CycleDetailPage } from '@/pages/CycleDetailPage';
 import { BillingPage } from '@/pages/BillingPage';
@@ -124,6 +140,34 @@ export const AppRoutes: React.FC = () => {
        */}
       <Route path="/" element={<RootPage />} />
       <Route path="/marketing" element={<MarketingPage />} />
+
+      {/*
+       * Public marketing pages — bare domain only.
+       *
+       * Two of these (/integrations, /roadmap) share a path with real
+       * authenticated app routes further down. Registering them only when
+       * there's no tenant subdomain keeps both sets on clean URLs without
+       * either shadowing the other: trussen.app/roadmap is the public
+       * roadmap, acme.trussen.app/roadmap is that company's actual roadmap.
+       */}
+      {!tenantSlug && (
+        <Route>
+          <Route path="/features" element={<FeaturesPage />} />
+          <Route path="/integrations" element={<MarketingIntegrationsPage />} />
+          <Route path="/pricing" element={<PricingPage />} />
+          <Route path="/changelog" element={<ChangelogPage />} />
+          <Route path="/roadmap" element={<MarketingRoadmapPage />} />
+          <Route path="/about" element={<AboutPage />} />
+          <Route path="/blog" element={<BlogPage />} />
+          <Route path="/careers" element={<CareersPage />} />
+          <Route path="/contact" element={<ContactPage />} />
+          <Route path="/press" element={<PressPage />} />
+          <Route path="/privacy" element={<PrivacyPage />} />
+          <Route path="/terms" element={<TermsPage />} />
+          <Route path="/cookies" element={<CookiePolicyPage />} />
+          <Route path="/security" element={<SecurityPage />} />
+        </Route>
+      )}
 
       {/*
        * Guest routes — only accessible when NOT signed in.

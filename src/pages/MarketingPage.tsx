@@ -1,5 +1,5 @@
 import React from 'react';
-import { motion, useInView } from 'motion/react';
+import { motion } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { TrussenAppLogo } from '@/assets/svg/TrussenAppLogo';
 import {
@@ -10,11 +10,6 @@ import {
   Shield,
   Users,
   Globe,
-  Github,
-  Twitter,
-  Linkedin,
-  Menu,
-  X,
   BarChart3,
   MessageSquare,
   FolderKanban,
@@ -27,125 +22,9 @@ import {
   TrendingUp,
   MousePointerClick,
 } from 'lucide-react';
-
-/* ─── animation helpers ─── */
-const ease = [0.22, 1, 0.36, 1] as const;
-
-const fadeUp = {
-  hidden: { opacity: 0, y: 30 },
-  visible: (i: number = 0) => ({
-    opacity: 1,
-    y: 0,
-    transition: { duration: 0.6, delay: i * 0.1, ease: ease as unknown as [number, number, number, number] },
-  }),
-};
-
-const Section: React.FC<{
-  children: React.ReactNode;
-  className?: string;
-  id?: string;
-}> = ({ children, className = '', id }) => {
-  const ref = React.useRef<HTMLElement>(null);
-  const inView = useInView(ref, { once: true, margin: '-80px' });
-  return (
-    <motion.section
-      ref={ref}
-      id={id}
-      initial="hidden"
-      animate={inView ? 'visible' : 'hidden'}
-      variants={{ visible: { transition: { staggerChildren: 0.08 } } }}
-      className={className}
-    >
-      {children}
-    </motion.section>
-  );
-};
-
-/* ════════════════════════════════════════════════
-   NAV
-   ════════════════════════════════════════════════ */
-const Nav = () => {
-  const navigate = useNavigate();
-  const [open, setOpen] = React.useState(false);
-  const [scrolled, setScrolled] = React.useState(false);
-
-  React.useEffect(() => {
-    const h = () => setScrolled(window.scrollY > 20);
-    window.addEventListener('scroll', h, { passive: true });
-    return () => window.removeEventListener('scroll', h);
-  }, []);
-
-  return (
-    <nav
-      className={`fixed top-0 inset-x-0 z-50 transition-all duration-300 ${
-        scrolled
-          ? 'bg-white/90 dark:bg-bg-dark/90 backdrop-blur-xl shadow-sm border-b border-gray-200/60 dark:border-border-dark/60'
-          : 'bg-transparent'
-      }`}
-    >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between h-16 items-center">
-          <div
-            className="flex items-center gap-2.5 cursor-pointer"
-            onClick={() => navigate('/marketing')}
-          >
-            <TrussenAppLogo className="w-11 h-11 shrink-0" />
-            <span className="text-xl font-bold tracking-tight">Trussen</span>
-          </div>
-
-          <div className="hidden md:flex items-center gap-8">
-            {['Features', 'How it works', 'Pricing', 'Testimonials'].map((t) => (
-              <a
-                key={t}
-                href={`#${t.toLowerCase().replace(/\s/g, '-')}`}
-                className="text-[13px] font-medium text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
-              >
-                {t}
-              </a>
-            ))}
-          </div>
-
-          <div className="hidden md:flex items-center gap-3">
-            <button
-              onClick={() => navigate('/login')}
-              className="px-4 py-2 text-sm font-medium hover:text-primary transition-colors"
-            >
-              Log in
-            </button>
-            <button
-              onClick={() => navigate('/signup')}
-              className="px-5 py-2.5 bg-primary text-white text-sm font-semibold rounded-xl hover:bg-primary/90 transition-all shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5"
-            >
-              Get Started Free
-            </button>
-          </div>
-
-          <button className="md:hidden p-2" onClick={() => setOpen(!open)}>
-            {open ? <X size={22} /> : <Menu size={22} />}
-          </button>
-        </div>
-      </div>
-
-      {open && (
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="md:hidden bg-white dark:bg-bg-dark border-b border-gray-200 dark:border-border-dark px-4 pb-6 pt-2 space-y-3"
-        >
-          {['Features', 'How it works', 'Pricing', 'Testimonials'].map((t) => (
-            <a key={t} href={`#${t.toLowerCase().replace(/\s/g, '-')}`} onClick={() => setOpen(false)} className="block py-2 text-sm font-medium">
-              {t}
-            </a>
-          ))}
-          <div className="pt-2 space-y-2">
-            <button onClick={() => navigate('/login')} className="w-full text-left py-2 text-sm font-medium">Log in</button>
-            <button onClick={() => navigate('/signup')} className="w-full px-4 py-2.5 bg-primary text-white text-sm font-semibold rounded-xl">Get Started Free</button>
-          </div>
-        </motion.div>
-      )}
-    </nav>
-  );
-};
+// Nav, Footer and the motion helpers are shared with every other public page
+// (features, pricing, legal, ...) — see pages/marketing/shared.tsx.
+import { MarketingLayout, Section, fadeUp, plans, brandLogos } from './marketing/shared';
 
 /* ════════════════════════════════════════════════
    HERO
@@ -239,7 +118,7 @@ const Hero = () => {
               </div>
               <div className="flex-1 flex justify-center">
                 <div className="px-4 py-1 bg-white dark:bg-bg-dark rounded-lg text-[11px] text-gray-400 border border-gray-200 dark:border-border-dark min-w-[280px] text-center">
-                  app.trussen.io/dashboard
+                  company.trussen.app/dashboard
                 </div>
               </div>
               <div className="w-12" />
@@ -357,21 +236,77 @@ const Hero = () => {
 /* ════════════════════════════════════════════════
    TRUSTED BY / LOGOS
    ════════════════════════════════════════════════ */
+/**
+ * Logo strip.
+ *
+ * Deliberately says "works with", not "trusted by" — these are the tools
+ * Trussen integrates with, which is true. Listing them under a
+ * customer-endorsement heading would not be, and swapping the grey
+ * placeholder squares for real brand marks is exactly what would have made
+ * that claim look authentic.
+ */
+const worksWith = [
+  'GitHub',
+  'Slack',
+  'Google Drive',
+  'Figma',
+  'Discord',
+  'Stripe',
+  'Claude & MCP clients',
+  'Jira import',
+  'Linear import',
+];
+
+/** Trailing "import"/"& MCP clients" is list context, not part of the brand. */
+const brandName = (name: string) => name.replace(/ (import|& MCP clients)$/, '');
+
+const LogoTrack = () => (
+  <div className="flex shrink-0 items-center gap-x-14 pr-14">
+    {worksWith.map((name) => (
+      <div
+        key={name}
+        className="flex items-center gap-2.5 text-gray-400 dark:text-gray-500 select-none"
+      >
+        <img
+          src={brandLogos[name]}
+          alt=""
+          aria-hidden="true"
+          loading="lazy"
+          className="w-7 h-7 object-contain opacity-70"
+        />
+        <span className="text-lg font-bold tracking-tight whitespace-nowrap">
+          {brandName(name)}
+        </span>
+      </div>
+    ))}
+  </div>
+);
+
 const TrustedBy = () => (
   <Section className="py-16 border-y border-gray-100 dark:border-border-dark bg-gray-50/50 dark:bg-black/10">
     <div className="max-w-7xl mx-auto px-4">
-      <motion.p variants={fadeUp} className="text-center text-xs font-bold uppercase tracking-widest text-gray-400 mb-8">
-        Trusted by innovative teams worldwide
+      <motion.p
+        variants={fadeUp}
+        className="text-center text-xs font-bold uppercase tracking-widest text-gray-400 mb-10"
+      >
+        Works with the tools your team already uses
       </motion.p>
-      <motion.div variants={fadeUp} className="flex flex-wrap items-center justify-center gap-x-12 gap-y-6">
-        {['Vercel', 'Stripe', 'Notion', 'Figma', 'GitHub'].map((name) => (
-          <div key={name} className="flex items-center gap-2 text-gray-300 dark:text-gray-600 select-none">
-            <div className="w-8 h-8 rounded-lg bg-gray-200 dark:bg-gray-800" />
-            <span className="text-lg font-bold tracking-tight">{name}</span>
-          </div>
-        ))}
-      </motion.div>
     </div>
+
+    {/* Full-bleed so logos scroll in and out past the page edges, with the
+        ends faded rather than cut off mid-logo. */}
+    <motion.div
+      variants={fadeUp}
+      className="relative overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_8%,black_92%,transparent)]"
+    >
+      <div className="flex w-max animate-marquee">
+        <LogoTrack />
+        {/* Duplicate copy — the -50% shift lands exactly here, so the loop
+            is seamless. aria-hidden on both: the names are decorative here
+            and repeated, and /integrations lists them properly. */}
+        <LogoTrack />
+      </div>
+    </motion.div>
   </Section>
 );
 
@@ -720,31 +655,6 @@ const Testimonials = () => (
   </Section>
 );
 
-/* ════════════════════════════════════════════════
-   PRICING
-   ════════════════════════════════════════════════ */
-const plans = [
-  {
-    name: 'Free',
-    price: '$0',
-    description: 'For individuals and small teams getting started.',
-    features: ['Up to 10 members', 'Unlimited issues', 'Basic integrations', 'Community support', '1 GB storage'],
-  },
-  {
-    name: 'Standard',
-    price: '$12',
-    description: 'For growing product teams that need more.',
-    features: ['Unlimited members', 'All Free features', 'Advanced integrations', 'Priority support', 'Templates & Roadmaps', '10 GB storage'],
-    popular: true,
-  },
-  {
-    name: 'Plus',
-    price: '$24',
-    description: 'For large organizations with advanced needs.',
-    features: ['All Standard features', 'SAML SSO', 'Audit logs', 'Advanced analytics', 'Dedicated manager', '100 GB storage'],
-  },
-];
-
 const Pricing = () => {
   const navigate = useNavigate();
   return (
@@ -843,71 +753,19 @@ const CTA = () => {
 };
 
 /* ════════════════════════════════════════════════
-   FOOTER
-   ════════════════════════════════════════════════ */
-const Footer = () => (
-  <footer className="bg-white dark:bg-bg-dark border-t border-gray-200 dark:border-border-dark pt-20 pb-10">
-    <div className="max-w-7xl mx-auto px-4 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-12 mb-20">
-      <div className="col-span-2 lg:col-span-2 space-y-6">
-        <div className="flex items-center gap-2.5">
-          <TrussenAppLogo className="w-11 h-11 shrink-0" />
-          <span className="text-xl font-bold tracking-tight">Trussen</span>
-        </div>
-        <p className="text-sm text-gray-500 dark:text-gray-400 max-w-xs leading-relaxed">
-          The next generation of project management. Built for high-performance teams who ship.
-        </p>
-        <div className="flex gap-4">
-          {[Twitter, Github, Linkedin].map((Icon, i) => (
-            <div key={i} className="w-9 h-9 rounded-xl bg-gray-100 dark:bg-white/5 flex items-center justify-center text-gray-400 hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer">
-              <Icon size={16} />
-            </div>
-          ))}
-        </div>
-      </div>
-      {[
-        { title: 'Product', items: ['Features', 'Integrations', 'Pricing', 'Changelog', 'Roadmap'] },
-        { title: 'Company', items: ['About', 'Blog', 'Careers', 'Contact', 'Press'] },
-        { title: 'Legal', items: ['Privacy', 'Terms', 'Cookie Policy', 'Security'] },
-      ].map((col) => (
-        <div key={col.title}>
-          <h4 className="font-bold text-sm mb-6">{col.title}</h4>
-          <ul className="space-y-3">
-            {col.items.map((item) => (
-              <li key={item} className="text-sm text-gray-500 dark:text-gray-400 hover:text-primary cursor-pointer transition-colors">{item}</li>
-            ))}
-          </ul>
-        </div>
-      ))}
-    </div>
-    <div className="max-w-7xl mx-auto px-4 pt-8 border-t border-gray-100 dark:border-border-dark flex flex-col sm:flex-row items-center justify-between gap-4">
-      <p className="text-xs text-gray-400">&copy; 2025 Trussen Inc. All rights reserved.</p>
-      <div className="flex items-center gap-6">
-        {['Privacy', 'Terms', 'Cookies'].map((l) => (
-          <span key={l} className="text-xs text-gray-400 hover:text-primary cursor-pointer transition-colors">{l}</span>
-        ))}
-      </div>
-    </div>
-  </footer>
-);
-
-/* ════════════════════════════════════════════════
    PAGE
    ════════════════════════════════════════════════ */
 export const MarketingPage: React.FC = () => {
   return (
-    <div className="min-h-screen bg-white dark:bg-bg-dark text-gray-900 dark:text-gray-100 selection:bg-primary/30">
-      <Nav />
-      <main>
-        <Hero />
-        <TrustedBy />
-        <Features />
-        <Stats />
-        <HowItWorks />
-        <Testimonials />
-        <Pricing />
-        <CTA />
-      </main>
-      <Footer />
-    </div>
+    <MarketingLayout>
+      <Hero />
+      <TrustedBy />
+      <Features />
+      <Stats />
+      <HowItWorks />
+      <Testimonials />
+      <Pricing />
+      <CTA />
+    </MarketingLayout>
   );
 };

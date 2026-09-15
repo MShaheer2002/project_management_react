@@ -17,6 +17,37 @@
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
 }
 
+@layer utilities {
+  /*
+   * Infinite logo marquee. The track holds the logo list twice, so shifting
+   * it by exactly -50% lands on the start of the duplicate copy — the loop
+   * point is invisible and there is no jump to hide.
+   */
+  @keyframes marquee-scroll {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(-50%);
+    }
+  }
+
+  .animate-marquee {
+    animation: marquee-scroll 45s linear infinite;
+  }
+
+  /* Let people read a logo they're pointing at. */
+  .animate-marquee:hover {
+    animation-play-state: paused;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .animate-marquee {
+      animation: none;
+    }
+  }
+}
+
 @layer base {
   :root {
     color-scheme: light;
