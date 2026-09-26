@@ -199,7 +199,11 @@ function patchIssueStatusCaches(
   // instead of forcing a refetch right now just because it's technically mounted.
   queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.byWorkspace(workspaceId), refetchType: 'none' });
 
-  queryClient.setQueryData(issueQueryKeys.detail(workspaceId, updatedIssue.id), updatedIssue);
+  
+  queryClient.setQueryData<IssueDetail>(
+    issueQueryKeys.detail(workspaceId, updatedIssue.id),
+    (existing) => existing && { ...existing, ...updatedIssue },
+  );
 }
 
 /** Finds an issue already sitting in some cached directory page, to use as the

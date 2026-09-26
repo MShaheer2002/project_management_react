@@ -262,6 +262,15 @@ export const useNotificationRealtime = () => {
         }
       };
 
+      // The owner just deleted this workspace; the server disconnects every
+      // socket right after this event. A reload re-syncs the workspace (with
+      // its purge date) and lands on /workspace-deactivated. Skipped when this
+      // tab already knows — e.g. the owner deleting it from Settings.
+      const handleWorkspaceDeactivated = () => {
+        if (useAuthStore.getState().workspace?.deactivatedAt) return;
+        window.location.href = '/workspace-deactivated';
+      };
+
       const handleConnect = async () => {
         // The first connect of a session lands right after the notification list and
         // unread-count queries already did their own natural initial fetch — resyncing
@@ -328,6 +337,7 @@ export const useNotificationRealtime = () => {
       socket.on('roadmap:dependency-resolved', handleRoadmapChange);
       socket.on('roadmap:dependency-cancelled', handleRoadmapChange);
       socket.on('roadmap:dependency-deleted', handleRoadmapChange);
+      socket.on('workspace:deactivated', handleWorkspaceDeactivated);
       socket.on('connect', handleConnect);
       socket.on('connect_error', handleConnectError);
       socket.io.on('reconnect_attempt', handleReconnectAttempt);
@@ -350,6 +360,7 @@ export const useNotificationRealtime = () => {
         socket.off('roadmap:dependency-resolved', handleRoadmapChange);
         socket.off('roadmap:dependency-cancelled', handleRoadmapChange);
         socket.off('roadmap:dependency-deleted', handleRoadmapChange);
+        socket.off('workspace:deactivated', handleWorkspaceDeactivated);
         socket.off('connect', handleConnect);
         socket.off('connect_error', handleConnectError);
         socket.io.off('reconnect_attempt', handleReconnectAttempt);

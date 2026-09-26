@@ -17,6 +17,7 @@ import {
   SelectWorkspacePage,
   InvitePage,
   NoWorkspaceAccessPage,
+  WorkspaceDeactivatedPage,
   ForgotPasswordPage,
   ResetPasswordPage,
   SSOCallbackPage,
@@ -193,6 +194,7 @@ export const AppRoutes: React.FC = () => {
       <Route path="/select-workspace" element={<SelectWorkspacePage />} />
       <Route path="/invite" element={<InvitePage />} />
       <Route path="/no-access" element={<NoWorkspaceAccessPage />} />
+      <Route path="/workspace-deactivated" element={<WorkspaceDeactivatedPage />} />
 
       {/*
        * Authenticated routes — only accessible when signed in.
@@ -223,7 +225,8 @@ export const AppRoutes: React.FC = () => {
 
           {/* Role-guarded routes (inline checks — will use RoleGuard component in Phase 3) */}
           <Route path="/analytics" element={isLead ? <AnalyticsPage /> : <Navigate to="/" />} />
-          <Route path="/integrations" element={isAdmin ? <IntegrationsPage /> : <Navigate to="/" />} />
+          {/* Members see it too, with only their Google Drive (IntegrationsPage). */}
+          <Route path="/integrations" element={isLead ? <IntegrationsPage /> : <Navigate to="/" />} />
           <Route path="/templates" element={isAdmin ? <TemplatesPage /> : <Navigate to="/" />} />
           <Route path="/templates/new" element={isAdmin ? <TemplatesPage /> : <Navigate to="/" />} />
           <Route path="/templates/:templateId" element={isAdmin ? <TemplatesPage /> : <Navigate to="/" />} />

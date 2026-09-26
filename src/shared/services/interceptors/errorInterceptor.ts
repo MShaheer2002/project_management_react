@@ -26,7 +26,7 @@ function goToOrgCreation() {
  * | Status | Action                                          |
  * |--------|-------------------------------------------------|
  * | 401    | Clear auth store, redirect to /login            |
- * | 403    | Toast "permission denied" (unless USER_NOT_SYNCED) |
+ * | 403    | Toast "permission denied" (unless USER_NOT_SYNCED / WORKSPACE_DEACTIVATED) |
  * | 409    | Toast the backend message                       |
  * | 422    | Skip — let form hooks handle field errors        |
  * | 429    | Toast "rate limited"                            |
@@ -80,6 +80,19 @@ export function attachErrorInterceptor(instance: AxiosInstance) {
               null
             );
             goToOrgCreation();
+          } else if (errorCode === 'WORKSPACE_DEACTIVATED') {
+            // The owner deleted the workspace (soft delete). Marking it in the
+            // store makes AuthGuard switch to /workspace-deactivated — the
+            // owner's restore screen, or "Deactivated by Owner" for everyone else.
+            const { workspace, setWorkspace } = useAuthStore.getState();
+            const details = data?.error?.details as { deactivatedAt?: string; purgeAt?: string } | undefined;
+            if (workspace && !workspace.deactivatedAt) {
+              setWorkspace({
+                ...workspace,
+                deactivatedAt: details?.deactivatedAt ?? new Date().toISOString(),
+                purgeAt: details?.purgeAt ?? null,
+              });
+            }
           } else if (errorCode === 'FREE_PLAN_ACCESS_LIMIT_EXCEEDED') {
             // Still a member, just over the Free plan's seat cap — don't clear
             // the workspace or redirect to onboarding, just explain why every

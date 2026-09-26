@@ -11,6 +11,16 @@ export interface ScopeCategory {
 
 export const ADMIN_SCOPE = 'admin';
 
+/**
+ * What the self-service "Connect AI" flow starts with.
+ *
+ * Read-only on purpose: the admin wildcard used to be pre-ticked, so a member
+ * clicking the generic Connect button bound their workspace at full access
+ * (audit FE-N-03). The backend now rejects a non-admin asking for `admin`, so
+ * this must also never be empty — an empty scope list reads as unrestricted.
+ */
+export const DEFAULT_OAUTH_SCOPES = ['issues:read', 'projects:read'];
+
 export const SCOPE_CATEGORIES: ScopeCategory[] = [
   {
     label: 'Issues',

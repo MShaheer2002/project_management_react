@@ -42,6 +42,8 @@ export const ProjectWorkflowSettings: React.FC<{ projectId: string; canManage: b
 
   const isOverridden = workflow.source === 'project';
   const showEditors = isOverridden || customizing;
+  // From the API, so the UI offers exactly what the server will accept (F-37).
+  const permissions = workflow.permissions ?? { structureLocked: true, canDeleteIssues: false, canRevert: false };
 
   const handleRevert = () => {
     clearOverride.mutate(undefined, {
@@ -66,7 +68,7 @@ export const ProjectWorkflowSettings: React.FC<{ projectId: string; canManage: b
               : 'This project uses the workspace default workflow.'}
           </p>
         </div>
-        {canManage && isOverridden && (
+        {canManage && isOverridden && permissions.canRevert && (
           <button
             type="button"
             onClick={handleRevert}
@@ -104,6 +106,8 @@ export const ProjectWorkflowSettings: React.FC<{ projectId: string; canManage: b
             onMergeStatus={isOverridden
               ? (sourceKey, targetStatusKey) => mergeStatus.mutateAsync({ sourceKey, targetStatusKey }).then((saved) => saved.statuses)
               : undefined}
+            structureLocked={permissions.structureLocked}
+            canDeleteIssues={permissions.canDeleteIssues}
           />
           <WorkflowAutomationEditor
             initialStatuses={workflow.statuses}

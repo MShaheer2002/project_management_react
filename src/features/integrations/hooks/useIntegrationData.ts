@@ -29,12 +29,12 @@ export const integrationQueryKeys = {
     [...integrationQueryKeys.all, 'figma', 'preview', wId, url] as const,
 };
 
-export const useIntegrations = () => {
+export const useIntegrations = (enabled = true) => {
   const wId = useAuthStore((s) => s.workspace?.id);
   return useQuery({
     queryKey: integrationQueryKeys.list(wId),
     queryFn: integrationService.list,
-    enabled: Boolean(wId),
+    enabled: enabled && Boolean(wId),
   });
 };
 
@@ -104,27 +104,18 @@ export const useFigmaSettings = (options?: { enabled?: boolean }) => {
   });
 };
 
-export const useFigmaPreview = (url: string, enabled = true) => {
-  const wId = useAuthStore((s) => s.workspace?.id);
-  return useQuery({
-    queryKey: integrationQueryKeys.figmaPreview(wId, url),
-    queryFn: () => figmaService.preview(url),
-    enabled: Boolean(wId) && enabled && isFigmaUrl(url),
-    staleTime: 5 * 60 * 1000,
-    retry: 1,
-  });
-};
-
+/** Preview cards for the Figma links on one issue (the server only previews links in that issue). */
 export const useFigmaBatchPreview = (
+  issueId: string | undefined,
   urls: string[],
   options?: { enabled?: boolean },
 ) => {
   const wId = useAuthStore((s) => s.workspace?.id);
   return useQuery({
-    queryKey: [...integrationQueryKeys.all, 'figma', 'batch', wId, urls],
-    queryFn: () => figmaService.batchPreview(urls),
+    queryKey: [...integrationQueryKeys.all, 'figma', 'batch', wId, issueId, urls],
+    queryFn: () => figmaService.batchPreview(issueId!, urls),
     enabled:
-      Boolean(wId) && urls.length > 0 && (options?.enabled ?? true),
+      Boolean(wId) && Boolean(issueId) && urls.length > 0 && (options?.enabled ?? true),
     staleTime: 5 * 60 * 1000,
     retry: 1,
   });

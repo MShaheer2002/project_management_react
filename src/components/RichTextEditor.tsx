@@ -1,4 +1,5 @@
 import React, { useRef, useCallback, useState, useEffect } from 'react';
+import DOMPurify from 'dompurify';
 import { 
   Bold, 
   Italic, 
@@ -106,16 +107,20 @@ const markdownToEditorHtml = (value: string) => {
   return blocks.join('');
 };
 
+// Stored rich text is authored by anyone who can write the issue — a MEMBER, an
+// API key, an MCP client, Slack, or the LLM — so it is untrusted input. These
+// helpers are exported and their output goes straight to innerHTML, so they
+// sanitize here rather than relying on each call site to remember (audit F-05).
 export const normalizeRichTextValue = (value: string) => {
   if (!value) return '';
-  if (looksLikeHtml(value)) return value;
-  if (looksLikeMarkdown(value)) return markdownToEditorHtml(value);
-  return value;
+  if (looksLikeHtml(value)) return DOMPurify.sanitize(value);
+  if (looksLikeMarkdown(value)) return DOMPurify.sanitize(markdownToEditorHtml(value));
+  return DOMPurify.sanitize(value);
 };
 
 const normalizePlainTextValue = (value: string) => {
   if (!value) return '';
-  if (looksLikeHtml(value)) return value;
+  if (looksLikeHtml(value)) return DOMPurify.sanitize(value);
   return escapeHtml(value).replace(/\n/g, '<br />');
 };
 
@@ -133,9 +138,15 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   const [isFocused, setIsFocused] = useState(false);
   const [showToolbar, setShowToolbar] = useState(false);
 
-  // Sync state to editor only once or when value is changed externally (rare)
+  // Sync state to editor only once or when value is changed externally (rare).
+  // Sanitized because `value` is stored content authored by anyone who can write
+  // the issue (member, API key, MCP client, Slack, LLM) and the read-only view
+  // already sanitizes — leaving the edit path raw meant simply opening the
+  // editor executed the payload in the app origin (audit F-05 / FE-02).
   useEffect(() => {
-    const normalizedValue = interpretMarkdown ? normalizeRichTextValue(value) : normalizePlainTextValue(value);
+    const normalizedValue = DOMPurify.sanitize(
+      interpretMarkdown ? normalizeRichTextValue(value) : normalizePlainTextValue(value),
+    );
     if (editorRef.current && editorRef.current.innerHTML !== normalizedValue) {
       editorRef.current.innerHTML = normalizedValue;
     }

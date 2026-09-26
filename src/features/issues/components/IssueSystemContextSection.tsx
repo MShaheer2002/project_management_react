@@ -33,6 +33,9 @@ const providerLabel = (provider: IssueIntegrationRef['provider']) => {
   }
 };
 
+// Only web links can be opened, so a saved link can never run code (F-46).
+const isWebLink = (url: string) => /^https?:\/\//i.test(url.trim());
+
 const formatReferenceMeta = (ref: IssueIntegrationRef) => {
   const parts = [ref.externalId, ref.url].filter(Boolean);
   return parts.join(' · ');
@@ -129,7 +132,7 @@ export const IssueSystemContextSection: React.FC<IssueSystemContextSectionProps>
                       </p>
                     )}
                   </div>
-                  {ref.url && (
+                  {ref.url && isWebLink(ref.url) && (
                     <button
                       type="button"
                       onClick={() => window.open(ref.url, '_blank', 'noopener,noreferrer')}

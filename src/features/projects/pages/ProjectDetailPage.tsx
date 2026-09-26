@@ -27,7 +27,7 @@ import type { DocumentRecord } from '@features/documents';
 import { IssuesPage } from '@features/issues';
 import { ProjectRoadmapPanel } from '@features/roadmap';
 import { buildMemberPerformanceRows } from '@shared/analytics/memberPerformance';
-import { canManageProject } from '@shared/permissions';
+import { canDeleteProject, canManageProject } from '@shared/permissions';
 import { getApiErrorCode, getApiErrorMessage, getApiFieldErrors } from '@shared/services';
 import { useIssuesDirectory } from '@features/issues';
 import { useWorkspaceMemberOptions } from '@features/workspace';
@@ -363,14 +363,17 @@ export const ProjectDetailPage: React.FC = () => {
             </div>
           </div>
 
-          <MemberPerformancePanel
-            title="Member Performance"
-            subtitle="Task completion for members assigned within this project."
-            rows={projectAnalyticsRows}
-            emptyTitle="No member performance yet"
-            emptyDescription="Project issue analytics will fill in here as real issue data lands in later phases."
-            unassignedCount={projectUnassignedCount}
-          />
+          {/* Per-person performance: admins and the project lead only, like project analytics (F-43). */}
+          {canManage && (
+            <MemberPerformancePanel
+              title="Member Performance"
+              subtitle="Task completion for members assigned within this project."
+              rows={projectAnalyticsRows}
+              emptyTitle="No member performance yet"
+              emptyDescription="Project issue analytics will fill in here as real issue data lands in later phases."
+              unassignedCount={projectUnassignedCount}
+            />
+          )}
         </div>
 
         <div className="space-y-6">
@@ -864,6 +867,8 @@ export const ProjectDetailPage: React.FC = () => {
             </button>
           </div>
 
+          {canDeleteProject(role) && (
+          <>
           <div className="h-px bg-red-500/10" />
 
           <div className="flex items-center justify-between">
@@ -880,6 +885,8 @@ export const ProjectDetailPage: React.FC = () => {
               Delete Permanently
             </button>
           </div>
+          </>
+          )}
         </div>
       </section>
     </div>

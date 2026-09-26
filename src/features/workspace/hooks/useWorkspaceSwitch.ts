@@ -31,8 +31,11 @@ export function useWorkspaceSwitch() {
         customStatuses: workspace.customStatuses,
         workflowAutomation: workspace.workflowAutomation,
         uploadPolicy: workspace.uploadPolicy,
+        allowPublicDriveLinks: workspace.allowPublicDriveLinks === true,
         inviteDomainPolicy: workspace.inviteDomainPolicy,
         allowedEmailDomains: workspace.allowedEmailDomains,
+        deactivatedAt: workspace.deactivatedAt ?? null,
+        purgeAt: workspace.purgeAt ?? null,
       };
       setWorkspace(authWorkspace);
 

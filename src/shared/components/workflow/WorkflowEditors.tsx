@@ -191,7 +191,14 @@ export const WorkflowStatusesEditor: React.FC<{
   onSaved?: (saved: WorkspaceStatus[]) => void;
   getStatusUsage: (statusKey: string, limit?: number) => Promise<WorkflowStatusUsage>;
   onMergeStatus?: (sourceKey: string, targetStatusKey: string) => Promise<WorkspaceStatus[]>;
-}> = ({ initialStatuses, canManage, onDirtyChange, onSave, onSaved, getStatusUsage, onMergeStatus }) => {
+  /**
+   * Admins set rules on this workflow, so this user may only rename, recolour
+   * and change visibility — every structural control is hidden (F-37).
+   */
+  structureLocked?: boolean;
+  /** Offer "delete all issues" when removing a status (admins only). */
+  canDeleteIssues?: boolean;
+}> = ({ initialStatuses, canManage, onDirtyChange, onSave, onSaved, getStatusUsage, onMergeStatus, structureLocked = false, canDeleteIssues = true }) => {
   const showToast = useToastStore((s) => s.showToast);
   const workspaceStatuses = initialStatuses;
   const [statuses, setStatuses] = useState<WorkspaceStatus[]>([]);
@@ -692,10 +699,14 @@ export const WorkflowStatusesEditor: React.FC<{
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-sm font-bold uppercase tracking-wider text-gray-400">Workflow</h3>
-          <p className="mt-1 text-xs text-gray-400">Define the statuses issues move through. Drag to reorder and decide which statuses appear on board.</p>
+          <p className="mt-1 text-xs text-gray-400">
+            {structureLocked
+              ? 'Your workspace admins set approval or transition rules for this workflow. You can rename statuses, recolour them and choose where they appear; only admins can add, remove, reorder or change their rules.'
+              : 'Define the statuses issues move through. Drag to reorder and decide which statuses appear on board.'}
+          </p>
         </div>
         <div className="flex items-center gap-2">
-          {canManage && (
+          {canManage && !structureLocked && (
             <button
               type="button"
               onClick={() => { setAddingNew(true); setNewLabel(''); }}
@@ -736,13 +747,13 @@ export const WorkflowStatusesEditor: React.FC<{
               }`}
             >
             <div
-              draggable={canManage}
+              draggable={canManage && !structureLocked}
               onDragStart={() => handleDragStart(idx)}
               onDragOver={(e) => handleDragOver(e, idx)}
               onDragEnd={handleDragEnd}
               className="group flex items-center gap-3"
             >
-              {canManage && (
+              {canManage && !structureLocked && (
                 <GripVertical size={14} className="shrink-0 cursor-grab text-gray-300 active:cursor-grabbing dark:text-gray-600" />
               )}
 
@@ -822,7 +833,7 @@ export const WorkflowStatusesEditor: React.FC<{
                   >
                     {exportingStatusKey === status.key ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
                   </button>
-                  {onMergeStatus && statuses.length > 1 && (
+                  {onMergeStatus && !structureLocked && statuses.length > 1 && (
                     <button
                       type="button"
                       onClick={() => setMergeDialog({
@@ -835,20 +846,28 @@ export const WorkflowStatusesEditor: React.FC<{
                       <GitMerge size={13} />
                     </button>
                   )}
-                  <button
-                    type="button"
-                    onClick={() => { void handleRequestRemove(status); }}
-                    disabled={checkingStatusUsageKey === status.key}
-                    className="rounded p-1 text-gray-400 hover:text-red-500 disabled:opacity-50"
-                  >
-                    {checkingStatusUsageKey === status.key ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
-                  </button>
+                  {!structureLocked && (
+                    <button
+                      type="button"
+                      onClick={() => { void handleRequestRemove(status); }}
+                      disabled={checkingStatusUsageKey === status.key}
+                      className="rounded p-1 text-gray-400 hover:text-red-500 disabled:opacity-50"
+                    >
+                      {checkingStatusUsageKey === status.key ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                    </button>
+                  )}
                 </div>
               )}
             </div>
 
             {isExpanded ? (
             <div className="mt-3 px-4 py-3">
+              {/* Structure and rules are admin-only once an admin has set any (F-37). */}
+              {structureLocked ? (
+                <p className="rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-500 dark:bg-white/[0.03] dark:text-gray-400">
+                  Lifecycle, category, transitions, entry rules and approvals are managed by your workspace admins.
+                </p>
+              ) : (<>
               <WorkflowConfigSection
                 title="Lifecycle"
                 description="Keep a workflow active or archive it from day-to-day operations."
@@ -879,6 +898,7 @@ export const WorkflowStatusesEditor: React.FC<{
                   ))}
                 </select>
               </WorkflowConfigSection>
+              </>)}
 
               <WorkflowConfigSection
                 title="Visibility"
@@ -926,6 +946,7 @@ export const WorkflowStatusesEditor: React.FC<{
                 </div>
               </WorkflowConfigSection>
 
+              {!structureLocked && (<>
               <WorkflowConfigSection
                 title="Transition Rules"
                 description="Movement permissions."
@@ -1147,6 +1168,7 @@ export const WorkflowStatusesEditor: React.FC<{
                   </div>
                 )}
               </WorkflowConfigSection>
+              </>)}
             </div>
             ) : null}
           </div>
@@ -1239,6 +1261,7 @@ export const WorkflowStatusesEditor: React.FC<{
                 </div>
               </label>
 
+              {canDeleteIssues && (
               <label className="flex items-start gap-3 rounded-xl border border-red-200/70 p-4 dark:border-red-500/20">
                 <input
                   type="radio"
@@ -1253,6 +1276,7 @@ export const WorkflowStatusesEditor: React.FC<{
                   </div>
                 </div>
               </label>
+              )}
             </div>
 
             <div className="flex justify-end gap-3">

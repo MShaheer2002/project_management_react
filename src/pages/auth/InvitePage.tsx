@@ -8,6 +8,7 @@ import { useToastStore } from '@/app/stores/useToastStore';
 import { workspaceService, type InvitationResolveResponse } from '@features/workspace';
 import type { ApiAxiosError } from '@shared/services/types';
 import { buildWorkspaceUrl } from '@shared/utils/tenant';
+import { workspaceLogoSrc } from '@shared/utils/workspaceLogo';
 
 const PENDING_INVITE_TOKEN_KEY = 'trussen-pending-invite-token';
 
@@ -176,9 +177,9 @@ export const InvitePage: React.FC = () => {
               ) : invite ? (
                 <div className="space-y-5">
                   <div className="flex items-center gap-3">
-                    {invite.workspaceLogo ? (
+                    {workspaceLogoSrc(invite.workspaceLogo) ? (
                       <img
-                        src={invite.workspaceLogo}
+                        src={workspaceLogoSrc(invite.workspaceLogo)}
                         alt={invite.workspaceName}
                         className="w-12 h-12 rounded-xl object-cover border border-gray-100 dark:border-border-dark"
                       />

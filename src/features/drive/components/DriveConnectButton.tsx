@@ -19,7 +19,7 @@ export const DriveConnectButton: React.FC = () => {
 
   const handleConnect = async () => {
     try {
-      const result = await connectDrive.mutateAsync();
+      const result = await connectDrive.mutateAsync("PERSONAL");
 
       // Open OAuth consent in a popup
       const popup = window.open(result.authUrl, 'drive-oauth', 'width=500,height=700,left=200,top=100');
