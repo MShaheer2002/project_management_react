@@ -620,6 +620,8 @@ export const IssueSystemParametersPanel: React.FC<IssueSystemParametersPanelProp
                 </div>
               ))}
 
+              {/* The server allows at most 25 links per issue. */}
+              {integrationRefs.length < 25 && (
               <button
                 type="button"
                 onClick={handleAddIntegrationRef}
@@ -628,6 +630,7 @@ export const IssueSystemParametersPanel: React.FC<IssueSystemParametersPanelProp
                 <Plus size={13} />
                 Add reference
               </button>
+              )}
             </div>
           </MiniDialog>
         )}

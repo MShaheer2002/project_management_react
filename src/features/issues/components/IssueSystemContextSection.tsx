@@ -1,4 +1,5 @@
 import React from 'react';
+import { isWebLink } from '@shared/utils/webLink';
 import { ExternalLink } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { STATUS_LABELS } from '@/constants';
@@ -129,7 +130,7 @@ export const IssueSystemContextSection: React.FC<IssueSystemContextSectionProps>
                       </p>
                     )}
                   </div>
-                  {ref.url && (
+                  {isWebLink(ref.url) && (
                     <button
                       type="button"
                       onClick={() => window.open(ref.url, '_blank', 'noopener,noreferrer')}

@@ -2,14 +2,15 @@
 export { driveService } from './services/driveService';
 
 // Query hooks
-export { driveQueryKeys, useDriveConnection } from './hooks/useDriveData';
+export { driveQueryKeys, useDriveConnection, useDriveFiles } from './hooks/useDriveData';
 
 // Mutation hooks
-export { useConnectDrive, useDisconnectDrive, useDriveUpload } from './hooks/useDriveMutations';
+export { useConnectDrive, useDisconnectDrive, useDriveUpload, useUpdateDriveSettings, useUpdateWorkspaceDrive, useDisconnectWorkspaceDrive } from './hooks/useDriveMutations';
 
 // Components
 export { DriveConnectButton } from './components/DriveConnectButton';
 export { DriveUploadButton } from './components/DriveUploadButton';
+export { DriveSharingBadge, DriveSharingSelect, DriveConnectionPanel, DRIVE_SHARING_LABELS } from './components/DriveSharing';
 
 // Types
 export type {
@@ -17,4 +18,7 @@ export type {
   DriveConnectResponse,
   DriveUploadResult,
   DriveFolderContext,
+  DriveSharing,
+  DriveTarget,
+  DriveFileRecord,
 } from './types';

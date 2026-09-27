@@ -31,6 +31,7 @@ export const ONBOARDING_EXEMPT_PATHS = [
   '/org-creation',
   '/select-workspace',
   '/no-access',
+  '/workspace-deactivated',
 ] as const;
 
 /**

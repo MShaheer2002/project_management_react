@@ -75,6 +75,13 @@ export const AuthGuard: React.FC = () => {
     return <LoadingScreen />;
   }
 
+  // The owner deleted this workspace: it stays closed (owner included) until
+  // restored or purged. Updated by AuthSync, the API error interceptor and
+  // the realtime socket, so this also fires mid-session.
+  if (workspace.deactivatedAt) {
+    return <Navigate to="/workspace-deactivated" replace />;
+  }
+
   // Signed in, on the right subdomain → render the protected route
   return <Outlet />;
 };

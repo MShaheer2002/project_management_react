@@ -35,6 +35,7 @@ import { useApp } from '../AppContext';
 import { useSidebarData, type SidebarPermissions, type SidebarTeam } from '@features/sidebar';
 import { useWorkspaces } from '@features/workspace';
 import { buildLandingUrl } from '@shared/utils/tenant';
+import { workspaceLogoSrc } from '@shared/utils/workspaceLogo';
 
 const focusMinimal = 'outline-none focus:outline-none focus-visible:outline-none focus-visible:ring-0';
 
@@ -321,7 +322,7 @@ export const Sidebar: React.FC = () => {
       { path: '/members', label: 'Members', icon: <Users size={16} /> },
       { path: '/activity', label: 'Activity', icon: <History size={16} /> },
       { path: '/analytics', label: 'Analytics', icon: <BarChart3 size={16} />, leadOnly: true },
-      { path: '/integrations', label: 'Integrations', icon: <Globe size={16} />, adminOnly: true },
+      { path: '/integrations', label: 'Integrations', icon: <Globe size={16} />, leadOnly: true },
       { path: '/templates', label: 'Templates', icon: <FileText size={16} />, permission: 'canManageTemplates' },
       { path: '/billing', label: 'Billing', icon: <CreditCard size={16} />, permission: 'canManageBilling' },
       { path: '/ai-usage', label: 'AI Usage', icon: <Sparkles size={16} />, adminOnly: true },
@@ -352,9 +353,9 @@ export const Sidebar: React.FC = () => {
               <div className="w-8 h-8 rounded-md bg-primary flex items-center justify-center text-white text-xs font-semibold shrink-0 overflow-hidden">
                 {isInitialSidebarLoading && !displayOrganization ? (
                   <span className="w-3.5 h-3.5 rounded bg-white/35 animate-pulse" />
-                ) : displayOrganization?.logo && !workspaceLogoFailed ? (
+                ) : workspaceLogoSrc(displayOrganization?.logo) && !workspaceLogoFailed ? (
                   <img
-                    src={displayOrganization.logo}
+                    src={workspaceLogoSrc(displayOrganization?.logo)}
                     alt={displayOrganization.name}
                     className="h-full w-full object-cover"
                     referrerPolicy="no-referrer"
@@ -432,9 +433,9 @@ export const Sidebar: React.FC = () => {
             className={`w-10 h-10 mx-auto flex items-center justify-center rounded-lg bg-primary text-white text-xs font-semibold transition-transform duration-150 active:scale-[0.96] overflow-hidden ${focusMinimal}`}
             title={displayOrganization?.name ?? 'Workspace'}
           >
-            {displayOrganization?.logo && !workspaceLogoFailed ? (
+            {workspaceLogoSrc(displayOrganization?.logo) && !workspaceLogoFailed ? (
               <img
-                src={displayOrganization.logo}
+                src={workspaceLogoSrc(displayOrganization?.logo)}
                 alt={displayOrganization.name}
                 className="h-full w-full object-cover"
                 referrerPolicy="no-referrer"

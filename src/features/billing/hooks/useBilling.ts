@@ -10,12 +10,12 @@ export const billingQueryKeys = {
   invoices: (workspaceId?: string) => ['billing', 'invoices', workspaceId] as const,
 };
 
-export const useSubscription = () => {
+export const useSubscription = (enabled = true) => {
   const workspaceId = useAuthStore((s) => s.workspace?.id);
   return useQuery({
     queryKey: billingQueryKeys.subscription(workspaceId),
     queryFn: billingService.getSubscription,
-    enabled: !!workspaceId,
+    enabled: enabled && !!workspaceId,
     staleTime: 30_000,
   });
 };

@@ -1,12 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Loader2, Moon, Save, Sun, Globe, Trash2 } from 'lucide-react';
+import { Loader2, Moon, Save, Sun, Globe, Trash2, Upload } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { DocumentsPanel } from '@features/documents';
+import { useUploadFile } from '@features/upload';
+import { driveQueryKeys } from '@features/drive';
 import {
   useDeleteWorkspace,
   useUpdateWorkspace,
-  useWorkspaces,
   useWorkspaceDetails,
   InviteDomainPolicyPicker,
 } from '@features/workspace';
@@ -23,7 +24,7 @@ import { useAuthStore } from '@/app/stores/useAuthStore';
 import { Modal } from '@shared/components/ui/Modal';
 import { WorkflowStatusesEditor, WorkflowAutomationEditor } from '@shared/components/workflow/WorkflowEditors';
 import { AiConnectionsPage } from '@/pages/AiConnectionsPage';
-import { buildWorkspaceUrl, buildLandingUrl } from '@shared/utils/tenant';
+import { workspaceLogoSrc } from '@shared/utils/workspaceLogo';
 
 interface SettingsSectionProps {
   title: string;
@@ -54,6 +55,97 @@ const SettingsItem: React.FC<SettingsItemProps> = ({ label, description, childre
   </div>
 );
 
+
+const LOGO_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
+const LOGO_MAX_BYTES = 5 * 1024 * 1024;
+
+/**
+ * Logo picker. Upload only: the logo is shown on the public sign-in and invite
+ * pages, so a pasted URL let an admin point it at a tracking server (F-36).
+ * The backend accepts nothing but this workspace's own uploaded logo.
+ */
+const WorkspaceLogoField: React.FC<{
+  name: string;
+  value: string;
+  disabled: boolean;
+  onChange: (url: string) => void;
+}> = ({ name, value, disabled, onChange }) => {
+  const showToast = useToastStore((s) => s.showToast);
+  const uploadFile = useUploadFile();
+  const inputRef = useRef<HTMLInputElement>(null);
+  // Uploads are private: until saved, the new logo can only be shown from the
+  // local file. Once saved, `value` is the served /workspaces/:id/logo address.
+  const [localPreview, setLocalPreview] = useState<{ assetUrl: string; objectUrl: string } | null>(null);
+  const previewSrc = localPreview && localPreview.assetUrl === value ? localPreview.objectUrl : workspaceLogoSrc(value);
+
+  useEffect(() => () => {
+    if (localPreview) URL.revokeObjectURL(localPreview.objectUrl);
+  }, [localPreview]);
+
+  const handleFile = async (file: File | undefined) => {
+    if (!file) return;
+    if (!LOGO_TYPES.includes(file.type)) {
+      showToast('Use a PNG, JPG, GIF or WebP image.', 'error', 'Unsupported image');
+      return;
+    }
+    if (file.size > LOGO_MAX_BYTES) {
+      showToast('The logo must be 5 MB or smaller.', 'error', 'Image too large');
+      return;
+    }
+    try {
+      const uploaded = await uploadFile.mutateAsync({ file, kind: 'workspace-logo' });
+      if (!uploaded.assetUrl) {
+        showToast("Logo uploads aren't available right now.", 'error');
+        return;
+      }
+      setLocalPreview({ assetUrl: uploaded.assetUrl, objectUrl: URL.createObjectURL(file) });
+      onChange(uploaded.assetUrl);
+    } catch {
+      showToast('The logo could not be uploaded. Please try again.', 'error');
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-3">
+      {previewSrc ? (
+        <img src={previewSrc} alt="" className="w-10 h-10 rounded-lg object-cover border border-gray-200 dark:border-border-dark" />
+      ) : (
+        <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center text-white text-sm font-semibold">
+          {name.charAt(0).toUpperCase() || '?'}
+        </div>
+      )}
+      <input
+        ref={inputRef}
+        type="file"
+        accept={LOGO_TYPES.join(',')}
+        className="hidden"
+        onChange={(e) => {
+          void handleFile(e.target.files?.[0]);
+          e.target.value = '';
+        }}
+      />
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        disabled={disabled || uploadFile.isPending}
+        className="flex items-center gap-2 px-3 py-1.5 rounded-md border border-gray-200 dark:border-border-dark text-xs font-semibold hover:bg-gray-50 dark:hover:bg-white/5 transition-colors disabled:opacity-60"
+      >
+        {uploadFile.isPending ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+        {value ? 'Replace' : 'Upload'}
+      </button>
+      {value && (
+        <button
+          type="button"
+          onClick={() => onChange('')}
+          disabled={disabled || uploadFile.isPending}
+          className="px-3 py-1.5 rounded-md text-xs font-semibold text-gray-500 hover:text-red-500 transition-colors disabled:opacity-60"
+        >
+          Remove
+        </button>
+      )}
+    </div>
+  );
+};
 
 /** Dedicated invite domain policy editor — isolated mutation, same reasoning as UploadPolicySection below */
 const InviteDomainPolicySection: React.FC<{ workspaceId: string }> = ({ workspaceId }) => {
@@ -98,6 +190,7 @@ const InviteDomainPolicySection: React.FC<{ workspaceId: string }> = ({ workspac
 /** Dedicated upload policy selector — isolated mutation to avoid racing with "Save Changes" */
 const UploadPolicySection: React.FC<{ workspaceId: string }> = ({ workspaceId }) => {
   const showToast = useToastStore((s) => s.showToast);
+  const queryClient = useQueryClient();
   const activeWorkspace = useAuthStore((s) => s.workspace);
   const setWorkspace = useAuthStore((s) => s.setWorkspace);
 
@@ -120,6 +213,24 @@ const UploadPolicySection: React.FC<{ workspaceId: string }> = ({ workspaceId })
     },
   });
 
+  const publicLinksMutation = useMutation({
+    mutationFn: (allow: boolean) => workspaceService.update({ workspaceId, allowPublicDriveLinks: allow }),
+    onMutate: (allow) => {
+      const prev = useAuthStore.getState().workspace;
+      if (prev) setWorkspace({ ...prev, allowPublicDriveLinks: allow });
+      return { prev };
+    },
+    onError: (_err, _allow, context) => {
+      if (context?.prev) setWorkspace(context.prev);
+      showToast('Failed to update Google Drive sharing', 'error');
+    },
+    onSuccess: (_data, allow) => {
+      // Upload pickers read the allowed levels from the server.
+      queryClient.invalidateQueries({ queryKey: driveQueryKeys.all });
+      showToast(allow ? 'Public Drive links allowed' : 'Public Drive links turned off', 'success');
+    },
+  });
+
   return (
     <SettingsSection title="File Uploads">
       <SettingsItem
@@ -137,6 +248,21 @@ const UploadPolicySection: React.FC<{ workspaceId: string }> = ({ workspaceId })
           <option value="DRIVE_ONLY">Google Drive Only</option>
         </select>
       </SettingsItem>
+      <SettingsItem
+        label="Public Drive links"
+        description="Let members make files in their own Google Drive public. Files already shared stay as they are."
+      >
+        <label className="inline-flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={activeWorkspace?.allowPublicDriveLinks === true}
+            onChange={(e) => publicLinksMutation.mutate(e.target.checked)}
+            disabled={publicLinksMutation.isPending}
+            className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary/20"
+          />
+          Allow
+        </label>
+      </SettingsItem>
       {activeWorkspace?.uploadPolicy === 'DRIVE_ONLY' && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700 dark:border-amber-900/30 dark:bg-amber-900/10 dark:text-amber-400">
           Members without a connected Google Drive will be unable to upload files. They will see a prompt to connect their Drive on the Integrations page.
@@ -152,12 +278,9 @@ export const SettingsPage: React.FC = () => {
   const showToast = useToastStore((s) => s.showToast);
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const currentUser = useAuthStore((s) => s.currentUser);
   const setWorkspace = useAuthStore((s) => s.setWorkspace);
-  const setAuth = useAuthStore((s) => s.setAuth);
   const activeWorkspace = useAuthStore((s) => s.workspace);
   const { data: workspace, isLoading } = useWorkspaceDetails();
-  const workspacesQuery = useWorkspaces();
   const updateWorkspace = useUpdateWorkspace();
   const deleteWorkspace = useDeleteWorkspace();
   const queryClient = useQueryClient();
@@ -316,9 +439,11 @@ export const SettingsPage: React.FC = () => {
       return;
     }
     try {
+      const logoChanged = (logo.trim() || '') !== (workspace?.logo ?? '');
       await updateWorkspace.mutateAsync({
         name: trimmedName,
-        logo: logo.trim() || null,
+        // Only when changed: the loaded value is the served address, not the upload itself.
+        ...(logoChanged && { logo: logo.trim() || null }),
       });
       showToast('Workspace updated.', 'success');
     } catch (error) {
@@ -328,43 +453,19 @@ export const SettingsPage: React.FC = () => {
   };
 
   const handleDelete = async () => {
-    if (!workspace || confirmName !== workspace.name) return;
+    if (!workspace || !activeWorkspace || confirmName.trim() !== workspace.name.trim()) return;
     try {
-      await deleteWorkspace.mutateAsync();
-      const result = await workspacesQuery.refetch();
-      const remaining = result.data ?? [];
-      const nextWorkspace = remaining.find((item) => item.id !== workspace.id) ?? remaining[0];
-
-      if (nextWorkspace) {
-        setWorkspace({
-          id: nextWorkspace.id,
-          name: nextWorkspace.name,
-          slug: nextWorkspace.slug,
-          logo: nextWorkspace.logo ?? undefined,
-          role: nextWorkspace.role.toLowerCase() as 'owner' | 'admin' | 'member' | 'guest',
-          defaultTeamId: nextWorkspace.defaultTeamId,
-          customStatuses: nextWorkspace.customStatuses,
-          workflowAutomation: nextWorkspace.workflowAutomation,
-          uploadPolicy: nextWorkspace.uploadPolicy,
-        });
-        showToast('Workspace deleted. Switched to another workspace.', 'success');
-        // Currently sitting on the just-deleted workspace's own subdomain —
-        // the replacement lives on a DIFFERENT subdomain, a different
-        // origin, so this has to be a real navigation, not a route change.
-        window.location.href = buildWorkspaceUrl(nextWorkspace.slug, '/dashboard');
-        return;
-      }
-
-      if (currentUser) {
-        setAuth(currentUser, null);
-      }
-      showToast('Workspace deleted. Create a new workspace to continue.', 'success');
-      // No workspace left — /org-creation only exists on the bare domain,
-      // and we're currently on the (now-deleted) workspace's own subdomain.
-      window.location.href = buildLandingUrl('/org-creation');
+      const result = await deleteWorkspace.mutateAsync(confirmName);
+      queryClient.invalidateQueries({ queryKey: ['workspaces'] });
+      // Soft delete: marking the workspace deactivated makes AuthGuard switch
+      // this tab to the restore screen with the 30-day countdown.
+      setWorkspace({ ...activeWorkspace, deactivatedAt: result.deactivatedAt, purgeAt: result.purgeAt });
     } catch (error) {
+      // 403/409/5xx are already toasted by the API interceptor; 422 is ours.
       const apiError = error as ApiAxiosError;
-      showToast(apiError.response?.data?.error?.message || 'Failed to delete workspace.', 'error');
+      if (apiError.response?.status === 422) {
+        showToast(apiError.response.data?.error?.message || 'Type the workspace name exactly to confirm.', 'error');
+      }
     }
   };
 
@@ -483,16 +584,9 @@ export const SettingsPage: React.FC = () => {
 
               <SettingsItem
                 label="Workspace Logo"
-                description="Optional image URL used for workspace branding."
+                description="Shown in the sidebar and on your sign-in and invite pages. PNG, JPG, GIF or WebP, up to 5 MB. Save to apply."
               >
-                <input
-                  type="url"
-                  value={logo}
-                  onChange={(e) => setLogo(e.target.value)}
-                  disabled={!canManageSettings}
-                  placeholder="https://..."
-                  className="px-3 py-1.5 bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-border-dark rounded-md text-sm outline-none focus:ring-2 focus:ring-primary/20 transition-all w-64 disabled:opacity-60"
-                />
+                <WorkspaceLogoField name={name} value={logo} disabled={!canManageSettings} onChange={setLogo} />
               </SettingsItem>
 
               <SettingsItem
@@ -591,7 +685,7 @@ export const SettingsPage: React.FC = () => {
               <SettingsSection title="Danger Zone">
                 <SettingsItem
                   label="Delete Workspace"
-                  description="Permanently delete this workspace and all its data. If this is your only workspace, you will be sent back to onboarding."
+                  description="Members lose access right away. The workspace and all its data are permanently deleted after 30 days. Until then you can restore it by signing in and clicking Restore."
                   danger
                 >
                   <div className="space-y-3">
@@ -604,7 +698,7 @@ export const SettingsPage: React.FC = () => {
                     />
                     <button
                       onClick={handleDelete}
-                      disabled={confirmName !== workspace?.name || deleteWorkspace.isPending}
+                      disabled={!workspace || confirmName.trim() !== workspace.name.trim() || deleteWorkspace.isPending}
                       className="flex items-center gap-2 px-4 py-1.5 rounded-md bg-red-500/10 text-red-500 text-xs font-semibold hover:bg-red-500 hover:text-white transition-all disabled:opacity-50 disabled:hover:bg-red-500/10 disabled:hover:text-red-500"
                     >
                       {deleteWorkspace.isPending ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}

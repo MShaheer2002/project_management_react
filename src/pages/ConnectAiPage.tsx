@@ -7,10 +7,11 @@ import { useWorkspaces } from '@features/workspace';
 import type { WorkspaceResponse } from '@features/workspace';
 import { useCompleteOAuthSetup } from '@features/ai-connections';
 import { ScopesField } from '@features/ai-connections/components/ScopesField';
-import { ADMIN_SCOPE } from '@features/ai-connections/scopes';
+import { DEFAULT_OAUTH_SCOPES } from '@features/ai-connections/scopes';
 import { CLIENT_OPTIONS } from '@features/ai-connections/clients';
 import type { ApiAxiosError } from '@shared/services/types';
 import { Logo } from './auth/shared';
+import { workspaceLogoSrc } from '@shared/utils/workspaceLogo';
 
 export const ConnectAiPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -23,7 +24,7 @@ export const ConnectAiPage: React.FC = () => {
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(activeWorkspace?.id ?? null);
   const [name, setName] = useState('');
   const [primaryClient, setPrimaryClient] = useState<(typeof CLIENT_OPTIONS)[number]['value']>('generic_mcp');
-  const [scopes, setScopes] = useState<string[]>([ADMIN_SCOPE]);
+  const [scopes, setScopes] = useState<string[]>(DEFAULT_OAUTH_SCOPES);
   const [error, setError] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
 
@@ -113,8 +114,8 @@ export const ConnectAiPage: React.FC = () => {
                       : 'border-gray-200 dark:border-border-dark bg-gray-50 dark:bg-black/20 hover:border-gray-300 dark:hover:border-white/[0.12]'
                   }`}
                 >
-                  {ws.logo ? (
-                    <img src={ws.logo} alt={ws.name} className="w-8 h-8 rounded-lg object-cover shrink-0" />
+                  {workspaceLogoSrc(ws.logo) ? (
+                    <img src={workspaceLogoSrc(ws.logo)} alt={ws.name} className="w-8 h-8 rounded-lg object-cover shrink-0" />
                   ) : (
                     <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-white text-xs font-semibold shrink-0">
                       {ws.name.charAt(0).toUpperCase()}

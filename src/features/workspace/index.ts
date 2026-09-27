@@ -4,6 +4,7 @@ export { useWorkspaceDetails, useWorkspaces, workspaceQueryKeys } from './hooks/
 export { useWorkspaceSwitch } from './hooks/useWorkspaceSwitch';
 export {
   useDeleteWorkspace,
+  useRestoreWorkspace,
   useRemoveMember,
   useRevokeInvitation,
   useUpdateMemberRole,
@@ -17,9 +18,11 @@ export {
 } from './hooks/useWorkspaceMembers';
 export { WorkspaceSwitcher } from './components/WorkspaceSwitcher';
 export { InviteDomainPolicyPicker } from './components/InviteDomainPolicyPicker';
+export { DeactivatedWorkspaceBadge } from './components/DeactivatedWorkspaceBadge';
 export type { WorkspaceMenuItem } from './components/WorkspaceSwitcher';
 export type {
   CreateWorkspaceInput,
+  DeactivateWorkspaceResponse,
   InvitationResponse,
   InvitationAcceptResponse,
   InvitationResolveResponse,

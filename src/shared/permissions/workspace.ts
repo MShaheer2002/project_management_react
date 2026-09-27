@@ -44,6 +44,13 @@ export const canManageRoadmap = (
   canCreateDepartment(role) ||
   (Boolean(currentUserId) && (currentUserId === projectLeadId || currentUserId === teamLeadId));
 
+/**
+ * Deleting a project wipes everyone's issues in it, so it's admin-only like
+ * deleting an issue — the project lead can be any member (F-37).
+ */
+export const canDeleteProject = (role: WorkspaceRoleInput): boolean =>
+  role === 'owner' || role === 'admin';
+
 export const canForceRoadmapOverride = (role: WorkspaceRoleInput): boolean =>
   canManageDocuments(role);
 

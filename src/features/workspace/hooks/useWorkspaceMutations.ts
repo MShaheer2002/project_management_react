@@ -44,9 +44,20 @@ export const useDeleteWorkspace = () => {
   const workspaceId = useAuthStore((s) => s.workspace?.id);
 
   return useMutation({
+    mutationFn: (confirmName: string) => {
+      if (!workspaceId) throw new Error('Missing active workspace');
+      return workspaceService.delete(workspaceId, confirmName);
+    },
+  });
+};
+
+export const useRestoreWorkspace = () => {
+  const workspaceId = useAuthStore((s) => s.workspace?.id);
+
+  return useMutation({
     mutationFn: () => {
       if (!workspaceId) throw new Error('Missing active workspace');
-      return workspaceService.delete(workspaceId);
+      return workspaceService.restore(workspaceId);
     },
   });
 };

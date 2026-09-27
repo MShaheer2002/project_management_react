@@ -16,7 +16,6 @@ export {
   useSlackAvailableChannels,
   useDiscordSettings,
   useFigmaSettings,
-  useFigmaPreview,
   useFigmaBatchPreview,
 } from './hooks/useIntegrationData';
 

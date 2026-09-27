@@ -5,7 +5,9 @@ import { useAuthStore } from '@/app/stores/useAuthStore';
 import { useWorkspaces } from '../hooks/useWorkspaceDetails';
 import { useWorkspaceSwitch } from '../hooks/useWorkspaceSwitch';
 import type { WorkspaceResponse } from '../services/workspaceService';
+import { DeactivatedWorkspaceBadge } from './DeactivatedWorkspaceBadge';
 import { buildLandingUrl } from '@shared/utils/tenant';
+import { workspaceLogoSrc } from '@shared/utils/workspaceLogo';
 
 const focusMinimal = 'outline-none focus:outline-none focus-visible:outline-none focus-visible:ring-0';
 
@@ -33,8 +35,9 @@ const WorkspaceLogo: React.FC<WorkspaceLogoProps> = ({ name, logo, size }) => {
   const dim = size === 'sm' ? 'w-8 h-8' : 'w-9 h-9';
   const textSize = size === 'sm' ? 'text-xs' : 'text-sm';
 
-  if (logo) {
-    return <img src={logo} alt={name} className={`${dim} rounded-md object-cover shrink-0`} />;
+  const src = workspaceLogoSrc(logo);
+  if (src) {
+    return <img src={src} alt={name} className={`${dim} rounded-md object-cover shrink-0`} />;
   }
   return (
     <div className={`${dim} rounded-md bg-primary flex items-center justify-center text-white ${textSize} font-semibold shrink-0`}>
@@ -120,8 +123,8 @@ export const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({
           className={`w-10 h-10 mx-auto flex items-center justify-center rounded-lg bg-primary text-white text-xs font-semibold transition-transform duration-150 active:scale-[0.96] ${focusMinimal}`}
           title={activeWorkspace.name}
         >
-          {activeWorkspace.logo ? (
-            <img src={activeWorkspace.logo} alt={activeWorkspace.name} className="w-10 h-10 rounded-lg object-cover" />
+          {workspaceLogoSrc(activeWorkspace.logo) ? (
+            <img src={workspaceLogoSrc(activeWorkspace.logo)} alt={activeWorkspace.name} className="w-10 h-10 rounded-lg object-cover" />
           ) : (
             activeWorkspace.name.charAt(0).toUpperCase()
           )}
@@ -261,6 +264,7 @@ const SwitcherDropdown: React.FC<SwitcherDropdownProps> = ({
                 >
                   {ROLE_LABELS[role] || role}
                 </span>
+                <DeactivatedWorkspaceBadge workspace={ws} />
                 {(ws.unreadNotifications ?? 0) > 0 && !isActive && (
                   <span className="text-[10px] font-medium px-1.5 py-px rounded-full bg-red-500/10 text-red-500 dark:text-red-400">
                     {ws.unreadNotifications}

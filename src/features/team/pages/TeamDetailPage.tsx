@@ -445,14 +445,17 @@ export const TeamDetailPage: React.FC = () => {
     <div className="space-y-6 p-6">
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className={showDocsCard ? 'lg:col-span-2' : 'lg:col-span-3'}>
-          <MemberPerformancePanel
-            title="Member Performance"
-            subtitle="Completion progress for issues assigned across this team."
-            rows={teamAnalyticsRows}
-            emptyTitle="No member performance yet"
-            emptyDescription="Assign issues to team members to start tracking completion and workload."
-            unassignedCount={teamUnassignedCount}
-          />
+          {/* Per-person performance: admins and the team lead only, like team analytics (F-43). */}
+          {canManage && (
+            <MemberPerformancePanel
+              title="Member Performance"
+              subtitle="Completion progress for issues assigned across this team."
+              rows={teamAnalyticsRows}
+              emptyTitle="No member performance yet"
+              emptyDescription="Assign issues to team members to start tracking completion and workload."
+              unassignedCount={teamUnassignedCount}
+            />
+          )}
         </div>
 
         {showDocsCard && (

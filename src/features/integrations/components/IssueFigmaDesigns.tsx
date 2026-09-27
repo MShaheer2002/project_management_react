@@ -5,6 +5,8 @@ import { FIGMA_URL_REGEX, PROVIDER_META } from '../types';
 import type { FigmaPreview } from '../types';
 
 interface IssueFigmaDesignsProps {
+  /** The issue these links belong to — previews are only served for its own links */
+  issueId: string;
   /** Issue description HTML — scanned for Figma URLs */
   description?: string;
   /** Explicit Figma URLs from integrationRefs */
@@ -63,6 +65,7 @@ const FigmaPreviewCard: React.FC<{ preview: FigmaPreview }> = ({
 );
 
 export const IssueFigmaDesigns: React.FC<IssueFigmaDesignsProps> = ({
+  issueId,
   description,
   figmaUrls: explicitUrls,
 }) => {
@@ -85,7 +88,7 @@ export const IssueFigmaDesigns: React.FC<IssueFigmaDesignsProps> = ({
     return Array.from(urls).slice(0, 20); // Max 20 per batch
   }, [description, explicitUrls]);
 
-  const batchQuery = useFigmaBatchPreview(allUrls, {
+  const batchQuery = useFigmaBatchPreview(issueId, allUrls, {
     enabled: isFigmaConnected && allUrls.length > 0,
   });
 
