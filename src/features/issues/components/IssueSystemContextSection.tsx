@@ -1,4 +1,5 @@
 import React from 'react';
+import { isWebLink } from '@shared/utils/webLink';
 import { ExternalLink } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { STATUS_LABELS } from '@/constants';
@@ -32,9 +33,6 @@ const providerLabel = (provider: IssueIntegrationRef['provider']) => {
       return 'Custom';
   }
 };
-
-// Only web links can be opened, so a saved link can never run code (F-46).
-const isWebLink = (url: string) => /^https?:\/\//i.test(url.trim());
 
 const formatReferenceMeta = (ref: IssueIntegrationRef) => {
   const parts = [ref.externalId, ref.url].filter(Boolean);
@@ -132,7 +130,7 @@ export const IssueSystemContextSection: React.FC<IssueSystemContextSectionProps>
                       </p>
                     )}
                   </div>
-                  {ref.url && isWebLink(ref.url) && (
+                  {isWebLink(ref.url) && (
                     <button
                       type="button"
                       onClick={() => window.open(ref.url, '_blank', 'noopener,noreferrer')}

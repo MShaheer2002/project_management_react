@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { isWebLink } from '@shared/utils/webLink';
 import { isAxiosError } from 'axios';
 import {
   ExternalLink,
@@ -591,7 +592,7 @@ export const IssueAttachmentsField: React.FC<IssueAttachmentsFieldProps> = ({
 
   const handleOpenAttachment = async (item: AttachmentListItem) => {
     // Drive links are direct URLs — open them directly
-    if (item.assetUrl && item.assetUrl.includes('drive.google.com')) {
+    if (isWebLink(item.assetUrl) && item.assetUrl.includes('drive.google.com')) {
       window.open(item.assetUrl, '_blank', 'noopener,noreferrer');
       return;
     }
@@ -599,7 +600,7 @@ export const IssueAttachmentsField: React.FC<IssueAttachmentsFieldProps> = ({
     const key = item.key.trim();
 
     if (!key) {
-      if (item.assetUrl) {
+      if (isWebLink(item.assetUrl)) {
         window.open(item.assetUrl, '_blank', 'noopener,noreferrer');
         return;
       }
