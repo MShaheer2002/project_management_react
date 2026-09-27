@@ -21,6 +21,12 @@ export interface ProjectWorkflow {
   source: 'workspace' | 'project';
   statuses: WorkspaceStatus[];
   automation: WorkflowAutomationConfig;
+  /** What the current user may change — computed by the API (F-37). */
+  permissions?: {
+    structureLocked: boolean;
+    canDeleteIssues: boolean;
+    canRevert: boolean;
+  };
 }
 
 export interface ProjectWorkflowStatusUsage {

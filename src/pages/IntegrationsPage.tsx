@@ -35,6 +35,7 @@ import {
   useConnectDrive,
   useDisconnectDrive,
   driveQueryKeys,
+  DriveConnectionPanel,
 } from '@features/drive';
 import { useSubscription } from '@features/billing';
 
@@ -88,12 +89,13 @@ export const IntegrationsPage: React.FC = () => {
     useState<IntegrationProvider | null>(null);
   const [disconnectingDrive, setDisconnectingDrive] = useState(false);
 
-  const { data: integrations = [], isLoading, isError, refetch } = useIntegrations();
+  // Company integrations are admin-only; members only get their Google Drive here.
+  const { data: integrations = [], isLoading, isError, refetch } = useIntegrations(isManager);
   const connectGitHub = useConnectGitHub();
   const connectSlack = useConnectSlack();
   const disconnectIntegration = useDisconnectIntegration();
 
-  const { data: subscription } = useSubscription();
+  const { data: subscription } = useSubscription(isManager);
   const allowedIntegrations = subscription?.entitlements.allowedIntegrations ?? null;
   const isIntegrationPlanLocked = useCallback(
     (provider: IntegrationProvider) =>
@@ -140,6 +142,7 @@ export const IntegrationsPage: React.FC = () => {
 
   // Merge API data with static provider metadata
   const enrichedIntegrations = useMemo<EnrichedIntegration[]>(() => {
+    if (!isManager) return [];
     const list = Object.values(PROVIDER_META).map((meta) => {
       const apiData = integrations.find((i) => i.provider === meta.id);
       return {
@@ -162,7 +165,7 @@ export const IntegrationsPage: React.FC = () => {
         i.name.toLowerCase().includes(term) ||
         i.description.toLowerCase().includes(term),
     );
-  }, [integrations, search, isIntegrationPlanLocked]);
+  }, [integrations, search, isIntegrationPlanLocked, isManager]);
 
   const connectedCount =
     enrichedIntegrations.filter((i) => i.connected).length +
@@ -430,66 +433,11 @@ export const IntegrationsPage: React.FC = () => {
                   />
                 </h3>
                 <p className="text-sm text-gray-400 leading-relaxed">
-                  Upload files to your personal Drive. Trussen stores only links — zero storage cost.
+                  Upload files to Google Drive. Trussen stores only the links.
                 </p>
               </div>
 
-              {/* Connected-by info */}
-              {driveConnection?.connected && driveConnection.email && (
-                <div className="text-[11px] text-gray-400 mb-4">
-                  Connected as {driveConnection.email}
-                  {driveConnection.connectedAt &&
-                    ` \u00B7 ${relativeTime(driveConnection.connectedAt)}`}
-                </div>
-              )}
-
-              <div className="flex items-center justify-end gap-2">
-                {driveConnection?.connected ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        try {
-                          const result = await connectDrive.mutateAsync();
-                          window.location.href = result.authUrl;
-                        } catch (error) {
-                          console.error('[IntegrationsPage] Drive switch account failed:', error);
-                        }
-                      }}
-                      disabled={connectDrive.isPending}
-                      className="px-3 py-1.5 rounded-md border border-gray-200 dark:border-border-dark text-xs font-semibold hover:bg-gray-50 dark:hover:bg-white/5 transition-colors flex items-center gap-1.5"
-                    >
-                      {connectDrive.isPending && <Loader2 size={12} className="animate-spin" />}
-                      Switch Account
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setDisconnectingDrive(true)}
-                      disabled={disconnectDrive.isPending}
-                      className="px-4 py-1.5 rounded-md border border-gray-200 dark:border-border-dark text-xs font-semibold hover:bg-red-500 hover:text-white hover:border-red-500 transition-all disabled:opacity-50"
-                    >
-                      Disconnect
-                    </button>
-                  </>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      try {
-                        const result = await connectDrive.mutateAsync();
-                        window.location.href = result.authUrl;
-                      } catch (error) {
-                        console.error('[IntegrationsPage] Drive connect failed:', error);
-                      }
-                    }}
-                    disabled={connectDrive.isPending}
-                    className="px-4 py-1.5 rounded-md bg-primary text-white text-xs font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-1.5"
-                  >
-                    {connectDrive.isPending && <Loader2 size={12} className="animate-spin" />}
-                    Connect
-                  </button>
-                )}
-              </div>
+              <DriveConnectionPanel />
             </div>
           )}
 
@@ -647,55 +595,6 @@ export const IntegrationsPage: React.FC = () => {
         </>
       )}
 
-      {/* Drive disconnect confirmation dialog */}
-      {disconnectingDrive && (
-        <>
-          <div
-            className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
-            onClick={() => setDisconnectingDrive(false)}
-          />
-          <div className="fixed left-1/2 top-1/2 z-50 w-full max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-gray-200 bg-white p-6 shadow-2xl dark:border-border-dark dark:bg-bg-dark">
-            <h3 className="text-lg font-bold">Disconnect Google Drive</h3>
-            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-              Are you sure? This will:
-            </p>
-            <ul className="mt-2 space-y-1 text-sm text-gray-500 dark:text-gray-400">
-              <li className="flex items-start gap-2">
-                <span className="mt-0.5 shrink-0">&bull;</span>
-                Stop new file uploads to your Google Drive
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="mt-0.5 shrink-0">&bull;</span>
-                Revoke Trussen access to your Google account
-              </li>
-            </ul>
-            <p className="mt-3 text-xs text-gray-400">
-              Existing file links will remain accessible. Your Drive files will not be affected.
-            </p>
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setDisconnectingDrive(false)}
-                className="px-4 py-2 rounded-lg text-sm font-medium text-gray-500 hover:bg-gray-100 dark:hover:bg-white/5 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  disconnectDrive.mutate();
-                  setDisconnectingDrive(false);
-                }}
-                disabled={disconnectDrive.isPending}
-                className="px-4 py-2 rounded-lg bg-red-500 text-sm font-bold text-white hover:bg-red-600 transition-colors disabled:opacity-50 flex items-center gap-2"
-              >
-                {disconnectDrive.isPending && <Loader2 size={14} className="animate-spin" />}
-                Disconnect
-              </button>
-            </div>
-          </div>
-        </>
-      )}
 
       {/* GitHub settings slide-over */}
       <GitHubSettingsPanel

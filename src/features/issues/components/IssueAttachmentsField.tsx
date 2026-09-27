@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { isWebLink } from '@shared/utils/webLink';
 import { isAxiosError } from 'axios';
 import {
   ExternalLink,
@@ -6,6 +7,7 @@ import {
   HardDrive,
   ImageIcon,
   Loader2,
+  Lock,
   Paperclip,
   Pencil,
   Plus,
@@ -14,8 +16,9 @@ import {
   Upload,
 } from 'lucide-react';
 import { uploadKindAccept, useOpenViewUploadUrl, useUploadFile, type UploadedFileReference } from '@features/upload';
-import { useDriveConnection, driveService } from '@features/drive';
-import type { DriveFolderContext } from '@features/drive';
+import { useDriveConnection, driveService, driveQueryKeys, useDriveFiles, DriveSharingBadge } from '@features/drive';
+import { useQueryClient } from '@tanstack/react-query';
+import type { DriveFolderContext, DriveSharing } from '@features/drive';
 import { getApiErrorCode, getApiErrorMessage } from '@shared/services';
 import { useAuthStore } from '@/app/stores/useAuthStore';
 import { useApp } from '@/AppContext';
@@ -25,6 +28,8 @@ type AttachmentUploadState = 'uploading' | 'uploaded' | 'failed';
 
 type AttachmentListItem = IssueAttachment & {
   status: AttachmentUploadState;
+  /** Sharing Google actually applied to a Drive upload made in this session */
+  driveSharing?: DriveSharing;
   progress: number | null;
   error?: string;
   file?: File;
@@ -180,6 +185,7 @@ export const IssueAttachmentsField: React.FC<IssueAttachmentsFieldProps> = ({
   embedded = false,
 }) => {
   const { showToast } = useApp();
+  const queryClient = useQueryClient();
   const uploadFile = useUploadFile();
   const openViewUploadUrl = useOpenViewUploadUrl();
   const { data: driveConnection } = useDriveConnection();
@@ -202,6 +208,7 @@ export const IssueAttachmentsField: React.FC<IssueAttachmentsFieldProps> = ({
   const showDriveUpload = (uploadPolicy === 'BOTH' || uploadPolicy === 'DRIVE_ONLY') && isDriveConnected;
   const showDriveConnectPrompt = uploadPolicy === 'DRIVE_ONLY' && !isDriveConnected;
 
+
   itemsRef.current = items;
 
   useEffect(() => {
@@ -219,6 +226,17 @@ export const IssueAttachmentsField: React.FC<IssueAttachmentsFieldProps> = ({
       });
     };
   }, []);
+
+  // Badges for Drive attachments already on the issue (sharing can change after upload).
+  const driveFileIds = useMemo(
+    () => items.filter((item) => item.assetUrl?.includes('drive.google.com') && item.key).map((item) => item.key).sort(),
+    [items],
+  );
+  const { data: driveFileRecords } = useDriveFiles(driveFileIds);
+  const driveSharingById = useMemo(
+    () => new Map((driveFileRecords ?? []).map((record) => [record.driveFileId, record.sharing] as const)),
+    [driveFileRecords],
+  );
 
   const uploadedCount = useMemo(
     () => items.filter((item) => item.status === 'uploaded').length,
@@ -400,6 +418,9 @@ export const IssueAttachmentsField: React.FC<IssueAttachmentsFieldProps> = ({
         signal: controller.signal,
         folderContext: driveFolderContext,
       });
+      if (result.sharingNotice) {
+        showToast(result.sharingNotice, 'warning', 'Kept private');
+      }
 
       controllersRef.current.delete(itemId);
 
@@ -420,6 +441,7 @@ export const IssueAttachmentsField: React.FC<IssueAttachmentsFieldProps> = ({
             key: result.driveFileId,
             assetUrl: result.driveUrl,
             reference: result.driveUrl,
+            driveSharing: result.sharing,
             status: 'uploaded',
             progress: 100,
             error: undefined,
@@ -434,8 +456,12 @@ export const IssueAttachmentsField: React.FC<IssueAttachmentsFieldProps> = ({
 
       if (controller.signal.aborted) return;
 
-      const message =
-        error instanceof Error ? error.message : 'Drive upload failed. Try again.';
+      const message = getApiErrorMessage(error) || 'Drive upload failed. Try again.';
+      // Connected without the Drive permission: the server marked the
+      // connection for reconnect, so refresh it to bring the Connect prompt back.
+      if (getApiErrorCode(error) === 'DRIVE_SCOPE_MISSING') {
+        void queryClient.invalidateQueries({ queryKey: driveQueryKeys.connection() });
+      }
 
       updateItems(
         (existing) =>
@@ -553,6 +579,11 @@ export const IssueAttachmentsField: React.FC<IssueAttachmentsFieldProps> = ({
     }
 
     if (target.isDriveUpload) {
+      // Drive was disconnected (e.g. missing permission) — retrying can only fail.
+      if (!isDriveConnected) {
+        showToast('Connect Google Drive again to retry this upload.', 'error');
+        return;
+      }
       void performDriveUpload(id);
     } else {
       void performUpload(id);
@@ -561,7 +592,7 @@ export const IssueAttachmentsField: React.FC<IssueAttachmentsFieldProps> = ({
 
   const handleOpenAttachment = async (item: AttachmentListItem) => {
     // Drive links are direct URLs — open them directly
-    if (item.assetUrl && item.assetUrl.includes('drive.google.com')) {
+    if (isWebLink(item.assetUrl) && item.assetUrl.includes('drive.google.com')) {
       window.open(item.assetUrl, '_blank', 'noopener,noreferrer');
       return;
     }
@@ -569,7 +600,7 @@ export const IssueAttachmentsField: React.FC<IssueAttachmentsFieldProps> = ({
     const key = item.key.trim();
 
     if (!key) {
-      if (item.assetUrl) {
+      if (isWebLink(item.assetUrl)) {
         window.open(item.assetUrl, '_blank', 'noopener,noreferrer');
         return;
       }
@@ -628,7 +659,7 @@ export const IssueAttachmentsField: React.FC<IssueAttachmentsFieldProps> = ({
                   type="button"
                   onClick={() => driveInputRef.current?.click()}
                   className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-600 transition-all hover:border-blue-400 hover:bg-blue-50 hover:text-blue-600 dark:border-border-dark dark:bg-white/[0.03] dark:text-gray-300 dark:hover:border-blue-500/50 dark:hover:bg-blue-500/10 dark:hover:text-blue-400"
-                  title="Upload to your Google Drive — any file type"
+                  title="Upload any file to Google Drive"
                 >
                   <HardDrive size={14} />
                   Upload to Drive
@@ -759,6 +790,9 @@ export const IssueAttachmentsField: React.FC<IssueAttachmentsFieldProps> = ({
                         Drive
                       </span>
                     )}
+                    {item.assetUrl?.includes('drive.google.com') && item.key && (driveSharingById.get(item.key) ?? item.driveSharing) && (
+                      <DriveSharingBadge sharing={(driveSharingById.get(item.key) ?? item.driveSharing)!} />
+                    )}
                   </div>
 
                   <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-400">
@@ -767,7 +801,11 @@ export const IssueAttachmentsField: React.FC<IssueAttachmentsFieldProps> = ({
                       <span>{item.progress !== null ? `${item.progress}% uploaded` : 'Uploading'}</span>
                     )}
                     {item.status === 'uploaded' && <span>Uploaded</span>}
-                    {item.status === 'failed' && <span className="text-gray-500 dark:text-gray-400">{item.error}</span>}
+                    {item.status === 'failed' && (
+                      <span className="text-gray-500 dark:text-gray-400">
+                        {item.isDriveUpload && !isDriveConnected ? 'Google Drive is not connected. Connect it on the Integrations page, then upload again.' : item.error}
+                      </span>
+                    )}
                   </div>
 
                   {item.status === 'uploading' && (
@@ -792,7 +830,7 @@ export const IssueAttachmentsField: React.FC<IssueAttachmentsFieldProps> = ({
                     </button>
                   )}
 
-                  {item.status === 'failed' && item.file && (
+                  {item.status === 'failed' && item.file && (!item.isDriveUpload || isDriveConnected) && (
                     <button
                       type="button"
                       onClick={() => handleRetry(item.id)}

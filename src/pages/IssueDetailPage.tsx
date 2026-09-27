@@ -1137,6 +1137,7 @@ export const IssueDetailPage: React.FC = () => {
             <IssueGitHubActivity issueId={issueResourceId} />
 
             <IssueFigmaDesigns
+              issueId={issueResourceId}
               description={issue.description}
               figmaUrls={
                 issue.integrationRefs

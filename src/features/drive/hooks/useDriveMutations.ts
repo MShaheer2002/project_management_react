@@ -3,6 +3,7 @@ import { useToastStore } from '@/app/stores/useToastStore';
 import { driveService } from '../services/driveService';
 import { driveQueryKeys } from './useDriveData';
 import type { ApiAxiosError } from '@shared/services/types';
+import type { DriveSharing, DriveTarget } from '../types';
 
 /**
  * Start the Google Drive OAuth flow.
@@ -12,7 +13,7 @@ export const useConnectDrive = () => {
   const showToast = useToastStore((s) => s.showToast);
 
   return useMutation({
-    mutationFn: driveService.connect,
+    mutationFn: (mode: DriveTarget = 'PERSONAL') => driveService.connect(mode),
     onError: (err: ApiAxiosError) => {
       const code = err.response?.data?.error?.code;
       if (code === 'DRIVE_NOT_CONFIGURED') {
@@ -47,6 +48,48 @@ export const useDisconnectDrive = () => {
         'error',
       );
     },
+  });
+};
+
+/** My Drive settings: who can open my files, and where my uploads go. */
+export const useUpdateDriveSettings = () => {
+  const queryClient = useQueryClient();
+  const showToast = useToastStore((s) => s.showToast);
+  return useMutation({
+    mutationFn: (input: { sharing?: DriveSharing; uploadTarget?: DriveTarget }) => driveService.updateSettings(input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: driveQueryKeys.connection() });
+      showToast('Saved', 'success');
+    },
+    onError: (err: ApiAxiosError) => showToast(err.response?.data?.error?.message || 'Could not save', 'error'),
+  });
+};
+
+/** Workspace Drive sharing (owners and admins). */
+export const useUpdateWorkspaceDrive = () => {
+  const queryClient = useQueryClient();
+  const showToast = useToastStore((s) => s.showToast);
+  return useMutation({
+    mutationFn: (sharing: DriveSharing) => driveService.updateWorkspaceDrive(sharing),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: driveQueryKeys.connection() });
+      showToast('Saved', 'success');
+    },
+    onError: (err: ApiAxiosError) => showToast(err.response?.data?.error?.message || 'Could not save', 'error'),
+  });
+};
+
+/** Disconnect the Workspace Drive (owners and admins). */
+export const useDisconnectWorkspaceDrive = () => {
+  const queryClient = useQueryClient();
+  const showToast = useToastStore((s) => s.showToast);
+  return useMutation({
+    mutationFn: driveService.disconnectWorkspace,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: driveQueryKeys.connection() });
+      showToast('Workspace Drive disconnected', 'success');
+    },
+    onError: (err: ApiAxiosError) => showToast(err.response?.data?.error?.message || 'Could not disconnect', 'error'),
   });
 };
 

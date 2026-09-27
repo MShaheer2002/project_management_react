@@ -173,8 +173,11 @@ export const AuthSync: React.FC<{ children: React.ReactNode }> = ({ children }) 
             customStatuses: ws.customStatuses || undefined,
             workflowAutomation: ws.workflowAutomation || undefined,
             uploadPolicy: ws.uploadPolicy || 'BOTH',
+            allowPublicDriveLinks: ws.allowPublicDriveLinks === true,
             inviteDomainPolicy: ws.inviteDomainPolicy || 'ANY',
             allowedEmailDomains: ws.allowedEmailDomains || [],
+            deactivatedAt: ws.deactivatedAt ?? null,
+            purgeAt: ws.purgeAt ?? null,
           }));
           console.log('[AuthSync] GET /workspaces returned', backendWorkspaces?.length, 'workspace(s)');
         }

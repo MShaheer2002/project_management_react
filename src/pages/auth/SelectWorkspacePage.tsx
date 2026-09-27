@@ -4,10 +4,11 @@ import { useUser } from '@clerk/clerk-react';
 import { motion } from 'motion/react';
 import { Building2, Check, Loader2, Plus } from 'lucide-react';
 import { useAuthStore } from '@/app/stores/useAuthStore';
-import { useWorkspaces, useWorkspaceSwitch } from '@features/workspace';
+import { DeactivatedWorkspaceBadge, useWorkspaces, useWorkspaceSwitch } from '@features/workspace';
 import type { WorkspaceResponse } from '@features/workspace';
 import { buildWorkspaceUrl } from '@shared/utils/tenant';
 import { Logo } from './shared';
+import { workspaceLogoSrc } from '@shared/utils/workspaceLogo';
 
 const ROLE_COLORS: Record<string, string> = {
   owner: 'bg-gray-100 text-gray-500 dark:bg-white/[0.06] dark:text-gray-400',
@@ -109,9 +110,9 @@ export const SelectWorkspacePage: React.FC = () => {
                     }`}
                   >
                     {/* Logo */}
-                    {ws.logo ? (
+                    {workspaceLogoSrc(ws.logo) ? (
                       <img
-                        src={ws.logo}
+                        src={workspaceLogoSrc(ws.logo)}
                         alt={ws.name}
                         className="w-10 h-10 rounded-lg object-cover shrink-0"
                       />
@@ -135,6 +136,7 @@ export const SelectWorkspacePage: React.FC = () => {
                         <span className={`text-[10px] font-medium px-1.5 py-px rounded-full ${ROLE_COLORS[role] || ROLE_COLORS.member}`}>
                           {ROLE_LABELS[role] || role}
                         </span>
+                        <DeactivatedWorkspaceBadge workspace={ws} />
                         {ws.slug && (
                           <span className="text-[11px] text-gray-400 dark:text-gray-500 truncate">
                             {ws.slug}.trussen.app

@@ -4,6 +4,7 @@ export {
   canCreateDepartment,
   canCreateTeam,
   canDeleteIssues,
+  canDeleteProject,
   canManageDocuments,
   canManageDepartment,
   canManageIntegrations,

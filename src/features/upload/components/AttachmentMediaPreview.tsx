@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { isWebLink } from '@shared/utils/webLink';
 import { FileVideo2, ImageIcon, Loader2 } from 'lucide-react';
 import { uploadService } from '../services/uploadService';
 
@@ -37,7 +38,7 @@ export const AttachmentMediaPreview: React.FC<AttachmentMediaPreviewProps> = ({
     }
 
     if (!attachmentKey) {
-      setResolvedUrl(assetUrl ?? null);
+      setResolvedUrl(isWebLink(assetUrl) ? assetUrl : null);
       setIsLoading(false);
       return () => {
         active = false;
@@ -55,7 +56,7 @@ export const AttachmentMediaPreview: React.FC<AttachmentMediaPreviewProps> = ({
       })
       .catch(() => {
         if (!active) return;
-        setResolvedUrl(assetUrl ?? null);
+        setResolvedUrl(isWebLink(assetUrl) ? assetUrl : null);
       })
       .finally(() => {
         if (!active) return;

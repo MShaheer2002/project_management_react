@@ -3,12 +3,15 @@ import type { ApiResponse } from '@shared/services/types';
 import type {
   DriveConnectionStatus,
   DriveConnectResponse,
+  DriveFileRecord,
+  DriveSharing,
+  DriveTarget,
   DriveUploadResult,
 } from '../types';
 
 /**
- * Google Drive service — per-user (not workspace-scoped).
- * Routes are under /me/drive (no X-Workspace-Id header needed).
+ * Google Drive service — the connection is per-user, but uploads, sharing and
+ * file lists belong to the active workspace (sent as X-Workspace-Id).
  *
  * SECURITY: All uploads are proxied through our backend.
  * Google Drive access tokens NEVER leave the server.
@@ -23,12 +26,27 @@ export const driveService = {
     return data.data;
   },
 
-  /** POST /me/drive/connect — Start OAuth flow */
-  connect: async (): Promise<DriveConnectResponse> => {
-    const { data } = await privateApi.post<ApiResponse<DriveConnectResponse>>(
-      '/me/drive/connect',
-    );
+  /** POST /me/drive/connect: start Google's consent. WORKSPACE is for owners and admins. */
+  connect: async (mode: DriveTarget = 'PERSONAL'): Promise<DriveConnectResponse> => {
+    const { data } = await privateApi.post<ApiResponse<DriveConnectResponse>>('/me/drive/connect', { mode });
     return data.data;
+  },
+
+  /** PATCH /me/drive/settings: sharing of my own Drive, and where my uploads go */
+  updateSettings: async (input: { sharing?: DriveSharing; uploadTarget?: DriveTarget }): Promise<DriveConnectionStatus> => {
+    const { data } = await privateApi.patch<ApiResponse<DriveConnectionStatus>>('/me/drive/settings', input);
+    return data.data;
+  },
+
+  /** PATCH /me/drive/workspace: sharing of the Workspace Drive (owners and admins) */
+  updateWorkspaceDrive: async (sharing: DriveSharing): Promise<DriveConnectionStatus> => {
+    const { data } = await privateApi.patch<ApiResponse<DriveConnectionStatus>>('/me/drive/workspace', { sharing });
+    return data.data;
+  },
+
+  /** DELETE /me/drive/workspace: disconnect the Workspace Drive (owners and admins) */
+  disconnectWorkspace: async (): Promise<void> => {
+    await privateApi.delete('/me/drive/workspace');
   },
 
   /** DELETE /me/drive/disconnect — Revoke tokens and delete connection */
@@ -90,6 +108,12 @@ export const driveService = {
       },
     );
 
+    return data.data;
+  },
+
+  /** GET /me/drive/files?ids=: sharing badges for Drive attachments */
+  listFiles: async (ids: string[]): Promise<DriveFileRecord[]> => {
+    const { data } = await privateApi.get<ApiResponse<DriveFileRecord[]>>('/me/drive/files', { params: { ids: ids.join(',') } });
     return data.data;
   },
 

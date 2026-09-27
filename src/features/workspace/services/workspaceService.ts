@@ -23,6 +23,7 @@ export interface WorkspaceResponse {
   defaultTeamId?: string; // Auto-created team ID (returned on POST /workspaces)
   teamSize?: string;      // "SMALL" | "MEDIUM" | "LARGE" | "ENTERPRISE"
   uploadPolicy?: 'BOTH' | 'SYSTEM_ONLY' | 'DRIVE_ONLY';
+  allowPublicDriveLinks?: boolean;
   unreadNotifications?: number; // Per-workspace unread count (from GET /workspaces)
   joinedAt?: string;            // When user joined this workspace
   createdAt?: string;
@@ -30,6 +31,14 @@ export interface WorkspaceResponse {
   workflowAutomation?: WorkflowAutomationConfig;
   inviteDomainPolicy?: InviteDomainPolicy;
   allowedEmailDomains?: string[];
+  deactivatedAt?: string | null; // Set while a deleted workspace is waiting to be purged
+  purgeAt?: string | null;
+  canRestore?: boolean;          // OWNER of a deactivated workspace
+}
+
+export interface DeactivateWorkspaceResponse {
+  deactivatedAt: string;
+  purgeAt: string;
 }
 
 export interface CreateWorkspaceInput {
@@ -78,6 +87,7 @@ export interface UpdateWorkspaceInput {
   name?: string;
   logo?: string | null;
   uploadPolicy?: 'BOTH' | 'SYSTEM_ONLY' | 'DRIVE_ONLY';
+  allowPublicDriveLinks?: boolean;
 }
 
 export interface WorkspaceStatusUsageResponse {
@@ -272,8 +282,20 @@ export const workspaceService = {
     return data.data;
   },
 
-  delete: async (workspaceId: string): Promise<void> => {
-    await privateApi.delete(`/workspaces/${workspaceId}`);
+  /**
+   * DELETE /workspaces/:workspaceId — OWNER only. Soft delete: the workspace is
+   * deactivated now and permanently deleted after 30 days unless restored.
+   */
+  delete: async (workspaceId: string, confirmName: string): Promise<DeactivateWorkspaceResponse> => {
+    const { data } = await privateApi.delete<ApiResponse<DeactivateWorkspaceResponse>>(`/workspaces/${workspaceId}`, {
+      data: { confirmName },
+    });
+    return data.data;
+  },
+
+  /** POST /workspaces/:workspaceId/restore — OWNER only, cancels a pending deletion */
+  restore: async (workspaceId: string): Promise<void> => {
+    await privateApi.post(`/workspaces/${workspaceId}/restore`);
   },
 
   /** PATCH /workspaces/:workspaceId/invite-domain-policy — ADMIN/OWNER only */

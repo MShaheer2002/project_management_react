@@ -13,7 +13,9 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '@/app/stores/useAuthStore';
 import { useApp } from '@/AppContext';
-import { useWorkspaceMemberOptions } from '@features/workspace';
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
+import { getApiErrorMessage } from '@shared/services';
+import { issueService } from '../services/issueService';
 import { AttachmentMediaPreview } from '@features/upload';
 import { useUploadFile } from '@features/upload';
 import {
@@ -190,13 +192,20 @@ const CommentAttachmentGallery: React.FC<{
   );
 };
 
+/** Same limit as the API (F-38); the API stays the authority and explains a refusal. */
+const MAX_MENTIONS_PER_COMMENT = 20;
+
+/** Distinct @-mentions in a draft — approximate, the server resolves the real people. */
+const countMentions = (text: string) => new Set((text.match(/(?:^|\s)@[^\s@]+/g) ?? []).map((token) => token.trim().toLowerCase())).size;
+
 const CommentComposer: React.FC<{
+  issueId: string;
   onSubmit: (value: string, attachments: IssueCommentAttachmentInput[]) => Promise<void>;
   placeholder: string;
   submitLabel: string;
   compact?: boolean;
   variant?: 'default' | 'minimal';
-}> = ({ onSubmit, placeholder, submitLabel, compact, variant = 'default' }) => {
+}> = ({ issueId, onSubmit, placeholder, submitLabel, compact, variant = 'default' }) => {
   const [value, setValue] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [mentionQuery, setMentionQuery] = useState('');
@@ -207,15 +216,16 @@ const CommentComposer: React.FC<{
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadFile = useUploadFile();
 
-  const mentionOptionsQuery = useWorkspaceMemberOptions(
-    {
-      q: mentionQuery || undefined,
-      sort: 'name:asc',
-      limit: 6,
-    },
-    { enabled: mentionOpen }
-  );
-  const mentionOptions = mentionOptionsQuery.data?.pages.flatMap((page) => page.items) ?? [];
+  // Only people who can open this issue — mentioning anyone else notifies nobody (F-38).
+  const mentionLimitReached = countMentions(value) >= MAX_MENTIONS_PER_COMMENT;
+  const mentionOptionsQuery = useQuery({
+    queryKey: ['issues', issueId, 'mentionable-members', mentionQuery],
+    queryFn: () => issueService.listMentionableMembers(issueId, { q: mentionQuery || undefined, limit: 6 }),
+    enabled: mentionOpen && !mentionLimitReached && Boolean(issueId),
+    placeholderData: keepPreviousData,
+    staleTime: 30_000,
+  });
+  const mentionOptions = mentionOptionsQuery.data ?? [];
 
   const updateMentionState = (nextValue: string, cursorPos: number) => {
     const textBeforeCursor = nextValue.slice(0, cursorPos);
@@ -339,6 +349,8 @@ const CommentComposer: React.FC<{
         });
         return [];
       });
+    } catch {
+      // Already shown by the caller; the draft is kept so nothing is lost.
     } finally {
       setIsSubmitting(false);
     }
@@ -388,10 +400,12 @@ const CommentComposer: React.FC<{
           />
           {mentionOpen && (
             <div className="absolute left-2 z-30 mt-1 w-[260px] max-h-52 overflow-y-auto rounded-xl border border-gray-200 bg-white p-1 shadow-xl dark:border-border-dark dark:bg-card-dark">
-              {mentionOptionsQuery.isLoading ? (
+              {mentionLimitReached ? (
+                <div className="px-3 py-2 text-xs text-gray-400">You can mention up to {MAX_MENTIONS_PER_COMMENT} people in one comment.</div>
+              ) : mentionOptionsQuery.isLoading ? (
                 <div className="px-3 py-2 text-xs text-gray-400">Loading users...</div>
               ) : mentionOptions.length === 0 ? (
-                <div className="px-3 py-2 text-xs text-gray-400">No matching users</div>
+                <div className="px-3 py-2 text-xs text-gray-400">No one who can see this issue matches</div>
               ) : (
                 mentionOptions.map((member) => (
                   <button
@@ -757,6 +771,7 @@ const CommentNode: React.FC<{
             Replying to {comment.author.name || comment.author.email}
           </p>
           <CommentComposer
+            issueId={comment.issueId}
             compact={compact}
             placeholder="Write a reply..."
             submitLabel="Reply"
@@ -881,7 +896,8 @@ export const IssueCommentsThread: React.FC<IssueCommentsThreadProps> = ({ issueI
     try {
       await createComment.mutateAsync({ body, parentId: parentId ?? null, attachments });
     } catch (error) {
-      showToast((error as Error)?.message || 'Failed to create comment.', 'error');
+      showToast(getApiErrorMessage(error) || 'Failed to create comment.', 'error');
+      throw error; // lets the composer keep the draft
     }
   };
 
@@ -957,6 +973,7 @@ export const IssueCommentsThread: React.FC<IssueCommentsThreadProps> = ({ issueI
       )}
 
       <CommentComposer
+        issueId={issueId}
         compact={compact}
         variant="minimal"
         placeholder="Leave a comment..."

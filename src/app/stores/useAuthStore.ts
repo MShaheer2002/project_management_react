@@ -21,8 +21,12 @@ export interface AuthWorkspace {
   customStatuses?: WorkspaceStatus[];
   workflowAutomation?: WorkflowAutomationConfig;
   uploadPolicy?: UploadPolicy; // Controls where members can upload: BOTH (default), SYSTEM_ONLY, DRIVE_ONLY
+  allowPublicDriveLinks?: boolean; // Admin switch: may Drive uploads be shared as "anyone with the link" (F-39)
   inviteDomainPolicy?: 'ANY' | 'COMPANY_ONLY' | 'CUSTOM'; // Who can be invited, by email domain
   allowedEmailDomains?: string[];
+  /** Set when the owner deleted the workspace — it's closed until restored or purged at purgeAt. */
+  deactivatedAt?: string | null;
+  purgeAt?: string | null;
 }
 
 export type AuthSyncStatus = 'idle' | 'loading' | 'ready';

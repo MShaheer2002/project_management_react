@@ -1,4 +1,5 @@
 import React, { useRef, useCallback, useState, useEffect } from 'react';
+import DOMPurify from 'dompurify';
 import { 
   Bold, 
   Italic, 
@@ -123,7 +124,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
 
   // Sync state to editor only once or when value is changed externally (rare)
   useEffect(() => {
-    const normalizedValue = normalizeEditorValue(value);
+    const normalizedValue = DOMPurify.sanitize(normalizeEditorValue(value)); // F-05
     if (editorRef.current && editorRef.current.innerHTML !== normalizedValue) {
       editorRef.current.innerHTML = normalizedValue;
     }

@@ -563,6 +563,18 @@ export const issueService = {
     };
   },
 
+  /** People who can see this issue — the only ones the @-mention picker offers (F-38). */
+  listMentionableMembers: async (
+    issueId: string,
+    params: { q?: string; limit?: number } = {}
+  ): Promise<Array<{ id: string; name: string; email: string; role: string }>> => {
+    const { data } = await privateApi.get<ApiResponse<Array<{ id: string; name: string; email: string; role: string }>>>(
+      `/issues/${issueId}/mentionable-members`,
+      { params }
+    );
+    return data.data;
+  },
+
   createComment: async (issueId: string, input: CreateIssueCommentInput): Promise<IssueComment> => {
     const { data } = await privateApi.post<ApiResponse<RawIssueComment>>(
       `/issues/${issueId}/comments`,

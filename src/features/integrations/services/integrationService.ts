@@ -207,18 +207,10 @@ export const figmaService = {
     return data.data;
   },
 
-  preview: async (url: string): Promise<FigmaPreview> => {
-    const { data } = await privateApi.get<ApiResponse<FigmaPreview>>(
-      '/integrations/figma/preview',
-      { params: { url } },
-    );
-    return data.data;
-  },
-
-  batchPreview: async (urls: string[]): Promise<FigmaPreview[]> => {
+  batchPreview: async (issueId: string, urls: string[]): Promise<FigmaPreview[]> => {
     const { data } = await privateApi.post<ApiResponse<FigmaPreview[]>>(
       '/integrations/figma/batch-preview',
-      { urls },
+      { issueId, urls },
     );
     return data.data;
   },
