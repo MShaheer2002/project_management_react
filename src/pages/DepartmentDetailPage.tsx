@@ -472,7 +472,7 @@ export const DepartmentDetailPage: React.FC = () => {
                   <h4 className="font-bold text-sm">Private to Members</h4>
                   {department.visibility === 'private' && <div className="w-4 h-4 rounded-full bg-primary border-4 border-white dark:border-card-dark shadow-sm" />}
                 </div>
-                <p className="text-xs text-gray-400 mt-1 font-medium leading-relaxed">Only current members and admins can видеть content within this department.</p>
+                <p className="text-xs text-gray-400 mt-1 font-medium leading-relaxed">Only current members and admins can see content within this department.</p>
               </div>
             </div>
           </div>

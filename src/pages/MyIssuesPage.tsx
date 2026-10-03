@@ -63,7 +63,6 @@ export const MyIssuesPage: React.FC = () => {
   const [collapsedStatusKeys, setCollapsedStatusKeys] = useState<string[]>([]);
   const deferredSearch = useDeferredValue(search);
 
-  const finalStatusKeys = ownWorkflowStatuses.filter((s) => s.isFinal).map((s) => s.key);
   const projectOptionsQuery = useProjectOptions({ sort: 'name:asc', limit: 100 });
   const projectOptions = projectOptionsQuery.data?.pages.flatMap((page) => page.items) ?? [];
   const issuesQuery = useIssuesDirectory(
@@ -73,7 +72,7 @@ export const MyIssuesPage: React.FC = () => {
       projectId: projectFilter === 'all' ? undefined : projectFilter,
       assigneeId: activeTab === 'assigned' || activeTab === 'completed' ? currentUser?.id : undefined,
       creatorId: activeTab === 'created' ? currentUser?.id : undefined,
-      status: activeTab === 'completed' ? (finalStatusKeys[0] ?? 'done') : undefined,
+      completed: activeTab === 'completed' ? 'true' : undefined,
       sort: 'updatedAt:desc',
       limit: 30,
     },

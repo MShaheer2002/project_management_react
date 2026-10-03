@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { isHttpsLinkOn, OAUTH_HOSTS } from '@shared/utils/webLink';
 import { Building2, Globe, Loader2, Lock } from 'lucide-react';
 import { useAuthStore } from '@/app/stores/useAuthStore';
 import { Modal } from '@shared/components/ui/Modal';
@@ -94,7 +95,7 @@ export const DriveConnectionPanel: React.FC = () => {
     setChoosingMode(false);
     try {
       const { authUrl } = await connect.mutateAsync(mode);
-      window.location.href = authUrl;
+      if (isHttpsLinkOn(authUrl, OAUTH_HOSTS.drive)) window.location.href = authUrl;
     } catch {
       // The hook shows the reason.
     }

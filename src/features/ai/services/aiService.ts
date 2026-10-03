@@ -1,4 +1,5 @@
 import { privateApi } from '@shared/services/privateApi';
+import { tunnelHeaders } from '@shared/services/tunnelHeaders';
 import { getAuthToken } from '@shared/services';
 import type { ApiResponse } from '@shared/services/types';
 import type {
@@ -218,7 +219,7 @@ export const aiService = {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`,
         'X-Workspace-Id': input.workspaceId,
-        'ngrok-skip-browser-warning': 'true',
+        ...tunnelHeaders,
       },
       body: JSON.stringify({
         conversationId: input.conversationId ?? undefined,

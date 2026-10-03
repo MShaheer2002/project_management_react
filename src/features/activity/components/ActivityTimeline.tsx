@@ -3,7 +3,6 @@ import {
   Activity,
   AtSign,
   Clock3,
-  Filter,
   GitBranch,
   GitCommit,
   GitPullRequest,
@@ -185,12 +184,6 @@ export const ActivityTimeline: React.FC<ActivityTimelineProps> = ({
               className="w-64 rounded-md border-none bg-gray-100 py-1.5 pl-9 pr-4 text-sm outline-none transition-all focus:ring-2 focus:ring-primary/20 dark:bg-white/5"
             />
           </div>
-          {!compact && (
-            <button className="flex items-center gap-2 rounded-md border border-gray-200 px-3 py-1.5 text-sm transition-colors hover:bg-gray-50 dark:border-border-dark dark:hover:bg-white/5">
-              <Filter size={14} />
-              <span>Filter</span>
-            </button>
-          )}
         </div>
       </header>
 

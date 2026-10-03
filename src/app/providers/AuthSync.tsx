@@ -1,10 +1,12 @@
 import React, { useEffect } from 'react';
+import { tunnelHeaders } from '@shared/services/tunnelHeaders';
 import { useUser, useAuth } from '@clerk/clerk-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore, type AuthWorkspace } from '@/app/stores/useAuthStore';
 import { useTenantStore } from '@/app/stores/useTenantStore';
 import { buildWorkspaceUrl } from '@shared/utils/tenant';
 import { getSafeRedirectPath } from '@shared/utils/safeRedirect';
+import { clearLocalWorkspaceData } from '@shared/utils/localWorkspaceData';
 import { decideWorkspaceDestination, isOnboardingExempt } from '@/app/auth/workspaceDecision';
 import axios from 'axios';
 import { authService } from '@features/auth';
@@ -69,12 +71,14 @@ export const AuthSync: React.FC<{ children: React.ReactNode }> = ({ children }) 
       return;
     }
 
-    // Not signed in → clear store, done
+    // Not signed in → clear store and saved workspace data, done. Every
+    // sign-out path (buttons, expired session, other tab) ends up here.
     if (!isSignedIn || !user) {
       console.log('[AuthSync] No signed-in user. Clearing auth store.');
       setDevJwt(null);
       setDevWorkspaceId(null);
       clear();
+      clearLocalWorkspaceData();
       return;
     }
 
@@ -92,7 +96,7 @@ export const AuthSync: React.FC<{ children: React.ReactNode }> = ({ children }) 
     if (isInitialSync) {
       setAuthSyncStatus('loading');
     }
-    console.log('[AuthSync] User signed in:', user.id, '| Email:', user.primaryEmailAddress?.emailAddress);
+    console.log('[AuthSync] User signed in:', user.id);
 
     const syncUser = async () => {
       const token = await getToken();
@@ -156,7 +160,7 @@ export const AuthSync: React.FC<{ children: React.ReactNode }> = ({ children }) 
         const { data } = await axios.get(`${baseUrl}/workspaces`, {
           headers: {
             'Content-Type': 'application/json',
-            'ngrok-skip-browser-warning': 'true',
+            ...tunnelHeaders,
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
           timeout: 5000,

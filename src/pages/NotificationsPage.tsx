@@ -2,7 +2,6 @@ import React, { useDeferredValue, useMemo, useState } from 'react';
 import {
   Inbox,
   CheckCircle2,
-  Filter,
   Search,
   MoreHorizontal,
   Loader2,
@@ -142,10 +141,6 @@ export const NotificationsPage: React.FC = () => {
           >
             Mark all read
           </button>
-          <button className="flex items-center gap-2 rounded-md border border-gray-200 px-3 py-1.5 text-sm transition-colors hover:bg-gray-50 dark:border-border-dark dark:hover:bg-white/5">
-            <Filter size={14} />
-            <span>Filter</span>
-          </button>
         </div>
       </header>
 
@@ -246,7 +241,8 @@ export const NotificationsPage: React.FC = () => {
                         type="button"
                         onClick={(event) => {
                           event.stopPropagation();
-                          void markRead.mutateAsync({ notificationId: notification.id, input: { read: true } });
+                          markRead.mutateAsync({ notificationId: notification.id, input: { read: true } })
+                            .catch(() => showToast('Could not mark as read. Try again.', 'error'));
                         }}
                         className="rounded p-1 text-gray-400 hover:bg-gray-200 dark:hover:bg-white/10"
                       >

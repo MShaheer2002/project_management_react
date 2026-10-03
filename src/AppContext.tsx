@@ -19,7 +19,6 @@ interface AppContextType {
   currentUser: User | null;
   setCurrentUser: (user: User | null) => void;
   organization: Organization | null;
-  setOrganization: (org: Organization | null) => void;
   selectedIssueId: string | null;
   setSelectedIssueId: (id: string | null) => void;
   isCommandPaletteOpen: boolean;
@@ -68,7 +67,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         currentUser: auth.currentUser ? { ...auth.currentUser, role: (auth.workspace?.role as any) || 'member' } as User : null,
         setCurrentUser: auth.setCurrentUser,
         organization: auth.organization,
-        setOrganization: auth.setOrganization,
         selectedIssueId: ui.selectedIssueId,
         setSelectedIssueId: ui.setSelectedIssueId,
         isCommandPaletteOpen: ui.isCommandPaletteOpen,

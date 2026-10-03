@@ -324,6 +324,7 @@ export const TeamDetailPage: React.FC = () => {
   };
 
   const handleRemoveMember = async (userId: string) => {
+    if (!(await confirmDialog({ title: 'Remove this member from the team?', tone: 'danger', confirmLabel: 'Remove' }))) return;
     try {
       await removeMember.mutateAsync(userId);
       showToast('Member removed from the team.', 'success');
@@ -672,8 +673,6 @@ export const TeamDetailPage: React.FC = () => {
 
           <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50/80 p-4 text-sm text-gray-500 dark:border-border-dark dark:bg-white/[0.03] dark:text-gray-400 md:col-span-2">
             Department: {team.department?.name || 'No department assigned'}.
-            <br />
-            Phase 3 keeps the real team contract here while the legacy mock tabs stay visible for later integration.
           </div>
         </div>
       </div>

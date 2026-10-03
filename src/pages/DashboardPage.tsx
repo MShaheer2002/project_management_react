@@ -106,11 +106,11 @@ export const DashboardPage: React.FC = () => {
   const sprintProgressData = data?.charts.sprintProgress.length ? normalizeChartData(data.charts.sprintProgress) : emptyChartData;
 
   const renderActivityDescription = (description: string) => {
-    const issueKeyRegex = /(LIN-\d+)/g;
+    const issueKeyRegex = /\b([A-Z]{2,10}-\d{1,6})\b/g;
     const parts = description.split(issueKeyRegex);
 
     return parts.map((part, index) => {
-      if (/^LIN-\d+$/.test(part)) {
+      if (/^[A-Z]{2,10}-\d{1,6}$/.test(part)) {
         return (
           <button
             key={`${part}-${index}`}

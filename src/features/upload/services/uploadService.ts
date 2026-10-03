@@ -15,7 +15,9 @@ import type {
   UploadedFileReference,
 } from '../types';
 
+// Payloads include signed upload URLs, so never log them outside dev (audit FE-03).
 const logUploadDebug = (message: string, payload?: unknown) => {
+  if (!import.meta.env.DEV) return;
   if (typeof payload === 'undefined') {
     console.log(`[UploadService] ${message}`);
     return;

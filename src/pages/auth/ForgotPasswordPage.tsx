@@ -34,7 +34,7 @@ export const ForgotPasswordPage: React.FC = () => {
     e.preventDefault();
     if (!isLoaded || !signIn) return;
 
-    console.log('[ForgotPassword] Requesting reset code for:', email);
+    console.log('[ForgotPassword] Requesting reset code');
     setIsSubmitting(true);
     try {
       // Tell Clerk to send a reset code to this email

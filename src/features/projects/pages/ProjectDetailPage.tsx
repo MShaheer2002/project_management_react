@@ -266,6 +266,7 @@ export const ProjectDetailPage: React.FC = () => {
   };
 
   const handleRemoveMember = async (member: ProjectMemberRow) => {
+    if (!(await confirmDialog({ title: 'Remove this member from the project?', tone: 'danger', confirmLabel: 'Remove' }))) return;
     try {
       await removeMember.mutateAsync(member.id);
       showToast('Project member removed.', 'success');
@@ -315,6 +316,7 @@ export const ProjectDetailPage: React.FC = () => {
   };
 
   const handleArchive = async () => {
+    if (!(await confirmDialog({ title: 'Archive this project?', tone: 'danger', confirmLabel: 'Archive' }))) return;
     try {
       await updateProject.mutateAsync({ status: 'ARCHIVED' });
       showToast('Project archived.', 'success');
@@ -488,14 +490,16 @@ export const ProjectDetailPage: React.FC = () => {
               Members directly assigned to this project.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => setIsMemberPickerOpen(true)}
-            className="inline-flex items-center gap-2 self-start rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white shadow-lg shadow-primary/20"
-          >
-            <Plus size={16} />
-            Add Members
-          </button>
+          {canManage && (
+            <button
+              type="button"
+              onClick={() => setIsMemberPickerOpen(true)}
+              className="inline-flex items-center gap-2 self-start rounded-lg bg-primary px-4 py-2 text-sm font-bold text-white shadow-lg shadow-primary/20"
+            >
+              <Plus size={16} />
+              Add Members
+            </button>
+          )}
         </div>
       </div>
 

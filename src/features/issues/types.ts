@@ -124,6 +124,7 @@ export interface ListIssuesInput {
   teamId?: string;
   departmentId?: string;
   creatorId?: string;
+  completed?: 'true';
 }
 
 export interface CreateIssueSubtaskInput {

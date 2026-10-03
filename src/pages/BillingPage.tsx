@@ -322,7 +322,6 @@ const BillingContent: React.FC = () => {
 
     try {
       const response = await backendCall();
-      console.log('[Billing] Backend response:', JSON.stringify(response, null, 2));
 
       // Step 2: Confirm payment with Stripe if required
       if (response.clientSecret) {

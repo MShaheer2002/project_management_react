@@ -169,7 +169,6 @@ const CommentAttachmentGallery: React.FC<{
               contentType={attachment.contentType}
               fileName={attachment.fileName}
               attachmentKey={attachment.key}
-              assetUrl={attachment.assetUrl}
               className="h-full w-full object-cover"
             />
           </button>
@@ -830,22 +829,13 @@ const MediaViewer: React.FC<{
           <p>{(attachment.size / 1024 / 1024).toFixed(2)} MB</p>
         </div>
         <div className="flex max-h-[78vh] min-h-[240px] items-center justify-center bg-black">
-          {attachment.contentType.startsWith('video/') ? (
-            <video
-              controls
-              autoPlay
-              className="max-h-[78vh] max-w-full"
-              src={attachment.assetUrl ?? undefined}
-            />
-          ) : (
-            <AttachmentMediaPreview
-              contentType={attachment.contentType}
-              fileName={attachment.fileName}
-              attachmentKey={attachment.key}
-              assetUrl={attachment.assetUrl}
-              className="max-h-[78vh] max-w-full object-contain"
-            />
-          )}
+          <AttachmentMediaPreview
+            contentType={attachment.contentType}
+            fileName={attachment.fileName}
+            attachmentKey={attachment.key}
+            className="max-h-[78vh] max-w-full object-contain"
+            controls
+          />
         </div>
       </div>
     </div>

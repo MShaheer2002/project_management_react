@@ -16,6 +16,7 @@ import { workspaceLogoSrc } from '@shared/utils/workspaceLogo';
 export const ConnectAiPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const clientId = searchParams.get('clientId');
+  const ticket = searchParams.get('ticket');
 
   const activeWorkspace = useAuthStore((s) => s.workspace);
   const { data: workspaces, isLoading: workspacesLoading } = useWorkspaces();
@@ -28,7 +29,7 @@ export const ConnectAiPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
 
-  if (!clientId) {
+  if (!clientId || !ticket) {
     return (
       <PageShell>
         <div className="text-center">
@@ -37,9 +38,7 @@ export const ConnectAiPage: React.FC = () => {
           </div>
           <h1 className="text-xl font-bold tracking-tight dark:text-white">Missing connection details</h1>
           <p className="mt-2 text-sm text-gray-500 dark:text-gray-400 max-w-sm mx-auto">
-            This page needs to be opened from your AI client's connection prompt — it's missing the client ID that
-            identifies which app is connecting. Try connecting again from Claude, Codex, or whichever client you're
-            using.
+            This link is missing or incomplete. Connect again from your AI app to get a new one.
           </p>
         </div>
       </PageShell>
@@ -71,6 +70,7 @@ export const ConnectAiPage: React.FC = () => {
       await completeSetup.mutateAsync({
         workspaceId: selectedWorkspaceId,
         clientId,
+        ticket,
         name: name.trim(),
         primaryClient,
         scopes,

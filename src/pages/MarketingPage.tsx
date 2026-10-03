@@ -14,13 +14,9 @@ import {
   MessageSquare,
   FolderKanban,
   Clock,
-  Star,
   ChevronRight,
   Play,
   Sparkles,
-  Target,
-  TrendingUp,
-  MousePointerClick,
 } from 'lucide-react';
 // Nav, Footer and the motion helpers are shared with every other public page
 // (features, pricing, legal, ...) — see pages/marketing/shared.tsx.
@@ -462,49 +458,6 @@ const Features = () => (
 );
 
 /* ════════════════════════════════════════════════
-   STATS
-   ════════════════════════════════════════════════ */
-const stats = [
-  { value: '40%', label: 'Faster Task Completion and Automated Workflows', icon: <TrendingUp size={18} /> },
-  { value: '3x', label: 'Higher Team Alignment and Real-time Updates', icon: <Users size={18} /> },
-  { value: '100%', label: 'Real-Time Insights Across and Track Progress', icon: <Target size={18} /> },
-  { value: '10k+', label: 'Active Users: Startups, Agencies, and Growing Teams', icon: <MousePointerClick size={18} /> },
-];
-
-const Stats = () => (
-  <Section id="testimonials" className="py-24 sm:py-32 bg-gray-50 dark:bg-black/20">
-    <div className="max-w-7xl mx-auto px-4">
-      <motion.div variants={fadeUp} className="text-center mb-16 space-y-4">
-        <span className="inline-block px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold uppercase tracking-wider">Why Trussen</span>
-        <h2 className="text-3xl sm:text-5xl font-bold tracking-tight">Why Teams Choose Trussen.</h2>
-        <p className="text-gray-500 dark:text-gray-400 max-w-xl mx-auto">
-          Trusted by teams to manage work more efficiently. Designed to help teams do their best work.
-        </p>
-      </motion.div>
-
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-        {stats.map((s, i) => (
-          <motion.div
-            key={i}
-            variants={fadeUp}
-            custom={i}
-            className="relative p-6 sm:p-8 bg-white dark:bg-card-dark rounded-2xl border border-gray-200 dark:border-border-dark text-center group hover:border-primary/30 transition-all"
-          >
-            <div className="absolute top-4 right-4 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary opacity-60 group-hover:opacity-100 transition-opacity">
-              {s.icon}
-            </div>
-            <div className="text-4xl sm:text-5xl font-bold bg-gradient-to-r from-primary to-purple-500 bg-clip-text text-transparent mb-3">
-              {s.value}
-            </div>
-            <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 leading-relaxed">{s.label}</p>
-          </motion.div>
-        ))}
-      </div>
-    </div>
-  </Section>
-);
-
-/* ════════════════════════════════════════════════
    HOW IT WORKS — 3 steps
    ════════════════════════════════════════════════ */
 const steps = [
@@ -600,56 +553,6 @@ const HowItWorks = () => (
             </motion.div>
           ))}
         </div>
-      </div>
-    </div>
-  </Section>
-);
-
-/* ════════════════════════════════════════════════
-   TESTIMONIALS
-   ════════════════════════════════════════════════ */
-const testimonials = [
-  { name: 'Emily Zhang', role: 'VP of Engineering, ScaleAI', quote: 'Trussen replaced 3 tools for our team. Issue tracking has never been this fast.', stars: 5 },
-  { name: 'Marcus Johnson', role: 'CTO, DevForge', quote: 'The keyboard shortcuts alone saved us hours. We shipped 40% more features last quarter.', stars: 5 },
-  { name: 'Sarah Kim', role: 'Product Lead, Nexus', quote: 'Beautiful, fast, and opinionated in all the right ways. Our team adopted it in a single day.', stars: 5 },
-];
-
-const Testimonials = () => (
-  <Section className="py-24 sm:py-32 bg-gray-50 dark:bg-black/20">
-    <div className="max-w-7xl mx-auto px-4">
-      <motion.div variants={fadeUp} className="text-center mb-16 space-y-4">
-        <span className="inline-block px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold uppercase tracking-wider">Testimonials</span>
-        <h2 className="text-3xl sm:text-5xl font-bold tracking-tight">
-          Real Results. Real Impact.
-        </h2>
-        <p className="text-gray-500 dark:text-gray-400 max-w-xl mx-auto">
-          Real-world success stories showcasing growth, performance, and productivity improvements.
-        </p>
-      </motion.div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {testimonials.map((t, i) => (
-          <motion.div
-            key={i}
-            variants={fadeUp}
-            custom={i}
-            className="p-6 sm:p-8 bg-white dark:bg-card-dark rounded-2xl border border-gray-200 dark:border-border-dark"
-          >
-            <div className="flex gap-0.5 mb-4">
-              {Array.from({ length: t.stars }).map((_, j) => (
-                <Star key={j} size={14} className="text-yellow-400 fill-yellow-400" />
-              ))}
-            </div>
-            <p className="text-sm leading-relaxed text-gray-600 dark:text-gray-300 mb-6">"{t.quote}"</p>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary/60 to-purple-500/60" />
-              <div>
-                <div className="text-sm font-bold">{t.name}</div>
-                <div className="text-[11px] text-gray-400">{t.role}</div>
-              </div>
-            </div>
-          </motion.div>
-        ))}
       </div>
     </div>
   </Section>
@@ -761,9 +664,7 @@ export const MarketingPage: React.FC = () => {
       <Hero />
       <TrustedBy />
       <Features />
-      <Stats />
       <HowItWorks />
-      <Testimonials />
       <Pricing />
       <CTA />
     </MarketingLayout>
