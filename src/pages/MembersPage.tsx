@@ -339,7 +339,9 @@ export const MembersPage: React.FC = () => {
                       </p>
                     </div>
                     <button
-                      onClick={() => revokeInvitation.mutate(invite.id)}
+                      onClick={async () => {
+                        if (await confirmDialog({ title: `Revoke the invite for ${invite.email}?`, tone: 'danger', confirmLabel: 'Revoke' })) revokeInvitation.mutate(invite.id);
+                      }}
                       className="px-3 py-1.5 rounded-md text-xs font-semibold text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
                     >
                       Revoke

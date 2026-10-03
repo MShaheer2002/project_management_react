@@ -86,7 +86,7 @@ export const useCompleteOAuthSetup = () => {
     mutationFn: ({
       workspaceId,
       ...input
-    }: { workspaceId: string; clientId: string; name: string; primaryClient?: string; scopes: string[] }) =>
+    }: { workspaceId: string; clientId: string; ticket: string; name: string; primaryClient?: string; scopes: string[] }) =>
       aiConnectionService.completeOAuthSetup(workspaceId, input),
     onSuccess: (_result, variables) => {
       queryClient.invalidateQueries({

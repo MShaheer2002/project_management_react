@@ -70,8 +70,11 @@ export const AnalyticsPage: React.FC = () => {
   const currentUser = useAuthStore((s) => s.currentUser);
   const isAdmin = workspace?.role === 'owner' || workspace?.role === 'admin';
 
-  const rawTab = searchParams.get('tab') as AnalyticsTab | null;
-  const activeTab = rawTab || (isAdmin ? 'workspace' : 'project');
+  const rawTab = searchParams.get('tab');
+  // An unknown or not-allowed ?tab= falls back to the default instead of a blank page.
+  const defaultTab: AnalyticsTab = isAdmin ? 'workspace' : 'project';
+  const activeTab: AnalyticsTab =
+    tabs.some((tab) => tab.value === rawTab) && (rawTab !== 'workspace' || isAdmin) ? (rawTab as AnalyticsTab) : defaultTab;
   const entityId = searchParams.get('id') || '';
   const [period, setPeriod] = useState<AnalyticsPeriod>('30d');
 

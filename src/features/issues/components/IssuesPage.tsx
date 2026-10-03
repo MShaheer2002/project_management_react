@@ -133,7 +133,7 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
     type: typeFilter === 'all' ? undefined : typeFilter,
     sort: 'updatedAt:desc',
     limit: 30,
-  });
+  }, { enabled: viewMode === 'calendar' }); // list and board groups load their own issues (B-FE-02)
   const updateAnyIssueStatus = useUpdateAnyIssueStatus();
   const deleteAnyIssue = useDeleteAnyIssue();
 
@@ -343,17 +343,20 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
     });
     if (!confirmed) return;
 
-    try {
-      await Promise.all(issueIds.map((issueId) => deleteAnyIssue.mutateAsync(issueId)));
-      showToast(
-        `${issueIds.length} issue${issueIds.length === 1 ? '' : 's'} deleted.`,
-        'success'
-      );
-      setSelectedIssueIds((current) => current.filter((issueId) => !issueIds.includes(issueId)));
-      setActiveIssueMenuId(null);
-    } catch (error) {
+    // Settle every delete so one failure doesn't hide the ones that worked (B-FE-03).
+    const results = await Promise.allSettled(issueIds.map((issueId) => deleteAnyIssue.mutateAsync(issueId)));
+    const deletedIds = issueIds.filter((_, index) => results[index].status === 'fulfilled');
+    const failed = issueIds.length - deletedIds.length;
+
+    if (failed === 0) {
+      showToast(`${deletedIds.length} issue${deletedIds.length === 1 ? '' : 's'} deleted.`, 'success');
+    } else if (deletedIds.length > 0) {
+      showToast(`Deleted ${deletedIds.length} of ${issueIds.length} issues. ${failed} could not be deleted.`, 'error', 'Some deletes failed');
+    } else {
       showToast('Failed to delete selected issues.', 'error', 'Delete failed');
     }
+    setSelectedIssueIds((current) => current.filter((issueId) => !deletedIds.includes(issueId)));
+    setActiveIssueMenuId(null);
   };
 
   const handleBulkStatusChange = async (newStatus: Status) => {
@@ -447,7 +450,7 @@ export const IssuesPage: React.FC<IssuesPageProps> = ({
       selectedAssigneeIds={selectedAssigneeIds}
       statuses={workspaceStatuses}
       onIssueUpdate={handleIssueUpdate}
-      onNewIssue={(status) => navigate(`/issues/create?status=${status}`)}
+      onNewIssue={(status) => navigate(`/issues/create?status=${encodeURIComponent(status)}`)}
       onIssuesLoaded={handleIssuesLoaded}
     />
   );

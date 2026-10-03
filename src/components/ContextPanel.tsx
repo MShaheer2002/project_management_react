@@ -514,7 +514,6 @@ export const ContextPanel: React.FC = () => {
                           contentType={attachment.contentType}
                           fileName={attachment.fileName}
                           attachmentKey={attachment.key}
-                          assetUrl={attachment.assetUrl}
                           className="h-full w-full object-cover"
                         />
                       </div>

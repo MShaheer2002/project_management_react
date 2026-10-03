@@ -1,4 +1,5 @@
 import React, { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import { getApiErrorMessage } from '@shared/services';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -315,13 +316,21 @@ const TemplatesListView: React.FC = () => {
       tone: 'danger',
       confirmLabel: 'Delete',
     }))) return;
-    await deleteTemplate.mutateAsync(template.id);
-    showToast('Template deleted.', 'success');
+    try {
+      await deleteTemplate.mutateAsync(template.id);
+      showToast('Template deleted.', 'success');
+    } catch (error) {
+      showToast(getApiErrorMessage(error) || 'Could not delete the template.', 'error');
+    }
   };
 
   const handleDuplicate = async (template: IssueTemplate) => {
-    const copy = await duplicateTemplate.mutateAsync(template.id);
-    showToast(`${copy.name} created.`, 'success');
+    try {
+      const copy = await duplicateTemplate.mutateAsync(template.id);
+      showToast(`${copy.name} created.`, 'success');
+    } catch (error) {
+      showToast(getApiErrorMessage(error) || 'Could not duplicate the template.', 'error');
+    }
   };
 
   return (
@@ -1233,16 +1242,24 @@ const TemplateDetailView: React.FC<{ templateId: string }> = ({ templateId }) =>
       tone: 'danger',
       confirmLabel: 'Delete',
     }))) return;
-    await deleteTemplate.mutateAsync(template.id);
-    showToast('Template deleted.', 'success');
-    navigate('/templates');
+    try {
+      await deleteTemplate.mutateAsync(template.id);
+      showToast('Template deleted.', 'success');
+      navigate('/templates');
+    } catch (error) {
+      showToast(getApiErrorMessage(error) || 'Could not delete the template.', 'error');
+    }
   };
 
   const handleDuplicate = async () => {
     if (!template) return;
-    const copy = await duplicateTemplate.mutateAsync(template.id);
-    showToast(`${copy.name} created.`, 'success');
-    navigate(`/templates/${copy.id}`);
+    try {
+      const copy = await duplicateTemplate.mutateAsync(template.id);
+      showToast(`${copy.name} created.`, 'success');
+      navigate(`/templates/${copy.id}`);
+    } catch (error) {
+      showToast(getApiErrorMessage(error) || 'Could not duplicate the template.', 'error');
+    }
   };
 
   if (templateQuery.isLoading) return <div className="flex h-full items-center justify-center text-sm text-gray-400"><Loader2 size={18} className="mr-2 animate-spin" /> Loading template...</div>;
