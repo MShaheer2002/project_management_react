@@ -35,6 +35,7 @@ import { SettingsPage } from '@/pages/SettingsPage';
 import { MembersPage } from '@/pages/MembersPage';
 import { MyIssuesPage } from '@/pages/MyIssuesPage';
 import { NotificationsPage } from '@/pages/NotificationsPage';
+import { HelpInsightsPage, HelpPage } from '@features/help';
 import { AnalyticsPage } from '@features/analytics';
 import { IntegrationsPage } from '@/pages/IntegrationsPage';
 import { MarketingPage } from '@/pages/MarketingPage';
@@ -206,6 +207,9 @@ export const AppRoutes: React.FC = () => {
         <Route element={<MainLayout />}>
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/inbox" element={<NotificationsPage />} />
+          <Route path="/help" element={<HelpPage />} />
+          <Route path="/help/insights" element={<HelpInsightsPage />} />
+          <Route path="/help/:articleId" element={<HelpPage />} />
           <Route path="/issues/my" element={<MyIssuesPage />} />
           <Route path="/issues" element={<IssuesPage initialViewMode="kanban" />} />
           <Route path="/issues/create" element={<CreateIssuePageKeyed />} />
