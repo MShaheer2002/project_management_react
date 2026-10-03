@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { isWebLink } from '@shared/utils/webLink';
+import { isDriveLink, isWebLink } from '@shared/utils/webLink';
 import { isAxiosError } from 'axios';
 import {
   ExternalLink,
@@ -15,7 +15,7 @@ import {
   Trash2,
   Upload,
 } from 'lucide-react';
-import { uploadKindAccept, useOpenViewUploadUrl, useUploadFile, type UploadedFileReference } from '@features/upload';
+import { AttachmentMediaPreview, uploadKindAccept, useOpenViewUploadUrl, useUploadFile, type UploadedFileReference } from '@features/upload';
 import { useDriveConnection, driveService, driveQueryKeys, useDriveFiles, DriveSharingBadge } from '@features/drive';
 import { useQueryClient } from '@tanstack/react-query';
 import type { DriveFolderContext, DriveSharing } from '@features/drive';
@@ -80,7 +80,8 @@ const buildStoredItem = (attachment: IssueAttachment): AttachmentListItem => ({
   ...attachment,
   status: 'uploaded',
   progress: 100,
-  previewUrl: attachment.assetUrl ?? null,
+  // Saved items preview through their key, never the stored assetUrl (FE-05).
+  previewUrl: null,
   usesObjectUrl: false,
 });
 
@@ -229,7 +230,7 @@ export const IssueAttachmentsField: React.FC<IssueAttachmentsFieldProps> = ({
 
   // Badges for Drive attachments already on the issue (sharing can change after upload).
   const driveFileIds = useMemo(
-    () => items.filter((item) => item.assetUrl?.includes('drive.google.com') && item.key).map((item) => item.key).sort(),
+    () => items.filter((item) => isDriveLink(item.assetUrl) && item.key).map((item) => item.key).sort(),
     [items],
   );
   const { data: driveFileRecords } = useDriveFiles(driveFileIds);
@@ -341,10 +342,6 @@ export const IssueAttachmentsField: React.FC<IssueAttachmentsFieldProps> = ({
         existing.map((item) => {
           if (item.id !== itemId) return item;
 
-          if (item.usesObjectUrl && item.previewUrl && uploaded.assetUrl) {
-            URL.revokeObjectURL(item.previewUrl);
-          }
-
           return {
             ...item,
             ...toIssueAttachment(uploaded),
@@ -352,8 +349,8 @@ export const IssueAttachmentsField: React.FC<IssueAttachmentsFieldProps> = ({
             progress: 100,
             error: undefined,
             file: undefined,
-            previewUrl: uploaded.assetUrl ?? item.previewUrl ?? null,
-            usesObjectUrl: uploaded.assetUrl ? false : item.usesObjectUrl,
+            previewUrl: item.previewUrl ?? null,
+            usesObjectUrl: item.usesObjectUrl,
           };
         })
       );
@@ -592,7 +589,7 @@ export const IssueAttachmentsField: React.FC<IssueAttachmentsFieldProps> = ({
 
   const handleOpenAttachment = async (item: AttachmentListItem) => {
     // Drive links are direct URLs — open them directly
-    if (isWebLink(item.assetUrl) && item.assetUrl.includes('drive.google.com')) {
+    if (isDriveLink(item.assetUrl)) {
       window.open(item.assetUrl, '_blank', 'noopener,noreferrer');
       return;
     }
@@ -753,10 +750,12 @@ export const IssueAttachmentsField: React.FC<IssueAttachmentsFieldProps> = ({
                     <img src={item.previewUrl} alt={item.fileName} className="h-full w-full object-cover" />
                   ) : isVideo(item.contentType) && item.previewUrl ? (
                     <video src={item.previewUrl} className="h-full w-full object-cover" muted playsInline />
+                  ) : isDriveLink(item.assetUrl) ? (
+                    <HardDrive size={18} className="text-blue-400" />
+                  ) : item.status === 'uploaded' && item.key && (isImage(item.contentType) || isVideo(item.contentType)) ? (
+                    <AttachmentMediaPreview contentType={item.contentType} fileName={item.fileName} attachmentKey={item.key} />
                   ) : isVideo(item.contentType) ? (
                     <FileVideo2 size={18} className="text-gray-400" />
-                  ) : item.assetUrl?.includes('drive.google.com') ? (
-                    <HardDrive size={18} className="text-blue-400" />
                   ) : (
                     <ImageIcon size={18} className="text-gray-400" />
                   )}
@@ -764,7 +763,7 @@ export const IssueAttachmentsField: React.FC<IssueAttachmentsFieldProps> = ({
 
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    {item.status === 'uploaded' && item.assetUrl?.includes('drive.google.com') && item.key ? (
+                    {item.status === 'uploaded' && isDriveLink(item.assetUrl) && item.key ? (
                       <InlineRename
                         fileName={item.fileName}
                         driveFileId={item.key}
@@ -785,12 +784,12 @@ export const IssueAttachmentsField: React.FC<IssueAttachmentsFieldProps> = ({
                     <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-gray-500 dark:bg-white/[0.06]">
                       {isVideo(item.contentType) ? 'Video' : isImage(item.contentType) ? 'Image' : 'File'}
                     </span>
-                    {item.assetUrl?.includes('drive.google.com') && (
+                    {isDriveLink(item.assetUrl) && (
                       <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-blue-500 dark:bg-blue-500/10">
                         Drive
                       </span>
                     )}
-                    {item.assetUrl?.includes('drive.google.com') && item.key && (driveSharingById.get(item.key) ?? item.driveSharing) && (
+                    {isDriveLink(item.assetUrl) && item.key && (driveSharingById.get(item.key) ?? item.driveSharing) && (
                       <DriveSharingBadge sharing={(driveSharingById.get(item.key) ?? item.driveSharing)!} />
                     )}
                   </div>

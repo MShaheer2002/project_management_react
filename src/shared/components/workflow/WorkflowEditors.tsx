@@ -370,7 +370,8 @@ export const WorkflowStatusesEditor: React.FC<{
 
   const downloadIssuesAsCsv = (status: WorkspaceStatus, issues: WorkflowStatusUsage['issues']) => {
     const header = ['Issue ID', 'Title', 'Project'];
-    const escapeCell = (value: string) => `"${value.replace(/"/g, '""')}"`;
+    // A leading ' makes spreadsheets show member written titles as text, never run them as formulas (FE-04).
+    const escapeCell = (value: string) => `"${(/^[=+\-@\t\r]/.test(value) ? `'${value}` : value).replace(/"/g, '""')}"`;
     const rows = issues.map((issue) => [issue.publicId, issue.title, issue.project?.name ?? ''].map(escapeCell).join(','));
     const csv = [header.join(','), ...rows].join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });

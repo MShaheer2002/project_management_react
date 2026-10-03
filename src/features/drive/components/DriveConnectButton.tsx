@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { isHttpsLinkOn, OAUTH_HOSTS } from '@shared/utils/webLink';
 import { CheckCircle2, Loader2, HardDrive, Unlink } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useDriveConnection, useConnectDrive, useDisconnectDrive, driveQueryKeys } from '../index';
@@ -22,6 +23,7 @@ export const DriveConnectButton: React.FC = () => {
       const result = await connectDrive.mutateAsync("PERSONAL");
 
       // Open OAuth consent in a popup
+      if (!isHttpsLinkOn(result.authUrl, OAUTH_HOSTS.drive)) return;
       const popup = window.open(result.authUrl, 'drive-oauth', 'width=500,height=700,left=200,top=100');
 
       // Poll for popup close — callback redirects back to frontend, closing the popup

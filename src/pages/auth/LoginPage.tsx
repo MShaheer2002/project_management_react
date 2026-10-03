@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { Mail, Lock, Chrome, Github, Layers, Star } from 'lucide-react';
+import { Mail, Lock, Chrome, Github, Layers } from 'lucide-react';
 import { useSignIn } from '@clerk/clerk-react';
 import { useToastStore } from '@/app/stores/useToastStore';
 import { useTenantStore } from '@/app/stores/useTenantStore';
@@ -39,7 +39,7 @@ export const LoginPage: React.FC = () => {
     e.preventDefault();
     if (!isLoaded || !signIn) return;
 
-    console.log('[Login] Attempting email/password sign-in for:', email);
+    console.log('[Login] Attempting email/password sign-in');
     setIsSubmitting(true);
     try {
       // Attempt sign-in with Clerk
@@ -51,7 +51,7 @@ export const LoginPage: React.FC = () => {
 
       // If sign-in is complete, activate the session
       if (result.status === 'complete') {
-        console.log('[Login] Sign-in complete. Activating session:', result.createdSessionId);
+        console.log('[Login] Sign-in complete. Activating session.');
         await setActive({ session: result.createdSessionId });
         // Deliberately no navigate() here. Clerk's isSignedIn flips true on
         // the NEXT render, still on /login — that's what lets AuthSync's
@@ -182,27 +182,8 @@ export const LoginPage: React.FC = () => {
                     ))}
                   </div>
                 </div>
-
-                {/* Testimonial */}
-                <div className="mt-8 text-center">
-                  <div className="flex justify-center gap-0.5 mb-3">
-                    {[...Array(5)].map((_, i) => <Star key={i} size={12} className="text-yellow-400 fill-yellow-400" />)}
-                  </div>
-                  <p className="text-[13px] text-white/45 italic leading-relaxed">"Replaced 3 tools. Velocity up 40% in month one."</p>
-                  <p className="mt-2 text-[11px] text-white/25 font-medium">Emily Z. — VP Eng, ScaleAI</p>
-                </div>
               </motion.div>
             </div>
-          </div>
-
-          {/* Bottom stats */}
-          <div className="flex gap-6 text-white/25">
-            {[{ v: '10k+', l: 'Teams' }, { v: '2M+', l: 'Issues' }, { v: '99.9%', l: 'Uptime' }].map((s) => (
-              <div key={s.l}>
-                <div className="text-sm font-bold text-white/50">{s.v}</div>
-                <div className="text-[10px]">{s.l}</div>
-              </div>
-            ))}
           </div>
         </div>
       </div>

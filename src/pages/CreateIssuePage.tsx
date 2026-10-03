@@ -545,25 +545,36 @@ export const CreateIssuePage: React.FC = () => {
     const createdIssue = await createIssue.mutateAsync(payload);
       const createdIssueResourceId = createdIssue.entityId ?? createdIssue.id;
 
+      // The issue exists from here on. A failed extra step must not send the
+      // user back to the form, where a retry would create a second copy (B-FE-05).
+      const failedSteps: string[] = [];
+      const step = async (name: string, run: () => Promise<unknown>) => {
+        try {
+          await run();
+        } catch {
+          failedSteps.push(name);
+        }
+      };
+
       if (selectedLabelIds.length > 0) {
-        await attachIssueLabelsAny.mutateAsync({
+        await step('labels', () => attachIssueLabelsAny.mutateAsync({
           issueId: createdIssueResourceId,
           input: { labelIds: selectedLabelIds },
-        });
+        }));
       }
 
       if (parentIssueId) {
-        await updateAnyIssue.mutateAsync({
+        await step('parent issue', () => updateAnyIssue.mutateAsync({
           issueId: createdIssueResourceId,
           input: {
             parentIssueId,
             ...(type === 'issue' ? { acceptanceCriteria: cleanAcceptanceCriteria } : {}),
           },
-        });
+        }));
       }
 
       if (dependencies.length > 0) {
-        await Promise.all(
+        await step('dependencies', () => Promise.all(
           dependencies.map((dependency) =>
             addIssueDependencyAny.mutateAsync({
               issueId: createdIssueResourceId,
@@ -573,14 +584,18 @@ export const CreateIssuePage: React.FC = () => {
               },
             })
           )
-        );
+        ));
       }
 
       if (watcherIds.length > 0) {
-        await addIssueWatchersAny.mutateAsync({
+        await step('watchers', () => addIssueWatchersAny.mutateAsync({
           issueId: createdIssueResourceId,
           input: { userIds: watcherIds },
-        });
+        }));
+      }
+
+      if (failedSteps.length > 0) {
+        showToast(`Issue created, but these were not saved: ${failedSteps.join(', ')}. Add them on the issue.`, 'error');
       }
 
       localStorage.removeItem(draftKey);
@@ -602,7 +617,7 @@ export const CreateIssuePage: React.FC = () => {
   ]);
 
   const handleCreate = async () => {
-    if (!validate()) return;
+    if (isSubmitting || !validate()) return;
     setIsSubmitting(true);
     try {
       if (assigneeId) {
@@ -772,10 +787,13 @@ export const CreateIssuePage: React.FC = () => {
     }
   }, [type, estimate]);
 
-  // Shortcuts
+  // Shortcuts. The ref always holds the latest handleCreate, so Ctrl+Enter
+  // submits what is on screen now, not the form as it was on mount (B-FE-06).
+  const handleCreateRef = useRef(handleCreate);
+  handleCreateRef.current = handleCreate;
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') handleCreate();
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') handleCreateRef.current();
       // Escape no longer navigates away — it only cancels an in-flight
       // Trussen AI generation, if one is running.
       if (e.key === 'Escape' && aiGenerationCancelRef.current) {
@@ -784,7 +802,7 @@ export const CreateIssuePage: React.FC = () => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [title, projectId]);
+  }, []);
 
   return (
     <motion.div 

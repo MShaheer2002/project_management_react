@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useRef } from 'react';
 import { 
   DndContext, 
   closestCenter, 
@@ -200,12 +200,16 @@ export const SubtaskList: React.FC<SubtaskListProps> = ({ issue }) => {
     }
   };
 
+  // Enter saves, and the blur that follows would save again (B-FE-04).
+  const savingRef = useRef(false);
   const handleAdd = async () => {
+    if (savingRef.current) return;
     if (!newSubtaskTitle.trim()) {
       setIsAdding(false);
       return;
     }
 
+    savingRef.current = true;
     try {
       await createSubtask.mutateAsync({
         title: newSubtaskTitle.trim(),
@@ -215,6 +219,8 @@ export const SubtaskList: React.FC<SubtaskListProps> = ({ issue }) => {
       setIsAdding(false);
     } catch {
       showToast('Failed to add subtask.', 'error');
+    } finally {
+      savingRef.current = false;
     }
   };
 

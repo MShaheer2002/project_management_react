@@ -27,7 +27,7 @@ interface IssueBoardColumnProps {
   onIssuesLoaded?: (statusKey: string, issues: Issue[]) => void;
 }
 
-const COLUMN_PAGE_SIZE = 10; // temporarily lowered for testing infinite scroll — bump back to 30 after
+const COLUMN_PAGE_SIZE = 30;
 const SCROLL_LOAD_THRESHOLD_PX = 150;
 
 const StatusIcon: React.FC<{ color: string; isFinal: boolean }> = ({ color, isFinal }) => {

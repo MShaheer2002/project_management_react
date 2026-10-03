@@ -270,7 +270,8 @@ export const RoadmapPage: React.FC = () => {
       if (value) next.set(key, value);
       else next.delete(key);
     });
-    setSearchParams(next);
+    // Replace, not push: Back should leave the page, not undo each keystroke.
+    setSearchParams(next, { replace: true });
   };
 
   /* Loading */

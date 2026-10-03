@@ -5,6 +5,7 @@ import { Mail, Lock, Chrome, Github, User, CheckCircle2, Zap, Shield, Globe } fr
 import { useSignUp } from '@clerk/clerk-react';
 import { useToastStore } from '@/app/stores/useToastStore';
 import { Logo, FormInput, SocialButton, Divider, SubmitButton, AuthFooter, TermsText } from './shared';
+import { getSafeRedirectPath } from '@shared/utils/safeRedirect';
 
 /**
  * SignupPage — /signup
@@ -17,7 +18,7 @@ export const SignupPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const showToast = useToastStore((s) => s.showToast);
-  const redirectTo = getSafeRedirect(searchParams.get('redirect')) || '/org-creation';
+  const redirectTo = getSafeRedirectPath(searchParams.get('redirect')) || '/org-creation';
 
   // Clerk's headless sign-up hook
   const { signUp, isLoaded } = useSignUp();
@@ -38,7 +39,7 @@ export const SignupPage: React.FC = () => {
     e.preventDefault();
     if (!isLoaded || !signUp) return;
 
-    console.log('[Signup] Attempting sign-up for:', email, '| Name:', fullName);
+    console.log('[Signup] Attempting sign-up');
     setIsSubmitting(true);
     try {
       // Step 1: Create sign-up attempt in Clerk
@@ -54,7 +55,7 @@ export const SignupPage: React.FC = () => {
       // Step 2: Request email verification code (6-digit OTP)
       console.log('[Signup] Step 2: Sending email verification code...');
       await signUp.prepareEmailAddressVerification({ strategy: 'email_code' });
-      console.log('[Signup] Step 2 complete. OTP sent to:', email);
+      console.log('[Signup] Step 2 complete. OTP sent.');
 
       // Step 3: Redirect to OTP verification page
       console.log('[Signup] Step 3: Redirecting to /email-verification');
@@ -127,7 +128,7 @@ export const SignupPage: React.FC = () => {
                 Start building<br />something great.
               </h2>
               <p className="mt-4 text-white/40 leading-relaxed">
-                Join 10,000+ teams already using Trussen to ship faster.
+                Plan, track and ship work together in one place.
               </p>
 
               <div className="mt-10 space-y-5">
@@ -209,8 +210,3 @@ export const SignupPage: React.FC = () => {
     </div>
   );
 };
-
-function getSafeRedirect(value: string | null): string | null {
-  if (!value) return null;
-  return value.startsWith('/') && !value.startsWith('//') ? value : null;
-}

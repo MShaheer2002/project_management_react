@@ -40,7 +40,7 @@ import { useAuthStore } from '@/app/stores/useAuthStore';
 import { confirmDialog } from '@/app/stores/useConfirmStore';
 import { useApp } from '@/AppContext';
 import { Modal } from '@/components/modals/Modal';
-import { ActivityPage } from '@features/activity';
+import { ActivityTimeline } from '@features/activity';
 import { MOCK_USERS } from '@/constants';
 import { useProjectsDirectory } from '@features/projects';
 import { useWorkspaceMemberOptions } from '@features/workspace';
@@ -411,6 +411,7 @@ export const DepartmentDetailPage: React.FC = () => {
   };
 
   const handleRemoveMember = async (userId: string) => {
+    if (!(await confirmDialog({ title: 'Remove this member from the department?', tone: 'danger', confirmLabel: 'Remove' }))) return;
     try {
       await removeMember.mutateAsync(userId);
       showToast('Member removed from the department.', 'success');
@@ -665,7 +666,6 @@ export const DepartmentDetailPage: React.FC = () => {
           <thead>
             <tr className="bg-gray-50/50 text-[10px] font-bold uppercase text-gray-400 dark:bg-black/10">
               <th className="px-6 py-4">Member</th>
-              <th className="px-6 py-4">Status</th>
               <th className="px-6 py-4">Team</th>
               <th className="px-6 py-4">Role</th>
               <th className="px-6 py-4 text-right">Actions</th>
@@ -685,12 +685,6 @@ export const DepartmentDetailPage: React.FC = () => {
                       <div className="text-sm font-bold">{member.name}</div>
                       <div className="text-[11px] font-medium text-gray-400">{member.email}</div>
                     </div>
-                  </div>
-                </td>
-                <td className="px-6 py-4">
-                  <div className="flex items-center gap-1.5 text-[10px] font-bold text-green-500">
-                    <div className="h-1.5 w-1.5 rounded-full bg-green-500 transition-all animate-pulse" />
-                    ONLINE
                   </div>
                 </td>
                 <td className="px-6 py-4">
@@ -890,7 +884,16 @@ export const DepartmentDetailPage: React.FC = () => {
     </div>
   );
 
-  const renderActivity = () => <ActivityPage scope="workspace" title="Activity" />;
+  const renderActivity = () => (
+    <ActivityTimeline
+      scope="department"
+      scopeId={department.id}
+      title="Activity"
+      emptyTitle="No department activity yet"
+      emptyDescription="Only events for this department will appear here."
+      errorMessage="Failed to load department activity."
+    />
+  );
 
   const renderSettings = () => (
     <form onSubmit={handleSave} className="mx-auto max-w-4xl space-y-12 p-8 pb-24">

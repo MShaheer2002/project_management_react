@@ -186,7 +186,19 @@ export const DocumentPreview: React.FC<DocumentPreviewProps> = ({
             convertToHtml: (input: { arrayBuffer: ArrayBuffer }) => Promise<{ value: string }>;
           };
           const result = await mammoth.convertToHtml({ arrayBuffer: buffer });
-          if (!cancelled) setDocxHtml(DOMPurify.sanitize(result.value));
+          // An uploaded file must not draw fake inputs or buttons inside our UI,
+          // and its links open in a new tab instead of replacing the app (H-FE-07).
+          const safe = DOMPurify.sanitize(result.value, {
+            FORBID_TAGS: ['form', 'input', 'button', 'textarea', 'select', 'option'],
+            RETURN_DOM_FRAGMENT: true,
+          });
+          safe.querySelectorAll('a').forEach((link) => {
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+          });
+          const holder = document.createElement('div');
+          holder.appendChild(safe);
+          if (!cancelled) setDocxHtml(holder.innerHTML);
         } else {
           const XLSX = await import('xlsx');
           const workbook = XLSX.read(buffer, { type: 'array' });

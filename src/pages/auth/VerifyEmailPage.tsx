@@ -5,6 +5,7 @@ import { Mail, ShieldCheck } from 'lucide-react';
 import { useSignUp } from '@clerk/clerk-react';
 import { useToastStore } from '@/app/stores/useToastStore';
 import { Logo, OTPInput, SubmitButton, BackLink, AuthFooter } from './shared';
+import { getSafeRedirectPath } from '@shared/utils/safeRedirect';
 
 /**
  * VerifyEmailPage — /email-verification
@@ -20,7 +21,7 @@ export const VerifyEmailPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const showToast = useToastStore((s) => s.showToast);
-  const redirectTo = getSafeRedirect(searchParams.get('redirect')) || '/org-creation';
+  const redirectTo = getSafeRedirectPath(searchParams.get('redirect')) || '/org-creation';
 
   // Clerk's sign-up hook — persists the in-progress sign-up across navigation
   const { signUp, setActive, isLoaded } = useSignUp();
@@ -37,7 +38,7 @@ export const VerifyEmailPage: React.FC = () => {
     e.preventDefault();
     if (!isLoaded || !signUp) return;
 
-    console.log('[VerifyEmail] Submitting OTP code:', code);
+    console.log('[VerifyEmail] Submitting OTP code');
     setIsSubmitting(true);
     try {
       // Attempt to verify the email with the 6-digit code
@@ -46,7 +47,7 @@ export const VerifyEmailPage: React.FC = () => {
 
       if (result.status === 'complete') {
         // Email verified! Activate the session so the user is now logged in
-        console.log('[VerifyEmail] Email verified. Activating session:', result.createdSessionId);
+        console.log('[VerifyEmail] Email verified. Activating session.');
         await setActive({ session: result.createdSessionId });
         console.log('[VerifyEmail] Session active. Redirecting to:', redirectTo);
         navigate(redirectTo);
@@ -158,8 +159,3 @@ export const VerifyEmailPage: React.FC = () => {
     </div>
   );
 };
-
-function getSafeRedirect(value: string | null): string | null {
-  if (!value) return null;
-  return value.startsWith('/') && !value.startsWith('//') ? value : null;
-}

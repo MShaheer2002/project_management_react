@@ -66,7 +66,7 @@ export const aiConnectionService = {
 
   completeOAuthSetup: async (
     workspaceId: string,
-    input: { clientId: string; name: string; primaryClient?: string; scopes: string[] },
+    input: { clientId: string; ticket: string; name: string; primaryClient?: string; scopes: string[] },
   ): Promise<AiConnection> => {
     const { data } = await privateApi.post<ApiResponse<AiConnection>>(
       '/ai-connections/oauth/complete',

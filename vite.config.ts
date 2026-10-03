@@ -5,10 +5,15 @@ import {defineConfig, loadEnv} from 'vite';
 
 export default defineConfig(({mode}) => {
   const env = loadEnv(mode, '.', '');
+  // A production build must reach the API over https (and so wss for the
+  // socket). Without this a missing BASE_URL silently falls back to
+  // http://localhost:8000 in the shipped bundle.
+  if (mode === 'production' && !env.BASE_URL?.startsWith('https://')) {
+    throw new Error('BASE_URL must be set to an https:// URL for production builds.');
+  }
   return {
     plugins: [react(), tailwindcss()],
     define: {
-      'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
       'process.env.BASE_URL': JSON.stringify(env.BASE_URL),
       'process.env.CLERK_PUBLISHABLE_KEY': JSON.stringify(env.CLERK_PUBLISHABLE_KEY),
     },
