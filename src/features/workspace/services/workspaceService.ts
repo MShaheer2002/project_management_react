@@ -389,12 +389,20 @@ export const workspaceService = {
     return data.data;
   },
 
+  // Follows every page so large workspaces show everyone, not just the first 100 (B-FE-09).
   getMembers: async (workspaceId: string): Promise<WorkspaceMemberResponse[]> => {
-    const result = await workspaceService.listMemberDirectory(workspaceId, {
-      limit: 100,
-      sort: 'name:asc',
-    });
-    return result.items;
+    const members: WorkspaceMemberResponse[] = [];
+    let cursor: string | undefined;
+    do {
+      const result = await workspaceService.listMemberDirectory(workspaceId, {
+        limit: 100,
+        sort: 'name:asc',
+        cursor,
+      });
+      members.push(...result.items);
+      cursor = result.meta.cursor ?? undefined;
+    } while (cursor);
+    return members;
   },
 
   listMemberDirectory: async (
@@ -464,10 +472,11 @@ export const workspaceService = {
   },
 
   resolveInvitation: async (token: string): Promise<InvitationResolveResponse> => {
-    const { data } = await publicApi.get<ApiResponse<InvitationResolveResponse>>('/invitations/resolve', {
-      params: { t: token },
-      skipGlobalErrorToast: true,
-    } as AxiosRequestConfig & { skipGlobalErrorToast: boolean });
+    const { data } = await publicApi.post<ApiResponse<InvitationResolveResponse>>(
+      '/invitations/resolve',
+      { token },
+      { skipGlobalErrorToast: true } as AxiosRequestConfig & { skipGlobalErrorToast: boolean },
+    );
     return data.data;
   },
 

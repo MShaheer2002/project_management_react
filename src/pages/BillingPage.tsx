@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { aiAvailabilityQueryKey } from '@features/ai';
 import {
   CreditCard,
   Check,
@@ -282,6 +283,8 @@ const BillingContent: React.FC = () => {
     queryClient.invalidateQueries({ queryKey: billingQueryKeys.subscription(workspaceId) });
     queryClient.invalidateQueries({ queryKey: billingQueryKeys.invoices(workspaceId) });
     queryClient.invalidateQueries({ queryKey: billingQueryKeys.paymentMethods(workspaceId) });
+    // A plan change can switch Trussen AI on or off.
+    queryClient.invalidateQueries({ queryKey: aiAvailabilityQueryKey(workspaceId) });
   }, [queryClient, workspaceId]);
 
   /**
@@ -322,7 +325,6 @@ const BillingContent: React.FC = () => {
 
     try {
       const response = await backendCall();
-      console.log('[Billing] Backend response:', JSON.stringify(response, null, 2));
 
       // Step 2: Confirm payment with Stripe if required
       if (response.clientSecret) {

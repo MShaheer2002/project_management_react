@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { tunnelHeaders } from '@shared/services/tunnelHeaders';
 import axios from 'axios';
 import { getTenantSlugFromHost } from '@shared/utils/tenant';
 
@@ -47,7 +48,7 @@ export const useTenantStore = create<TenantState>()((set, get) => ({
       // is an unauthenticated check for whether the subdomain is real at
       // all, so it needs its own handling below, not the shared one.
       const { data } = await axios.get(`${baseUrl}/workspaces/resolve/${slug}`, {
-        headers: { 'ngrok-skip-browser-warning': 'true' },
+        headers: tunnelHeaders,
         timeout: 5000,
       });
       set({ status: 'found', workspace: { name: data.data.name, logo: data.data.logo || undefined } });

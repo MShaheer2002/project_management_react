@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { isHttpsLinkOn, OAUTH_HOSTS } from '@shared/utils/webLink';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import {
@@ -70,6 +71,21 @@ type EnrichedIntegration = {
   planLocked: boolean;
 };
 
+const OAUTH_PROVIDER_NAMES: Record<string, string> = {
+  github: 'GitHub',
+  slack: 'Slack',
+  drive: 'Google Drive',
+};
+
+const OAUTH_ERROR_TEXT: Record<string, string> = {
+  ACCESS_DENIED: 'You cancelled the connection.',
+  INSUFFICIENT_ROLE: 'Only admins can connect this.',
+  WORKSPACE_DEACTIVATED: 'This workspace is deactivated.',
+  INTEGRATION_PLAN_UPGRADE_REQUIRED: 'Your plan does not include this integration.',
+  DRIVE_SCOPE_MISSING: 'Allow Trussen to add files to your Drive, then connect again.',
+  WORKSPACE_DRIVE_EXISTS: 'A workspace Google Drive is already connected.',
+};
+
 export const IntegrationsPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
@@ -108,20 +124,21 @@ export const IntegrationsPage: React.FC = () => {
   const connectDrive = useConnectDrive();
   const disconnectDrive = useDisconnectDrive();
 
-  // Handle OAuth callback redirect params
+  // Handle OAuth callback redirect params. Anyone can craft this link, so
+  // only our own words are shown: known providers and error codes (FE-06).
   useEffect(() => {
     const provider = searchParams.get('provider');
     const status = searchParams.get('status');
-    const message = searchParams.get('message');
+    const providerName = provider ? OAUTH_PROVIDER_NAMES[provider] : undefined;
 
     if (!provider || !status) return;
+    if (!providerName) {
+      setSearchParams({}, { replace: true });
+      return;
+    }
 
     if (status === 'connected') {
-      showToast(
-        `${provider.charAt(0).toUpperCase() + provider.slice(1)} connected successfully`,
-        'success',
-        'Integration connected',
-      );
+      showToast(`${providerName} connected successfully`, 'success', 'Integration connected');
       if (provider === 'drive') {
         queryClient.invalidateQueries({ queryKey: driveQueryKeys.connection() });
       } else {
@@ -130,11 +147,8 @@ export const IntegrationsPage: React.FC = () => {
         });
       }
     } else if (status === 'error') {
-      showToast(
-        message || `Failed to connect ${provider}`,
-        'error',
-        'Connection failed',
-      );
+      const code = searchParams.get('code') ?? '';
+      showToast(OAUTH_ERROR_TEXT[code] ?? `Could not connect ${providerName}. Try again.`, 'error', 'Connection failed');
     }
 
     setSearchParams({}, { replace: true });
@@ -204,7 +218,7 @@ export const IntegrationsPage: React.FC = () => {
       try {
         const connectFn = provider === 'github' ? connectGitHub : connectSlack;
         const result = await connectFn.mutateAsync();
-        window.location.href = result.authUrl;
+        if (isHttpsLinkOn(result.authUrl, OAUTH_HOSTS[provider === 'github' ? 'github' : 'slack'])) window.location.href = result.authUrl;
       } catch (err) {
         const apiErr = err as ApiAxiosError;
         const code = apiErr.response?.data?.error?.code;

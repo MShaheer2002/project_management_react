@@ -1,5 +1,6 @@
 import React, { useRef, useCallback, useState, useEffect } from 'react';
 import DOMPurify from 'dompurify';
+import { isWebLink } from '@shared/utils/webLink';
 import { 
   Bold, 
   Italic, 
@@ -44,6 +45,15 @@ const renderInlineMarkdown = (value: string) => {
 };
 
 const looksLikeHtml = (value: string) => /<[^>]+>/.test(value);
+
+// Links may only be web or mail links; "example.com" becomes https://example.com (H-FE-04).
+const toLinkUrl = (input: string | null) => {
+  const value = input?.trim();
+  if (!value) return null;
+  if (/^mailto:[^\s]+$/i.test(value)) return value;
+  const withScheme = /^[a-z][a-z\d+.-]*:/i.test(value) ? value : `https://${value}`;
+  return isWebLink(withScheme) ? withScheme : null;
+};
 
 const looksLikeMarkdown = (value: string) =>
   /(^|\n)\s{0,3}(#{1,6}\s|[-*]\s|\d+\.\s)|\*\*[^*]+\*\*|_[^_]+_|`[^`]+`|\[[^\]]+\]\([^)]+\)/m.test(value);
@@ -248,7 +258,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
             
             <ToolbarButton onClick={() => applyFormat('insertUnorderedList')} icon={<List size={16} />} title="Bullet List" />
             <ToolbarButton onClick={() => applyFormat('insertOrderedList')} icon={<ListOrdered size={16} />} title="Numbered List" />
-            <ToolbarButton onClick={() => applyFormat('createLink', window.prompt('Enter URL') || '')} icon={<LinkIcon size={16} />} title="Link" />
+            <ToolbarButton onClick={() => { const url = toLinkUrl(window.prompt('Enter URL')); if (url) applyFormat('createLink', url); }} icon={<LinkIcon size={16} />} title="Link" />
             <ToolbarButton onClick={() => applyFormat('formatBlock', '<pre>')} icon={<Code size={16} />} title="Code Block" />
             
             <div className="w-[1px] h-4 bg-gray-700 mx-2" />

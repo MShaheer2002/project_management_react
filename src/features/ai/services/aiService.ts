@@ -1,4 +1,5 @@
 import { privateApi } from '@shared/services/privateApi';
+import { tunnelHeaders } from '@shared/services/tunnelHeaders';
 import { getAuthToken } from '@shared/services';
 import type { ApiResponse } from '@shared/services/types';
 import type {
@@ -31,6 +32,74 @@ const buildUsageQuery = (input?: {
   ...(input?.to ? { to: input.to } : {}),
   ...(typeof input?.limit === 'number' ? { limit: input.limit } : {}),
 });
+
+export type AiAssistStreamEventType = 'status' | 'meta' | 'delta' | 'done' | 'error';
+
+/**
+ * POST to a Server-Sent Events endpoint and hand each event to `onEvent`.
+ * fetch, not EventSource: EventSource can't POST or send the auth header.
+ * A failed request (before streaming) throws an Error with the API's `code`.
+ */
+async function postEventStream(
+  path: string,
+  input: { workspaceId: string; body: unknown; onEvent: (type: string, data: unknown) => void; signal?: AbortSignal },
+): Promise<void> {
+  if (!input.workspaceId) throw new Error('Workspace not selected');
+  const token = await getAuthToken();
+  if (!token) throw new Error('Not authenticated');
+
+  const baseUrl = (privateApi.defaults.baseURL || '').replace(/\/$/, '');
+  const response = await fetch(`${baseUrl}${path}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+      'X-Workspace-Id': input.workspaceId,
+      ...tunnelHeaders,
+    },
+    body: JSON.stringify(input.body),
+    ...(input.signal ? { signal: input.signal } : {}),
+  });
+
+  if (!response.ok) {
+    const errData = await response.json().catch(() => ({})) as { error?: { code?: string; message?: string } };
+    const error = new Error(errData.error?.message || `Error ${response.status}`) as Error & { code?: string; status?: number };
+    error.code = errData.error?.code;
+    error.status = response.status;
+    throw error;
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error('No response stream');
+
+  const decoder = new TextDecoder();
+  let buffer = '';
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    while (buffer.includes('\n\n')) {
+      const eventEnd = buffer.indexOf('\n\n');
+      const eventBlock = buffer.slice(0, eventEnd);
+      buffer = buffer.slice(eventEnd + 2);
+
+      let eventType = '';
+      let eventData = '';
+      for (const line of eventBlock.split('\n')) {
+        if (line.startsWith('event: ')) eventType = line.slice(7).trim();
+        if (line.startsWith('data: ')) eventData = line.slice(6);
+      }
+      if (!eventType || !eventData) continue;
+
+      try {
+        input.onEvent(eventType, JSON.parse(eventData));
+      } catch {
+        // Ignore malformed stream events so one bad chunk does not kill the session.
+      }
+    }
+  }
+}
 
 export const aiService = {
   /** POST /ai/generate-issue — Generate a structured issue from natural language */
@@ -71,6 +140,27 @@ export const aiService = {
   },
 
   /** POST /ai/assist — Lightweight ephemeral assistant */
+  /** GET /ai/assist/history: this person's help chat from the last 24 hours, oldest first */
+  getAssistHistory: async (): Promise<Array<{ role: 'user' | 'assistant'; content: unknown; createdAt: string }>> => {
+    const { data } = await privateApi.get<ApiResponse<{ messages: Array<{ role: 'user' | 'assistant'; content: unknown; createdAt: string }> }>>(
+      '/ai/assist/history',
+    );
+    return data.data.messages;
+  },
+
+  /** POST /ai/assist/answers/:id/feedback: thumbs up or down on an AI Assistance answer */
+  rateAssistAnswer: async (
+    answerId: string,
+    input: { rating: 'up' | 'down'; reason?: 'wrong' | 'unclear' | 'not_helpful' | 'other'; comment?: string },
+  ): Promise<void> => {
+    await privateApi.post(`/ai/assist/answers/${encodeURIComponent(answerId)}/feedback`, input);
+  },
+
+  /** DELETE /ai/assist/history */
+  clearAssistHistory: async (): Promise<void> => {
+    await privateApi.delete('/ai/assist/history');
+  },
+
   assist: async (input: {
     message: string;
     route?: string;
@@ -125,6 +215,12 @@ export const aiService = {
       `/ai/suggestions/${suggestionId}/dismiss`,
       input ?? {},
     );
+    return data.data;
+  },
+
+  /** GET /ai/availability — Which AI features this workspace's plan includes */
+  getAvailability: async (): Promise<{ assistant: boolean; trussenAi: boolean }> => {
+    const { data } = await privateApi.get<ApiResponse<{ assistant: boolean; trussenAi: boolean }>>('/ai/availability');
     return data.data;
   },
 
@@ -206,69 +302,31 @@ export const aiService = {
       throw new Error('Workspace not selected');
     }
 
-    const token = await getAuthToken();
-    if (!token) {
-      throw new Error('Not authenticated');
-    }
-
-    const baseUrl = (privateApi.defaults.baseURL || '').replace(/\/$/, '');
-    const response = await fetch(`${baseUrl}/ai/chat`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-        'X-Workspace-Id': input.workspaceId,
-        'ngrok-skip-browser-warning': 'true',
-      },
-      body: JSON.stringify({
-        conversationId: input.conversationId ?? undefined,
-        message: input.message,
-      }),
+    await postEventStream('/ai/chat', {
+      workspaceId: input.workspaceId,
+      body: { conversationId: input.conversationId ?? undefined, message: input.message },
+      onEvent: (type, data) => input.onEvent(type as AiChatEventType, data as ChatStreamEvent),
       ...(input.signal ? { signal: input.signal } : {}),
     });
+  },
 
-    if (!response.ok) {
-      const errData = await response.json().catch(() => ({})) as { error?: { code?: string; message?: string } };
-      const error = new Error(errData.error?.message || `Error ${response.status}`) as Error & { code?: string };
-      error.code = errData.error?.code;
-      throw error;
-    }
-
-    const reader = response.body?.getReader();
-    if (!reader) {
-      throw new Error('No response stream');
-    }
-
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-
-      while (buffer.includes('\n\n')) {
-        const eventEnd = buffer.indexOf('\n\n');
-        const eventBlock = buffer.slice(0, eventEnd);
-        buffer = buffer.slice(eventEnd + 2);
-
-        let eventType = '';
-        let eventData = '';
-
-        for (const line of eventBlock.split('\n')) {
-          if (line.startsWith('event: ')) eventType = line.slice(7).trim();
-          if (line.startsWith('data: ')) eventData = line.slice(6);
-        }
-
-        if (!eventType || !eventData) continue;
-
-        try {
-          input.onEvent(eventType as AiChatEventType, JSON.parse(eventData) as ChatStreamEvent);
-        } catch {
-          // Ignore malformed stream events so one bad chunk does not kill the session.
-        }
-      }
-    }
+  /**
+   * POST /ai/assist/stream: AI Assistance, streamed. Events: `status`, `meta`,
+   * `delta` (answer text pieces), then `done` (the complete answer) or `error`.
+   */
+  streamAssist: async (input: {
+    message: string;
+    route?: string;
+    pageTitle?: string;
+    workspaceId: string;
+    onEvent: (type: AiAssistStreamEventType, data: unknown) => void;
+    signal?: AbortSignal;
+  }): Promise<void> => {
+    await postEventStream('/ai/assist/stream', {
+      workspaceId: input.workspaceId,
+      body: { message: input.message, route: input.route, pageTitle: input.pageTitle },
+      onEvent: (type, data) => input.onEvent(type as AiAssistStreamEventType, data),
+      ...(input.signal ? { signal: input.signal } : {}),
+    });
   },
 };

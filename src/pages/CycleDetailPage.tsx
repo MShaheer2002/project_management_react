@@ -7,7 +7,6 @@ import {
   ArrowUpDown,
   Bug,
   ChevronDown,
-  Building2,
   Calendar,
   CheckCircle2,
   CheckSquare,
@@ -260,12 +259,29 @@ export const CycleDetailPage: React.FC = () => {
 
     return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
   }, [cycleIssues]);
+  const [issueSearch, setIssueSearch] = useState('');
+  const searchedCycleIssues = useMemo(() => {
+    const term = issueSearch.trim().toLowerCase();
+    if (!term) return cycleIssues;
+    return cycleIssues.filter((issue) => issue.title.toLowerCase().includes(term) || issue.id.toLowerCase().includes(term));
+  }, [cycleIssues, issueSearch]);
   const filteredCycleIssues = useMemo(() => {
-    if (selectedAssigneeIds.length === 0) return cycleIssues;
+    if (selectedAssigneeIds.length === 0) return searchedCycleIssues;
     const selectedIds = new Set(selectedAssigneeIds);
-    return cycleIssues.filter((issue) => issue.assigneeId && selectedIds.has(issue.assigneeId));
-  }, [cycleIssues, selectedAssigneeIds]);
-  const visibleCycleIssues = issueView === 'board' ? filteredCycleIssues : cycleIssues;
+    return searchedCycleIssues.filter((issue) => issue.assigneeId && selectedIds.has(issue.assigneeId));
+  }, [searchedCycleIssues, selectedAssigneeIds]);
+  const visibleCycleIssues = issueView === 'board' ? filteredCycleIssues : searchedCycleIssues;
+  // The real days of the cycle, in UTC so a date never shifts with the viewer's timezone (B-FE-10).
+  const cycleCalendar = useMemo(() => {
+    const start = cycle?.startsAt ? Date.parse(`${cycle.startsAt.slice(0, 10)}T00:00:00Z`) : NaN;
+    const end = cycle?.endsAt ? Date.parse(`${cycle.endsAt.slice(0, 10)}T00:00:00Z`) : NaN;
+    if (Number.isNaN(start) || Number.isNaN(end) || end < start) return { leadingBlanks: 0, days: [] as string[] };
+    const days: string[] = [];
+    for (let time = start; time <= end && days.length < 366; time += 86_400_000) {
+      days.push(new Date(time).toISOString().slice(0, 10));
+    }
+    return { leadingBlanks: new Date(start).getUTCDay(), days };
+  }, [cycle?.startsAt, cycle?.endsAt]);
   const visibleCycleIssueIds = useMemo(() => visibleCycleIssues.map((issue) => issue.id), [visibleCycleIssues]);
   const cycleBoardStatuses = useMemo(
     () => workspaceStatuses.filter((status) => status.visibility.cycleBoard !== false),
@@ -780,18 +796,12 @@ export const CycleDetailPage: React.FC = () => {
                   <div className="relative min-w-[180px] max-w-[260px] flex-1">
                     <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                     <input
+                      value={issueSearch}
+                      onChange={(e) => setIssueSearch(e.target.value)}
                       placeholder="Search issues..."
                       className="w-full rounded-md border-none bg-gray-100 py-1.5 pl-9 pr-3 text-sm outline-none transition-all focus:ring-2 focus:ring-primary/20 dark:bg-white/5"
                     />
                   </div>
-                  <button className="inline-flex shrink-0 items-center gap-2 rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50 dark:border-border-dark dark:bg-white/5 dark:text-gray-300 dark:hover:bg-white/10">
-                    <Filter size={14} className="text-gray-400" />
-                    All Types
-                  </button>
-                  <button className="hidden shrink-0 items-center gap-2 rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50 dark:border-border-dark dark:bg-white/5 dark:text-gray-300 dark:hover:bg-white/10 lg:inline-flex">
-                    <Building2 size={14} className="text-gray-400" />
-                    All Departments
-                  </button>
                   <button
                     type="button"
                     onClick={handlePlanIssues}
@@ -1162,12 +1172,14 @@ export const CycleDetailPage: React.FC = () => {
                         {day}
                       </div>
                     ))}
-                    {Array.from({ length: 35 }).map((_, index) => {
-                      const dayNumber = index + 1;
-                      const dayIssues = visibleCycleIssues.filter((issue) => Number(issue.dueDate?.slice(8, 10)) === dayNumber);
+                    {Array.from({ length: cycleCalendar.leadingBlanks }).map((_, index) => (
+                      <div key={`blank-${index}`} className="min-h-[112px] bg-gray-50/60 dark:bg-black/10" />
+                    ))}
+                    {cycleCalendar.days.map((isoDate) => {
+                      const dayIssues = visibleCycleIssues.filter((issue) => issue.dueDate?.slice(0, 10) === isoDate);
                       return (
-                        <div key={dayNumber} className="flex min-h-[112px] flex-col gap-1 bg-white p-2 dark:bg-card-dark">
-                          <span className="mb-1 text-xs font-medium text-gray-400">{dayNumber}</span>
+                        <div key={isoDate} className="flex min-h-[112px] flex-col gap-1 bg-white p-2 dark:bg-card-dark">
+                          <span className="mb-1 text-xs font-medium text-gray-400">{Number(isoDate.slice(8, 10))}</span>
                           {dayIssues.map((issue) => (
                             <button
                               key={issue.id}

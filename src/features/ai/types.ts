@@ -251,6 +251,14 @@ export interface AiAssistResponse {
     label: string;
   };
   facts: AiAssistFact[];
+  /** Help articles the answer is based on ("Learn more"). Set by the server. */
+  sources?: Array<{ articleId: string; title: string }>;
+  /** False when the assistant couldn't find a basis for an answer. */
+  grounded?: boolean;
+  /** Offered when the assistant couldn't help. */
+  support?: { email: string };
+  /** Id for thumbs up/down. */
+  answerId?: string;
   usage: {
     inputTokens: number;
     outputTokens: number;

@@ -11,6 +11,15 @@ import { buildWorkspaceUrl } from '@shared/utils/tenant';
 import { workspaceLogoSrc } from '@shared/utils/workspaceLogo';
 
 const PENDING_INVITE_TOKEN_KEY = 'trussen-pending-invite-token';
+// Invites that can never be accepted again. Email mismatch is not here: the
+// user may still sign in with the invited address.
+const DEAD_INVITE_CODES = new Set([
+  'ALREADY_MEMBER',
+  'INVITATION_NOT_FOUND',
+  'INVITATION_EXPIRED',
+  'INVITATION_REVOKED',
+  'INVITATION_ALREADY_ACCEPTED',
+]);
 
 export const InvitePage: React.FC = () => {
   const navigate = useNavigate();
@@ -53,6 +62,8 @@ export const InvitePage: React.FC = () => {
         const apiError = err as ApiAxiosError;
         const code = apiError.response?.data?.error?.code;
         const message = apiError.response?.data?.error?.message;
+
+        if (code && DEAD_INVITE_CODES.has(code)) window.localStorage.removeItem(PENDING_INVITE_TOKEN_KEY);
 
         switch (code) {
           case 'INVITATION_NOT_FOUND':
@@ -116,6 +127,8 @@ export const InvitePage: React.FC = () => {
       const apiError = err as ApiAxiosError;
       const code = apiError.response?.data?.error?.code;
       const message = apiError.response?.data?.error?.message;
+
+      if (code && DEAD_INVITE_CODES.has(code)) window.localStorage.removeItem(PENDING_INVITE_TOKEN_KEY);
 
       switch (code) {
         case 'INVITATION_EMAIL_MISMATCH':

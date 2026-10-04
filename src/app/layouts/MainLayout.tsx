@@ -5,13 +5,14 @@ import { TopNavbar } from '@shared/components/layout/TopNavbar';
 import { ContextPanel } from '@/components/ContextPanel';
 import { CommandPalette } from '@/components/CommandPalette';
 import { ModalManager } from '@/components/modals/ModalManager';
-import { AiAssistantBubble, TrussenAiPanel } from '@features/ai';
+import { AiAssistantBubble, TrussenAiPanel, useAiAvailability } from '@features/ai';
 import { useUIStore } from '@/app/stores/useUIStore';
 import { ErrorBoundary } from '@shared/components/ErrorBoundary';
 import { AnimatePresence } from 'motion/react';
 
 export const MainLayout: React.FC = () => {
   const isAiPanelOpen = useUIStore((s) => s.isAiPanelOpen);
+  const { trussenAi } = useAiAvailability();
   const location = useLocation();
 
   return (
@@ -30,7 +31,7 @@ export const MainLayout: React.FC = () => {
         </main>
       </div>
       {/* Trussen AI Panel — pushes content, part of flex layout */}
-      {isAiPanelOpen && <TrussenAiPanel />}
+      {isAiPanelOpen && trussenAi && <TrussenAiPanel />}
       <AiAssistantBubble />
       <AnimatePresence>
         <ContextPanel />

@@ -481,9 +481,19 @@ export const IssueDetailPage: React.FC = () => {
         await removeIssueDependency.mutateAsync(dependency.issueId);
       }
 
+      // There is no "change relation" call, so it is remove then add. If the add
+      // fails, put the old link back instead of losing it (B-FE-07).
       for (const dependency of changed) {
         await removeIssueDependency.mutateAsync(dependency.issueId);
-        await addIssueDependency.mutateAsync({ issueId: dependency.issueId, relation: dependency.relation });
+        try {
+          await addIssueDependency.mutateAsync({ issueId: dependency.issueId, relation: dependency.relation });
+        } catch (error) {
+          const previousRelation = previousMap.get(dependency.issueId);
+          if (previousRelation) {
+            await addIssueDependency.mutateAsync({ issueId: dependency.issueId, relation: previousRelation }).catch(() => undefined);
+          }
+          throw error;
+        }
       }
 
       for (const dependency of added) {
@@ -1079,7 +1089,6 @@ export const IssueDetailPage: React.FC = () => {
                               contentType={attachment.contentType}
                               fileName={attachment.fileName}
                               attachmentKey={attachment.key}
-                              assetUrl={attachment.assetUrl}
                               className="h-full w-full object-cover"
                             />
                           </div>

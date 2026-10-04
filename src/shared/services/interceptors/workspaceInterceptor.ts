@@ -36,7 +36,7 @@ function isWorkspaceContextExempt(method: string | undefined, path: string): boo
   if (method === 'get' && path === '/workspaces') return true;
   if (method === 'post' && path === '/workspaces') return true;
   if (method === 'get' && path.startsWith('/workspaces/check-slug/')) return true;
-  if (method === 'get' && path === '/invitations/resolve') return true;
+  if (method === 'post' && path === '/invitations/resolve') return true;
   if (method === 'post' && path === '/invitations/accept') return true;
   // The user picks a workspace explicitly on this page — it isn't necessarily
   // whatever's currently active in this tab, so don't let the interceptor

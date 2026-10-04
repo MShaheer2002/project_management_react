@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { tunnelHeaders } from '@shared/services/tunnelHeaders';
 import { attachAllInterceptors } from './interceptors';
 
 /**
@@ -11,7 +12,7 @@ export const privateApi = axios.create({
   baseURL: process.env.BASE_URL || 'http://localhost:8000',
   headers: {
     'Content-Type': 'application/json',
-    'ngrok-skip-browser-warning': 'true', // Required for ngrok free tier to avoid CORS/interstitial
+    ...tunnelHeaders,
   },
   timeout: 15000,
 });

@@ -49,7 +49,7 @@ import { useCycles } from '@features/cycles';
 import { useActiveTemplates } from '@features/templates';
 import { useProjectOptions } from '@features/projects';
 import { useWorkspaceMemberOptions } from '@features/workspace';
-import { AiIssueGenerator, IssueGenerationSuggestions, useGenerateDraftSuggestions } from '@features/ai';
+import { AiIssueGenerator, IssueGenerationSuggestions, useAiAvailability, useGenerateDraftSuggestions } from '@features/ai';
 import type { AiGeneratedIssue } from '@features/ai';
 import {
   IssueLabelRow,
@@ -181,6 +181,7 @@ export const CreateIssuePage: React.FC = () => {
   );
   const createIssue = useCreateIssue();
   const generateDraftSuggestions = useGenerateDraftSuggestions();
+  const { trussenAi } = useAiAvailability();
   const checkAssignmentEligibility = useCheckIssueAssignmentEligibility();
   const { dialog: projectAssignmentDialog, openAssignmentDialog, handleAssignmentError } = useProjectAssignmentGuard();
   const updateAnyIssue = useUpdateAnyIssue();
@@ -545,25 +546,36 @@ export const CreateIssuePage: React.FC = () => {
     const createdIssue = await createIssue.mutateAsync(payload);
       const createdIssueResourceId = createdIssue.entityId ?? createdIssue.id;
 
+      // The issue exists from here on. A failed extra step must not send the
+      // user back to the form, where a retry would create a second copy (B-FE-05).
+      const failedSteps: string[] = [];
+      const step = async (name: string, run: () => Promise<unknown>) => {
+        try {
+          await run();
+        } catch {
+          failedSteps.push(name);
+        }
+      };
+
       if (selectedLabelIds.length > 0) {
-        await attachIssueLabelsAny.mutateAsync({
+        await step('labels', () => attachIssueLabelsAny.mutateAsync({
           issueId: createdIssueResourceId,
           input: { labelIds: selectedLabelIds },
-        });
+        }));
       }
 
       if (parentIssueId) {
-        await updateAnyIssue.mutateAsync({
+        await step('parent issue', () => updateAnyIssue.mutateAsync({
           issueId: createdIssueResourceId,
           input: {
             parentIssueId,
             ...(type === 'issue' ? { acceptanceCriteria: cleanAcceptanceCriteria } : {}),
           },
-        });
+        }));
       }
 
       if (dependencies.length > 0) {
-        await Promise.all(
+        await step('dependencies', () => Promise.all(
           dependencies.map((dependency) =>
             addIssueDependencyAny.mutateAsync({
               issueId: createdIssueResourceId,
@@ -573,14 +585,18 @@ export const CreateIssuePage: React.FC = () => {
               },
             })
           )
-        );
+        ));
       }
 
       if (watcherIds.length > 0) {
-        await addIssueWatchersAny.mutateAsync({
+        await step('watchers', () => addIssueWatchersAny.mutateAsync({
           issueId: createdIssueResourceId,
           input: { userIds: watcherIds },
-        });
+        }));
+      }
+
+      if (failedSteps.length > 0) {
+        showToast(`Issue created, but these were not saved: ${failedSteps.join(', ')}. Add them on the issue.`, 'error');
       }
 
       localStorage.removeItem(draftKey);
@@ -602,7 +618,7 @@ export const CreateIssuePage: React.FC = () => {
   ]);
 
   const handleCreate = async () => {
-    if (!validate()) return;
+    if (isSubmitting || !validate()) return;
     setIsSubmitting(true);
     try {
       if (assigneeId) {
@@ -772,10 +788,13 @@ export const CreateIssuePage: React.FC = () => {
     }
   }, [type, estimate]);
 
-  // Shortcuts
+  // Shortcuts. The ref always holds the latest handleCreate, so Ctrl+Enter
+  // submits what is on screen now, not the form as it was on mount (B-FE-06).
+  const handleCreateRef = useRef(handleCreate);
+  handleCreateRef.current = handleCreate;
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') handleCreate();
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') handleCreateRef.current();
       // Escape no longer navigates away — it only cancels an in-flight
       // Trussen AI generation, if one is running.
       if (e.key === 'Escape' && aiGenerationCancelRef.current) {
@@ -784,7 +803,7 @@ export const CreateIssuePage: React.FC = () => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [title, projectId]);
+  }, []);
 
   return (
     <motion.div 
@@ -844,99 +863,104 @@ export const CreateIssuePage: React.FC = () => {
         <div className="flex-1 overflow-y-auto scrollbar-hide bg-white dark:bg-bg-dark">
           <div className="max-w-4xl mx-auto px-10 py-8 space-y-10 pb-32">
 
-            {/* AI Issue Creator */}
-            <AiIssueGenerator
-              onPendingChange={(cancel) => {
-                aiGenerationCancelRef.current = cancel;
-              }}
-              onGenerated={(data: AiGeneratedIssue) => {
-                // Fill the form with AI-generated data
-                setTitle(data.title);
-                setType(data.type);
-                setPriority(data.priority);
-                setDescription(data.description);
-                setAiPreviewSuggestions([]);
+            {/* Trussen AI (Premium): hidden when the plan doesn't include it. */}
+            {trussenAi && (
+              <>
+                {/* AI Issue Creator */}
+                <AiIssueGenerator
+                  onPendingChange={(cancel) => {
+                    aiGenerationCancelRef.current = cancel;
+                  }}
+                  onGenerated={(data: AiGeneratedIssue) => {
+                    // Fill the form with AI-generated data
+                    setTitle(data.title);
+                    setType(data.type);
+                    setPriority(data.priority);
+                    setDescription(data.description);
+                    setAiPreviewSuggestions([]);
 
-                if (data.suggestedAssigneeId) setAssigneeId(data.suggestedAssigneeId);
-                if (data.suggestedProjectId) setProjectId(data.suggestedProjectId);
-                if (data.templateId) setSelectedTemplateId(data.templateId);
+                    if (data.suggestedAssigneeId) setAssigneeId(data.suggestedAssigneeId);
+                    if (data.suggestedProjectId) setProjectId(data.suggestedProjectId);
+                    if (data.templateId) setSelectedTemplateId(data.templateId);
 
-                // Bug-specific fields
-                if (data.stepsToReproduce) setStepsToReproduce(data.stepsToReproduce);
-                if (data.expectedBehavior) setExpectedBehavior(data.expectedBehavior);
-                if (data.actualBehavior) setActualBehavior(data.actualBehavior);
-                if (data.severity) setSeverity(data.severity);
+                    // Bug-specific fields
+                    if (data.stepsToReproduce) setStepsToReproduce(data.stepsToReproduce);
+                    if (data.expectedBehavior) setExpectedBehavior(data.expectedBehavior);
+                    if (data.actualBehavior) setActualBehavior(data.actualBehavior);
+                    if (data.severity) setSeverity(data.severity);
 
-                // Feature-specific fields
-                if (data.acceptanceCriteria) setAcceptanceCriteria(data.acceptanceCriteria);
-                if (data.notes) setNotes(data.notes);
+                    // Feature-specific fields
+                    if (data.acceptanceCriteria) setAcceptanceCriteria(data.acceptanceCriteria);
+                    if (data.notes) setNotes(data.notes);
 
-                // Subtasks
-                if (data.subtasks.length > 0) {
-                  setSubtasks(data.subtasks.map((s, i) => ({
-                    id: crypto.randomUUID(),
-                    title: s.title,
-                    order: i,
-                    completed: false,
-                    isEditing: false,
-                  })));
-                }
+                    // Subtasks
+                    if (data.subtasks.length > 0) {
+                      setSubtasks(data.subtasks.map((s, i) => ({
+                        id: crypto.randomUUID(),
+                        title: s.title,
+                        order: i,
+                        completed: false,
+                        isEditing: false,
+                      })));
+                    }
 
-                // Labels — resolve names to IDs from available workspace labels
-                if (data.suggestedLabels.length > 0 && labels.length > 0) {
-                  const matchedIds: string[] = [];
-                  for (const name of data.suggestedLabels) {
-                    const match = labels.find((l) => l.name.toLowerCase() === name.toLowerCase());
-                    if (match) matchedIds.push(match.id);
-                  }
-                  if (matchedIds.length > 0) setSelectedLabelIds(matchedIds);
-                }
+                    // Labels — resolve names to IDs from available workspace labels
+                    if (data.suggestedLabels.length > 0 && labels.length > 0) {
+                      const matchedIds: string[] = [];
+                      for (const name of data.suggestedLabels) {
+                        const match = labels.find((l) => l.name.toLowerCase() === name.toLowerCase());
+                        if (match) matchedIds.push(match.id);
+                      }
+                      if (matchedIds.length > 0) setSelectedLabelIds(matchedIds);
+                    }
 
-                // Due date
-                if (data.suggestedDueDate) setDueDate(data.suggestedDueDate);
+                    // Due date
+                    if (data.suggestedDueDate) setDueDate(data.suggestedDueDate);
 
-                // Estimate
-                if (data.suggestedEstimate) setEstimate(String(data.suggestedEstimate));
+                    // Estimate
+                    if (data.suggestedEstimate) setEstimate(String(data.suggestedEstimate));
 
-                // Figma URLs → add as integration refs
-                if (data.figmaUrls && data.figmaUrls.length > 0) {
-                  const figmaRefs: IssueIntegrationRef[] = data.figmaUrls.map((url) => ({
-                    id: crypto.randomUUID(),
-                    provider: 'figma' as const,
-                    label: 'Figma Design',
-                    url,
-                  }));
-                  setIntegrationRefs((prev) => [...prev, ...figmaRefs]);
-                }
+                    // Figma URLs → add as integration refs
+                    if (data.figmaUrls && data.figmaUrls.length > 0) {
+                      const figmaRefs: IssueIntegrationRef[] = data.figmaUrls.map((url) => ({
+                        id: crypto.randomUUID(),
+                        provider: 'figma' as const,
+                        label: 'Figma Design',
+                        url,
+                      }));
+                      setIntegrationRefs((prev) => [...prev, ...figmaRefs]);
+                    }
 
-                void generateDraftSuggestions.mutateAsync({
-                  title: data.title,
-                  description: data.description,
-                  projectId: data.suggestedProjectId ?? undefined,
-                  assigneeId: data.suggestedAssigneeId,
-                  currentLabels: data.suggestedLabels,
-                }).then((result) => {
-                  setAiPreviewSuggestions(result.suggestions);
-                }).catch(() => {
-                  setAiPreviewSuggestions([]);
-                });
-              }}
-            />
+                    void generateDraftSuggestions.mutateAsync({
+                      title: data.title,
+                      description: data.description,
+                      projectId: data.suggestedProjectId ?? undefined,
+                      assigneeId: data.suggestedAssigneeId,
+                      currentLabels: data.suggestedLabels,
+                    }).then((result) => {
+                      setAiPreviewSuggestions(result.suggestions);
+                    }).catch(() => {
+                      setAiPreviewSuggestions([]);
+                    });
+                  }}
+                />
 
-            <IssueGenerationSuggestions
-              suggestions={aiPreviewSuggestions}
-              isLoading={generateDraftSuggestions.isPending}
-              selectedLabelNames={selectedLabels.map((label) => label.name)}
-              selectedAssigneeId={assigneeId}
-              onApplyLabel={(labelName) => {
-                const match = labels.find((label) => label.name.toLowerCase() === labelName.toLowerCase());
-                if (!match) return;
-                setSelectedLabelIds((current) => (current.includes(match.id) ? current : [...current, match.id]));
-              }}
-              onApplyAssignee={(userId) => {
-                setAssigneeId(userId);
-              }}
-            />
+                <IssueGenerationSuggestions
+                  suggestions={aiPreviewSuggestions}
+                  isLoading={generateDraftSuggestions.isPending}
+                  selectedLabelNames={selectedLabels.map((label) => label.name)}
+                  selectedAssigneeId={assigneeId}
+                  onApplyLabel={(labelName) => {
+                    const match = labels.find((label) => label.name.toLowerCase() === labelName.toLowerCase());
+                    if (!match) return;
+                    setSelectedLabelIds((current) => (current.includes(match.id) ? current : [...current, match.id]));
+                  }}
+                  onApplyAssignee={(userId) => {
+                    setAssigneeId(userId);
+                  }}
+                />
+              </>
+            )}
 
             {/* Title */}
             <div>

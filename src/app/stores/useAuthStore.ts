@@ -45,7 +45,6 @@ interface AuthState {
   // Legacy compat — used by AppContext shim until fully migrated
   organization: { id: string; name: string; slug: string; logo?: string } | null;
   setCurrentUser: (user: any) => void;
-  setOrganization: (org: any) => void;
 }
 
 /**
@@ -95,12 +94,6 @@ export const useAuthStore = create<AuthState>()(
           currentUser: user ? { id: user.id, name: user.name, email: user.email, avatar: user.avatar } : null,
           isAuthenticated: !!user,
         })),
-
-      setOrganization: (org) =>
-        set({
-          organization: org,
-          workspace: org ? { id: org.id, name: org.name, slug: org.slug, logo: org.logo, role: 'owner' } : null,
-        }),
     }),
     {
       name: 'trussen-auth',
