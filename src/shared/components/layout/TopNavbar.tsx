@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useAiAvailability } from '@features/ai';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@clerk/clerk-react';
 import { useAuthStore } from '@/app/stores/useAuthStore';
@@ -26,6 +27,7 @@ export const TopNavbar: React.FC = () => {
   const setCommandPaletteOpen = useUIStore((s) => s.setCommandPaletteOpen);
   const isAiPanelOpen = useUIStore((s) => s.isAiPanelOpen);
   const setAiPanelOpen = useUIStore((s) => s.setAiPanelOpen);
+  const { trussenAi } = useAiAvailability();
   const currentUser = useAuthStore((s) => s.currentUser);
   const theme = useThemeStore((s) => s.theme);
   const setTheme = useThemeStore((s) => s.setTheme);
@@ -115,18 +117,21 @@ export const TopNavbar: React.FC = () => {
           <NotificationsPopover open={isNotificationsOpen} onClose={() => setNotificationsOpen(false)} />
         </div>
 
-        <button
-          onClick={() => setAiPanelOpen(!isAiPanelOpen)}
-          className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all ${
-            isAiPanelOpen
-              ? 'bg-primary/10 text-primary'
-              : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-white/5 dark:hover:text-gray-300'
-          }`}
-          title="Open Trussen AI"
-        >
-          <Sparkles size={13} />
-          <span className="hidden sm:inline">Ask Trussen</span>
-        </button>
+        {/* Trussen AI is a Premium feature; hidden on plans without it. */}
+        {trussenAi && (
+          <button
+            onClick={() => setAiPanelOpen(!isAiPanelOpen)}
+            className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all ${
+              isAiPanelOpen
+                ? 'bg-primary/10 text-primary'
+                : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-white/5 dark:hover:text-gray-300'
+            }`}
+            title="Open Trussen AI"
+          >
+            <Sparkles size={13} />
+            <span className="hidden sm:inline">Ask Trussen</span>
+          </button>
+        )}
 
         <div ref={userMenuRef} className="relative">
           <button

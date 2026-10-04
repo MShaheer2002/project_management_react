@@ -49,7 +49,7 @@ import { useCycles } from '@features/cycles';
 import { useActiveTemplates } from '@features/templates';
 import { useProjectOptions } from '@features/projects';
 import { useWorkspaceMemberOptions } from '@features/workspace';
-import { AiIssueGenerator, IssueGenerationSuggestions, useGenerateDraftSuggestions } from '@features/ai';
+import { AiIssueGenerator, IssueGenerationSuggestions, useAiAvailability, useGenerateDraftSuggestions } from '@features/ai';
 import type { AiGeneratedIssue } from '@features/ai';
 import {
   IssueLabelRow,
@@ -181,6 +181,7 @@ export const CreateIssuePage: React.FC = () => {
   );
   const createIssue = useCreateIssue();
   const generateDraftSuggestions = useGenerateDraftSuggestions();
+  const { trussenAi } = useAiAvailability();
   const checkAssignmentEligibility = useCheckIssueAssignmentEligibility();
   const { dialog: projectAssignmentDialog, openAssignmentDialog, handleAssignmentError } = useProjectAssignmentGuard();
   const updateAnyIssue = useUpdateAnyIssue();
@@ -862,99 +863,104 @@ export const CreateIssuePage: React.FC = () => {
         <div className="flex-1 overflow-y-auto scrollbar-hide bg-white dark:bg-bg-dark">
           <div className="max-w-4xl mx-auto px-10 py-8 space-y-10 pb-32">
 
-            {/* AI Issue Creator */}
-            <AiIssueGenerator
-              onPendingChange={(cancel) => {
-                aiGenerationCancelRef.current = cancel;
-              }}
-              onGenerated={(data: AiGeneratedIssue) => {
-                // Fill the form with AI-generated data
-                setTitle(data.title);
-                setType(data.type);
-                setPriority(data.priority);
-                setDescription(data.description);
-                setAiPreviewSuggestions([]);
+            {/* Trussen AI (Premium): hidden when the plan doesn't include it. */}
+            {trussenAi && (
+              <>
+                {/* AI Issue Creator */}
+                <AiIssueGenerator
+                  onPendingChange={(cancel) => {
+                    aiGenerationCancelRef.current = cancel;
+                  }}
+                  onGenerated={(data: AiGeneratedIssue) => {
+                    // Fill the form with AI-generated data
+                    setTitle(data.title);
+                    setType(data.type);
+                    setPriority(data.priority);
+                    setDescription(data.description);
+                    setAiPreviewSuggestions([]);
 
-                if (data.suggestedAssigneeId) setAssigneeId(data.suggestedAssigneeId);
-                if (data.suggestedProjectId) setProjectId(data.suggestedProjectId);
-                if (data.templateId) setSelectedTemplateId(data.templateId);
+                    if (data.suggestedAssigneeId) setAssigneeId(data.suggestedAssigneeId);
+                    if (data.suggestedProjectId) setProjectId(data.suggestedProjectId);
+                    if (data.templateId) setSelectedTemplateId(data.templateId);
 
-                // Bug-specific fields
-                if (data.stepsToReproduce) setStepsToReproduce(data.stepsToReproduce);
-                if (data.expectedBehavior) setExpectedBehavior(data.expectedBehavior);
-                if (data.actualBehavior) setActualBehavior(data.actualBehavior);
-                if (data.severity) setSeverity(data.severity);
+                    // Bug-specific fields
+                    if (data.stepsToReproduce) setStepsToReproduce(data.stepsToReproduce);
+                    if (data.expectedBehavior) setExpectedBehavior(data.expectedBehavior);
+                    if (data.actualBehavior) setActualBehavior(data.actualBehavior);
+                    if (data.severity) setSeverity(data.severity);
 
-                // Feature-specific fields
-                if (data.acceptanceCriteria) setAcceptanceCriteria(data.acceptanceCriteria);
-                if (data.notes) setNotes(data.notes);
+                    // Feature-specific fields
+                    if (data.acceptanceCriteria) setAcceptanceCriteria(data.acceptanceCriteria);
+                    if (data.notes) setNotes(data.notes);
 
-                // Subtasks
-                if (data.subtasks.length > 0) {
-                  setSubtasks(data.subtasks.map((s, i) => ({
-                    id: crypto.randomUUID(),
-                    title: s.title,
-                    order: i,
-                    completed: false,
-                    isEditing: false,
-                  })));
-                }
+                    // Subtasks
+                    if (data.subtasks.length > 0) {
+                      setSubtasks(data.subtasks.map((s, i) => ({
+                        id: crypto.randomUUID(),
+                        title: s.title,
+                        order: i,
+                        completed: false,
+                        isEditing: false,
+                      })));
+                    }
 
-                // Labels — resolve names to IDs from available workspace labels
-                if (data.suggestedLabels.length > 0 && labels.length > 0) {
-                  const matchedIds: string[] = [];
-                  for (const name of data.suggestedLabels) {
-                    const match = labels.find((l) => l.name.toLowerCase() === name.toLowerCase());
-                    if (match) matchedIds.push(match.id);
-                  }
-                  if (matchedIds.length > 0) setSelectedLabelIds(matchedIds);
-                }
+                    // Labels — resolve names to IDs from available workspace labels
+                    if (data.suggestedLabels.length > 0 && labels.length > 0) {
+                      const matchedIds: string[] = [];
+                      for (const name of data.suggestedLabels) {
+                        const match = labels.find((l) => l.name.toLowerCase() === name.toLowerCase());
+                        if (match) matchedIds.push(match.id);
+                      }
+                      if (matchedIds.length > 0) setSelectedLabelIds(matchedIds);
+                    }
 
-                // Due date
-                if (data.suggestedDueDate) setDueDate(data.suggestedDueDate);
+                    // Due date
+                    if (data.suggestedDueDate) setDueDate(data.suggestedDueDate);
 
-                // Estimate
-                if (data.suggestedEstimate) setEstimate(String(data.suggestedEstimate));
+                    // Estimate
+                    if (data.suggestedEstimate) setEstimate(String(data.suggestedEstimate));
 
-                // Figma URLs → add as integration refs
-                if (data.figmaUrls && data.figmaUrls.length > 0) {
-                  const figmaRefs: IssueIntegrationRef[] = data.figmaUrls.map((url) => ({
-                    id: crypto.randomUUID(),
-                    provider: 'figma' as const,
-                    label: 'Figma Design',
-                    url,
-                  }));
-                  setIntegrationRefs((prev) => [...prev, ...figmaRefs]);
-                }
+                    // Figma URLs → add as integration refs
+                    if (data.figmaUrls && data.figmaUrls.length > 0) {
+                      const figmaRefs: IssueIntegrationRef[] = data.figmaUrls.map((url) => ({
+                        id: crypto.randomUUID(),
+                        provider: 'figma' as const,
+                        label: 'Figma Design',
+                        url,
+                      }));
+                      setIntegrationRefs((prev) => [...prev, ...figmaRefs]);
+                    }
 
-                void generateDraftSuggestions.mutateAsync({
-                  title: data.title,
-                  description: data.description,
-                  projectId: data.suggestedProjectId ?? undefined,
-                  assigneeId: data.suggestedAssigneeId,
-                  currentLabels: data.suggestedLabels,
-                }).then((result) => {
-                  setAiPreviewSuggestions(result.suggestions);
-                }).catch(() => {
-                  setAiPreviewSuggestions([]);
-                });
-              }}
-            />
+                    void generateDraftSuggestions.mutateAsync({
+                      title: data.title,
+                      description: data.description,
+                      projectId: data.suggestedProjectId ?? undefined,
+                      assigneeId: data.suggestedAssigneeId,
+                      currentLabels: data.suggestedLabels,
+                    }).then((result) => {
+                      setAiPreviewSuggestions(result.suggestions);
+                    }).catch(() => {
+                      setAiPreviewSuggestions([]);
+                    });
+                  }}
+                />
 
-            <IssueGenerationSuggestions
-              suggestions={aiPreviewSuggestions}
-              isLoading={generateDraftSuggestions.isPending}
-              selectedLabelNames={selectedLabels.map((label) => label.name)}
-              selectedAssigneeId={assigneeId}
-              onApplyLabel={(labelName) => {
-                const match = labels.find((label) => label.name.toLowerCase() === labelName.toLowerCase());
-                if (!match) return;
-                setSelectedLabelIds((current) => (current.includes(match.id) ? current : [...current, match.id]));
-              }}
-              onApplyAssignee={(userId) => {
-                setAssigneeId(userId);
-              }}
-            />
+                <IssueGenerationSuggestions
+                  suggestions={aiPreviewSuggestions}
+                  isLoading={generateDraftSuggestions.isPending}
+                  selectedLabelNames={selectedLabels.map((label) => label.name)}
+                  selectedAssigneeId={assigneeId}
+                  onApplyLabel={(labelName) => {
+                    const match = labels.find((label) => label.name.toLowerCase() === labelName.toLowerCase());
+                    if (!match) return;
+                    setSelectedLabelIds((current) => (current.includes(match.id) ? current : [...current, match.id]));
+                  }}
+                  onApplyAssignee={(userId) => {
+                    setAssigneeId(userId);
+                  }}
+                />
+              </>
+            )}
 
             {/* Title */}
             <div>

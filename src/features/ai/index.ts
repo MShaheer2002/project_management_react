@@ -4,6 +4,7 @@ export { aiService } from './services/aiService';
 // Hooks
 export { useGenerateDraftSuggestions, useGenerateIssue } from './hooks/useAiMutations';
 export { aiUsageQueryKeys, useAiUserUsage, useAiWorkspaceUsage } from './hooks/useAiUsage';
+export { aiAvailabilityQueryKey, useAiAvailability } from './hooks/useAiAvailability';
 
 // Components
 export { AiIssueGenerator } from './components/AiIssueGenerator';
